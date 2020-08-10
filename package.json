@@ -1,0 +1,29 @@
+{
+  "name": "msgpack-struct",
+  "author": "Kris Zyp",
+  "version": "0.1.0",
+  "description": "Fast MessagePack implementation with extension for structure encoding",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "http://github.com/kriszyp/msgpack-struct"
+  },
+  "scripts": {
+    "install": "prebuild-install || node-gyp rebuild",
+    "rebuild": "node-gyp rebuild",
+    "prebuild": "prebuild --all --verbose",
+    "test": "./node_modules/.bin/mocha tests -u tdd"
+  },
+  "main": "./index.js",
+  "gypfile": true,
+  "dependencies": {
+    "prebuild-install": "^5.2.5",
+    "nan": "^2.13.1"
+  },
+  "optionalDependencies": {},
+  "devDependencies": {
+    "@types/node": "latest",
+    "chai": "^4",
+    "mocha": "^4"
+  }
+}
