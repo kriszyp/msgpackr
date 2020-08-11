@@ -4,7 +4,7 @@
   },
   "targets": [
     {
-      "target_name": "dpack",
+      "target_name": "msgpack",
       "win_delay_load_hook": "false",
       "sources": [
         "src/parse.cpp",

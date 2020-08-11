@@ -59,3 +59,9 @@ typings/
 # dotenv environment variables file
 .env
 tests/samples
+
+# Visual Studio Code directory
+.vscode
+.vs
+
+build

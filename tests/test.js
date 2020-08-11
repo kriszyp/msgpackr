@@ -1,5 +1,5 @@
 var inspector = require('inspector')
-inspector.open(9330, null, true)
+//inspector.open(9330, null, true)
 
 function tryRequire(module) {
 	try {
@@ -25,17 +25,17 @@ try {
 
 if (typeof XMLHttpRequest === 'undefined') {
 	var fs = require('fs')
-	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/samples/slack.json'))
+	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/samples/study-summary.json'))
 } else {
 	var xhr = new XMLHttpRequest()
 	xhr.open('GET', 'samples/outcomes.json', false)
 	xhr.send()
 	var sampleData = JSON.parse(xhr.responseText)
 }
-var ITERATIONS = 100000
+var ITERATIONS = 20000
 
 suite('msgpack-struct basic tests', function(){
-	test.only('serialize/parse data', function(){
+	test('serialize/parse data', function(){
 		var data = {
 			data: [
 				{ a: 1, name: 'one', type: 'odd', isOdd: true },
@@ -64,7 +64,7 @@ suite('msgpack-struct basic tests', function(){
 		assert.deepEqual(parsed, data)
 	})
 
-	test('mixed array', function(){
+	test.only('mixed array', function(){
 		var data = [
 			'one',
 			'two',
@@ -74,10 +74,15 @@ suite('msgpack-struct basic tests', function(){
 			null,
 			true,
 			'three',
-			'one'
+			'three',
+			'one', [
+				3, 5, true
+			]
 		]
-		var serialized = serialize(data)
-		var parsed = parse(serialized)
+		let structures = []
+		let serializer = new Serializer({ structures })
+		var serialized = serializer.serialize(data)
+		var parsed = serializer.parse(serialized)
 		assert.deepEqual(parsed, data)
 	})
 
@@ -86,6 +91,7 @@ suite('msgpack-struct basic tests', function(){
 		let structures = []
 		let serializer = new Serializer({ structures })
 		var serialized = serializer.serialize(data)
+		debugger
 		var parsed = serializer.parse(serialized)
 		assert.deepEqual(parsed, data)
 	})
@@ -334,7 +340,6 @@ suite('dpack performance tests', function(){
 		let structures = []
 		let serializer = new Serializer({ structures })
 		var serialized = serializer.serialize(data)
-
 		console.log('msgpack-struct size', serialized.length)
 		for (var i = 0; i < ITERATIONS; i++) {
 			var parsed = serializer.parse(serialized)
@@ -386,7 +391,7 @@ suite('dpack performance tests', function(){
 			parsed.Settings
 		}
 	})
-	test.only('performance JSON.stringify', function() {
+	test('performance JSON.stringify', function() {
 		var data = sampleData
 		this.timeout(10000)
 		for (var i = 0; i < ITERATIONS; i++) {
@@ -406,7 +411,7 @@ suite('dpack performance tests', function(){
 	})
 
 
-	test.only('performance serialize', function() {
+	test('performance serialize', function() {
 		var data = sampleData
 		this.timeout(10000)
 		let structures = []

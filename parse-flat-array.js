@@ -1,36 +1,27 @@
-let { setSource, readStrings } = require('./build/Release/msgpack.node')
+let { setSource, readNext } = require('./build/Release/msgpack.node')
 let src
 let position = 0
-let alreadySet
-const EMPTY_ARRAY = []
-let strings = EMPTY_ARRAY
-let stringPosition = 0
 class Parser {
 	constructor(options) {
 		Object.assign(this, options)
 	}
 	parse(source) {
 		position = 0
-		stringPosition = 0
-		if (src !== source) {
-			src = source
-			setSource(source)
-		}
+		src = source
 		if (this.structures) {
 			currentStructures = this.structures
+			setSource(source)
+			let value = readNext()
 
-			//let value = readNext()
-
-			let value = read()
-			strings = EMPTY_ARRAY
+			//let value = read()
 			currentStructures = null
 			return value
 		} else if (!currentStructures) {
 			currentStructures = []
 		}
-//		setSource(source)
-//		return readNext()
-		return read()
+		setSource(source)
+		return readNext()
+		//return read()
 	}
 }
 let parseTable = new Array(256)
@@ -82,16 +73,8 @@ function read() {
 			return array
 		}
 	} else if (token < 0xc4) {
-		if (token < 0xc0) {
-			let string = strings[stringPosition++]
-			if (string === undefined) {
-				strings = readStrings(position - 1, src.length)
-				stringPosition = 0
-				string = strings[stringPosition++]
-			}
-			position += token - 0xa0
-			return string
-		}
+		if (token < 0xc0)
+			return src.utf8Slice(position, position += token - 0xa0)
 		else if (token < 0xc2)
 			return token === 0xc0 ? null : undefined
 		else
@@ -130,25 +113,11 @@ parseTable[0xce] = () => {
 
 parseTable[0xd9] = () => {
 	let length = src[position++]
-	position += length
-	let string = strings[stringPosition++]
-	if (string === undefined) {
-		strings = readStrings(position - 2, src.length)
-		stringPosition = 0
-		string = strings[stringPosition++]
-	}
-	return string
+	return src.utf8Slice(position, position += length)
 }
 parseTable[0xda] = () => {
 	let length = (src[position++] << 8) + src[position++]
-	position += length
-	let string = strings[stringPosition++]
-	if (string === undefined) {
-		strings = readStrings(position - 3, src.length)
-		stringPosition = 0
-		string = strings[stringPosition++]
-	}
-	return string
+	return src.utf8Slice(position, position += length)
 }
 parseTable[0xdc] = () => {
 	let length = (src[position++] << 8) + src[position++]
