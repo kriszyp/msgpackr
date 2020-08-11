@@ -15,8 +15,10 @@ int position = 0;
 int writePosition = 0;
 v8::Local<v8::Value> target[MAX_TARGET_SIZE];
 
-Nan::Callback arrayMaker;
-void setupHandlers() {
+void setupTokenTable() {
+	for (int i = 0; i < 256; i++) {
+		tokenTable[i] = nullptr;	
+	}
 	tokenTable[0xd9] = ([](int token) -> void {
 		int length = source[position++];
 		target[writePosition++] = Nan::New<v8::String>((char*) source + position, length).ToLocalChecked();
@@ -41,9 +43,6 @@ void setupHandlers() {
 	tokenTable[0xce] = ([](int token) -> void {
 		position += 4;
 	});
-
-
-	//arrayMaker.Reset(v8::Local<v8::Function>::Cast(info[0]));
 }
 NAN_METHOD(setSource) {
 	int length = node::Buffer::Length(info[0]);
@@ -70,19 +69,17 @@ NAN_METHOD(readStrings) {
 		} else {
 			if (tokenTable[token]) {
 				tokenTable[token](token);
+				if (writePosition >= MAX_TARGET_SIZE)
+					break;
 			}
-			if (writePosition >= MAX_TARGET_SIZE)
-				break;
 		}
 	}
 	Isolate *isolate = Isolate::GetCurrent();
 	info.GetReturnValue().Set(Array::New(isolate, target, writePosition));
 }
 
-
-
 void initializeModule(v8::Local<v8::Object> exports) {
-	setupHandlers();
+	setupTokenTable();
 	Nan::SetMethod(exports, "setSource", setSource);
 	Nan::SetMethod(exports, "readStrings", readStrings);
 }

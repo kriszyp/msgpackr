@@ -1,12 +1,12 @@
 {
-  "name": "msgpack-struct",
+  "name": "msgpackr",
   "author": "Kris Zyp",
   "version": "0.1.0",
-  "description": "Fast MessagePack implementation with extension for structure encoding",
+  "description": "Fast MessagePack implementation with extension for record structures",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "http://github.com/kriszyp/msgpack-struct"
+    "url": "http://github.com/kriszyp/msgpackr"
   },
   "scripts": {
     "install": "prebuild-install || node-gyp rebuild",
