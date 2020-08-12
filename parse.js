@@ -80,6 +80,9 @@ function read() {
 		}
 	} else if (token < 0xc4) {
 		if (token < 0xc0) {
+			let length = token - 0xa0
+			if (length < 0)
+				return simpleString(length)
 			let string = strings[stringPosition++]
 			if (string === undefined) {
 				strings = readStrings(position - 1, src.length)
@@ -227,3 +230,89 @@ function readMap(length) {
 		return map
 	}
 }
+
+let fromCharCode = String.fromCharCode
+function simpleString(length) {
+	if (length < 4) {
+		if (length < 2) {
+			if (length === 0)
+				return ''
+			else {
+				let a = src[position++]
+				if ((a & 0x80) > 1) {
+					position -= 1
+					return
+				}
+				return fromCharCode(a)
+			}
+		} else {
+			let a = src[position++]
+			let b = src[position++]
+			if ((a & 0x80) > 0 || (b & 0x80) > 0) {
+				position -= 2
+				return
+			}
+			if (length < 3)
+				return fromCharCode(a, b)
+			let c = src[position++]
+			if ((c & 0x80) > 0) {
+				position -= 3
+				return
+			}
+			return fromCharCode(a, b, c)
+		}
+	} else {
+		let a = src[position++]
+		let b = src[position++]
+		let c = src[position++]
+		let d = src[position++]
+		if ((a & 0x80) > 0 || (b & 0x80) > 0 || (c & 0x80) > 0 || (d & 0x80) > 0) {
+			position -= 4
+			return
+		}
+		if (length < 6) {
+			if (length === 4)
+				return fromCharCode(a, b, c, d)
+			else {
+				let e = src[position++]
+				if ((e & 0x80) > 1) {
+					position -= 5
+					return
+				}
+				return fromCharCode(a, b, c, d, e)
+			}
+		} else {
+			let e = src[position++]
+			let f = src[position++]
+			if ((e & 0x80) > 0 || (f & 0x80) > 0) {
+				position -= 6
+				return
+			}
+			if (length < 7)
+				return fromCharCode(a, b, c, d, e, f)
+			let g = src[position++]
+			if ((g & 0x80) > 0) {
+				position -= 3
+				return
+			}
+			return fromCharCode(a, b, c, d, e, f, g)
+		}
+
+	}
+}
+
+/*
+function simpleString(length) {
+  const out = new Array(length);
+  for (let i = 0; i < length; i++) {
+    const byte = src[position++];
+    if ((byte & 0x80) === 0) {
+      // 1 byte
+      out[i] = byte;
+    } else {
+    	position -= i + 1
+    	return
+    }
+  }
+  return String.fromCharCode.apply(String, out)
+}*/

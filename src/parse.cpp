@@ -142,6 +142,19 @@ NAN_METHOD(readStrings) {
 		} else if (token < 0xc0) {
 			// fixstr, we want to convert this
 			token -= 0xa0;
+			if (token < 8) {
+				// skip simple strings that are less than 8 characters and only latin, these are handled in JS, 
+				int strPosition = position;
+				position += token;
+				while(strPosition < position) {
+					if (source[strPosition] & 0x80 == 0)
+						strPosition++;
+					else
+						break;
+				}
+				if (strPosition == position)
+					continue; // processed all of them, safe to skip
+			}
 			target[writePosition++] = Nan::New<v8::String>((char*) source + position, (int) token).ToLocalChecked();
 			position += token;
 			if (writePosition >= MAX_TARGET_SIZE)
