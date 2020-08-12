@@ -25,14 +25,14 @@ try {
 
 if (typeof XMLHttpRequest === 'undefined') {
 	var fs = require('fs')
-	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/samples/study-summary.json'))
+	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/samples/term.json'))
 } else {
 	var xhr = new XMLHttpRequest()
 	xhr.open('GET', 'samples/outcomes.json', false)
 	xhr.send()
 	var sampleData = JSON.parse(xhr.responseText)
 }
-var ITERATIONS = 20000
+var ITERATIONS = 50000
 
 suite('msgpack-struct basic tests', function(){
 	test('serialize/parse data', function(){
@@ -76,12 +76,13 @@ suite('msgpack-struct basic tests', function(){
 			'three',
 			'three',
 			'one', [
-				3, 5, true
+				3, -5, -50, -400,1.3, -5.3, true
 			]
 		]
 		let structures = []
 		let serializer = new Serializer({ structures })
 		var serialized = serializer.serialize(data)
+		debugger
 		var parsed = serializer.parse(serialized)
 		assert.deepEqual(parsed, data)
 	})
@@ -366,32 +367,7 @@ suite('dpack performance tests', function(){
 			data = type.fromBuffer(serialized);
 		}
 	})
-	test.skip('performance V8 serialize', function() {
-		var v8 = require('v8')
-		var data = sampleData
-		this.timeout(10000)
-		for (var i = 0; i < ITERATIONS; i++) {
-			var serialized = v8.serialize(data)
-			//var serializedGzip = deflateSync(serialized)
-		}
-	})
-	test.skip('performance V8 deserialize', function() {
-		var v8 = require('v8')
-		var data = sampleData
-		this.timeout(10000)
-		var serialized = v8.serialize(data)
-		var serializedGzip = deflateSync(serialized)
-		console.log('size', serialized.length)
-		console.log('deflate size', serializedGzip.length)
-		//console.log({ shortRefCount, longRefCount })
-		var parsed
-		for (var i = 0; i < ITERATIONS; i++) {
-			parsed = v8.deserialize(serialized)
-			//parsed = parse(inflateSync(serializedGzip))
-			parsed.Settings
-		}
-	})
-	test('performance JSON.stringify', function() {
+	test.only('performance JSON.stringify', function() {
 		var data = sampleData
 		this.timeout(10000)
 		for (var i = 0; i < ITERATIONS; i++) {
@@ -399,19 +375,8 @@ suite('dpack performance tests', function(){
 			//deflateSync(Buffer.from(string), { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 3 } })
 		}
 	})
-	test('performance JSON.stringify with schema', function() {
-		this.timeout(10000)
-		var data = sampleData
-		let schema = createSchema(data)
-		for (var i = 0; i < ITERATIONS; i++) {
-			let values = writeObjectWithSchema(data, schema)
-			let string = JSON.stringify(values)
-			//deflateSync(Buffer.from(string), { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 3 } })
-		}
-	})
 
-
-	test('performance serialize', function() {
+	test.only('performance serialize', function() {
 		var data = sampleData
 		this.timeout(10000)
 		let structures = []

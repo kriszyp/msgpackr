@@ -1,5 +1,10 @@
-#include <vector>
-#include <algorithm>
+/*
+This is responsible for extracting the strings, in bulk, from a MessagePack buffer. Creating strings from buffers can
+be one of the biggest performance bottlenecks of parsing, but creating an array of extracting strings all at once
+provides much better performance. This will parse and produce up to 256 strings at once .The JS parser can call this multiple
+times as necessary to get more strings. This must be partially capable of parsing MessagePack so it can know where to
+find the string tokens and determine their position and length. All strings are decoded as UTF-8.
+*/
 #include <v8.h>
 #include <node.h>
 #include <node_buffer.h>
@@ -19,13 +24,24 @@ void setupTokenTable() {
 	for (int i = 0; i < 256; i++) {
 		tokenTable[i] = nullptr;	
 	}
+	// str 8
 	tokenTable[0xd9] = ([](int token) -> void {
 		int length = source[position++];
 		target[writePosition++] = Nan::New<v8::String>((char*) source + position, length).ToLocalChecked();
 		position += length;
 	});
+	// str 16
 	tokenTable[0xda] = ([](int token) -> void {
 		int length = source[position++] << 8;
+		length += source[position++];
+		target[writePosition++] = Nan::New<v8::String>((char*) source + position, length).ToLocalChecked();
+		position += length;
+	});
+	// str 32
+	tokenTable[0xdb] = ([](int token) -> void {
+		int length = source[position++] << 24;
+		length += source[position++] << 16;
+		length += source[position++] << 8;
 		length += source[position++];
 		target[writePosition++] = Nan::New<v8::String>((char*) source + position, length).ToLocalChecked();
 		position += length;
@@ -34,14 +50,78 @@ void setupTokenTable() {
 	tokenTable[0xcb] = ([](int token) -> void {
 		position += 8;
 	});
-	tokenTable[0xcc] = ([](int token) -> void {
+	// uint8, int8
+	tokenTable[0xcc] = tokenTable[0xd0] = ([](int token) -> void {
 		position++;
 	});
-	tokenTable[0xcd] = ([](int token) -> void {
+	// uint16, int16, array 16, map 16, fixext 1
+	tokenTable[0xcd] = tokenTable[0xd1] = tokenTable[0xdc] = tokenTable[0xde] = tokenTable[0xd4] = ([](int token) -> void {
 		position += 2;;
 	});
-	tokenTable[0xce] = ([](int token) -> void {
+	// fixext 16
+	tokenTable[0xd5] = ([](int token) -> void {
+		position += 3;
+	});
+	// uint32, int32, float32, array 32, map 32
+	tokenTable[0xce] = tokenTable[0xd2] = tokenTable[0xca] = tokenTable[0xdd] = tokenTable[0xdf] = ([](int token) -> void {
 		position += 4;
+	});
+	// fixext 4
+	tokenTable[0xd6] = ([](int token) -> void {
+		position += 5;
+	});
+	// uint64, int64, float64, fixext 8
+	tokenTable[0xcf] = tokenTable[0xd3] = tokenTable[0xcb] = ([](int token) -> void {
+		position += 8;
+	});
+	// fixext 8
+	tokenTable[0xd8] = ([](int token) -> void {
+		position += 9;
+	});
+	// fixext 16
+	tokenTable[0xd8] = ([](int token) -> void {
+		position += 17;
+	});
+	// bin 8
+	tokenTable[0xc4] = ([](int token) -> void {
+		int length = source[position++];
+		position += length;
+	});
+	// bin 16
+	tokenTable[0xc5] = ([](int token) -> void {
+		int length = source[position++] << 8;
+		length += source[position++];
+		position += length;
+	});
+	// bin 32
+	tokenTable[0xc6] = ([](int token) -> void {
+		int length = source[position++] << 24;
+		length += source[position++] << 16;
+		length += source[position++] << 8;
+		length += source[position++];
+		position += length;
+	});
+	// ext 8
+	tokenTable[0xc7] = ([](int token) -> void {
+		int length = source[position++];
+		position++;
+		position += length;
+	});
+	// ext 16
+	tokenTable[0xc8] = ([](int token) -> void {
+		int length = source[position++] << 8;
+		length += source[position++];
+		position++;
+		position += length;
+	});
+	// ext 32
+	tokenTable[0xc9] = ([](int token) -> void {
+		int length = source[position++] << 24;
+		length += source[position++] << 16;
+		length += source[position++] << 8;
+		length += source[position++];
+		position++;
+		position += length;
 	});
 }
 NAN_METHOD(setSource) {
@@ -58,9 +138,9 @@ NAN_METHOD(readStrings) {
 	while (position < size) {
 		uint8_t token = source[position++];
 		if (token < 0xa0) {
-			// one byte tokens
+			// all one byte tokens
 		} else if (token < 0xc0) {
-			// string, we want to convert this
+			// fixstr, we want to convert this
 			token -= 0xa0;
 			target[writePosition++] = Nan::New<v8::String>((char*) source + position, (int) token).ToLocalChecked();
 			position += token;

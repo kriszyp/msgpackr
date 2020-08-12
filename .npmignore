@@ -1,3 +1,5 @@
 # Dependency directories
 node_modules/
 tests/samples
+.vs
+build/
