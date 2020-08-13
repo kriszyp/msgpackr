@@ -135,7 +135,7 @@ NAN_METHOD(readStrings) {
 	Local<Context> context = Nan::GetCurrentContext();
 	position = Local<Number>::Cast(info[0])->IntegerValue(context).ToChecked();
 	int size = Local<Number>::Cast(info[1])->IntegerValue(context).ToChecked();
-	while (position < size) {
+	next_token: while (position < size) {
 		uint8_t token = source[position++];
 		if (token < 0xa0) {
 			// all one byte tokens
@@ -145,20 +145,21 @@ NAN_METHOD(readStrings) {
 			if (token < 8) {
 				// skip simple strings that are less than 8 characters and only latin, these are handled in JS, 
 				int strPosition = position;
-				position += token;
-				while(strPosition < position) {
+				int end = position + token;
+				while(strPosition < end) {
 					if (source[strPosition] & 0x80 == 0)
 						strPosition++;
 					else
 						break;
 				}
-				if (strPosition == position)
-					continue; // processed all of them, safe to skip
+				if (strPosition == end)
+					goto next_token; // processed all of them, safe to skip
+			} else {
+				target[writePosition++] = Nan::New<v8::String>((char*) source + position, (int) token).ToLocalChecked();
+				position += token;
+				if (writePosition >= MAX_TARGET_SIZE)
+					break;
 			}
-			target[writePosition++] = Nan::New<v8::String>((char*) source + position, (int) token).ToLocalChecked();
-			position += token;
-			if (writePosition >= MAX_TARGET_SIZE)
-				break;
 		} else {
 			if (tokenTable[token]) {
 				tokenTable[token](token);

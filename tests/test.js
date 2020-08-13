@@ -25,14 +25,14 @@ try {
 
 if (typeof XMLHttpRequest === 'undefined') {
 	var fs = require('fs')
-	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/samples/strings.json'))
+	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/samples/study-summary.json'))
 } else {
 	var xhr = new XMLHttpRequest()
 	xhr.open('GET', 'samples/outcomes.json', false)
 	xhr.send()
 	var sampleData = JSON.parse(xhr.responseText)
 }
-var ITERATIONS = 500000
+var ITERATIONS = 50000
 
 suite('msgpack-struct basic tests', function(){
 	test('serialize/parse data', function(){

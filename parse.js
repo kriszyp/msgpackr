@@ -6,7 +6,16 @@ const EMPTY_ARRAY = []
 let strings = EMPTY_ARRAY
 let stringPosition = 0
 let currentConfig = {}
-let asString
+let srcString
+let srcStringStart = 0
+let srcStringEnd = 0
+let currentExtensions = []
+// the registration of the record definition extension (as "r")
+const recordDefinition = currentExtensions[0x72] = (id) => {
+	currentStructures[id] = read()
+}
+// registration of bulk record definition?
+// currentExtensions[0x52] = () =>
 class Parser {
 	constructor(options) {
 		Object.assign(this, options)
@@ -14,10 +23,10 @@ class Parser {
 	parse(source) {
 		position = 0
 		stringPosition = 0
+		srcStringEnd = 0
 		if (src !== source) {
 			src = source
 			setSource(source)
-			asString = source.toString('latin1')
 		}
 		if (this.structures) {
 			currentStructures = this.structures
@@ -82,6 +91,7 @@ function read() {
 		}
 	} else if (token < 0xc0) {
 		// fixstr
+		//return readShortString(token - 0xa0)
 		let length = token - 0xa0
 		if (length < 8)
 			return simpleString(length)
@@ -91,13 +101,13 @@ function read() {
 			stringPosition = 0
 			string = strings[stringPosition++]
 		}
-		position += token - 0xa0
+		position += length
 		return string
 	} else {
 		let value
 		switch (token) {
 			case 0xc0: return null
-			case 0xc1: return
+			case 0xc1: return; // "never-used", just use it for undefined for now
 			case 0xc2: return false
 			case 0xc3: return true
 			case 0xca:
@@ -136,6 +146,17 @@ function read() {
 				position += 8
 				return value
 
+			case 0xd4:
+				value = src[position++]
+				if (value == 0x72) {
+					recordDefinition(src[position++])
+					return read()
+				} else {
+					if (currentExtensions[value])
+						return currentExtensions[value](src[position++])
+					else
+						throw new Error('Unknown extension ' + byte)
+				}
 			case 0xd9:
 			// str 8
 				return readString8(src[position++])
@@ -184,6 +205,24 @@ function readString(headerLength) {
 		return string
 	}
 }
+function readShortString(length) {
+	let start = position
+	let end = start + length
+	while (position < end) {
+		const byte = src[position++];
+		if ((byte & 0x80) > 0) {
+			position = end
+			console.log('utf8 slice')
+			return src.utf8Slice(start, end)
+		}
+	}
+	if (srcStringEnd < end) {
+		srcStringStart = start
+		srcStringEnd = start + 8192
+		srcString = src.toString('latin1', start, srcStringEnd)
+	}
+	return srcString.slice(start - srcStringStart, end - srcStringStart)
+}
 function readArray(length) {
 	let array = new Array(length)
 	for (let i = 0; i < length; i++) {
@@ -209,7 +248,7 @@ function readMap(length) {
 }
 
 let fromCharCode = String.fromCharCode
-function simpleString(length) {
+/*function simpleString(length) {
 	let start = position
 	for (let i = 0; i < length; i++) {
 		const byte = src[position++];
@@ -219,7 +258,7 @@ function simpleString(length) {
     		}
     	}
     	return asString.slice(start, position)
-}/*
+}*/
 function simpleString(length) {
 	if (length < 4) {
 		if (length < 2) {
