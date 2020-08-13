@@ -32,7 +32,7 @@ if (typeof XMLHttpRequest === 'undefined') {
 	xhr.send()
 	var sampleData = JSON.parse(xhr.responseText)
 }
-var ITERATIONS = 50000
+var ITERATIONS = 500000
 
 suite('msgpack-struct basic tests', function(){
 	test('serialize/parse data', function(){

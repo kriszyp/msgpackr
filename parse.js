@@ -6,6 +6,7 @@ const EMPTY_ARRAY = []
 let strings = EMPTY_ARRAY
 let stringPosition = 0
 let currentConfig = {}
+let asString
 class Parser {
 	constructor(options) {
 		Object.assign(this, options)
@@ -16,6 +17,7 @@ class Parser {
 		if (src !== source) {
 			src = source
 			setSource(source)
+			asString = source.toString('latin1')
 		}
 		if (this.structures) {
 			currentStructures = this.structures
@@ -78,106 +80,98 @@ function read() {
 			}
 			return array
 		}
-	} else if (token < 0xc4) {
-		if (token < 0xc0) {
-			let length = token - 0xa0
-			if (length < 0)
-				return simpleString(length)
-			let string = strings[stringPosition++]
-			if (string === undefined) {
-				strings = readStrings(position - 1, src.length)
-				stringPosition = 0
-				string = strings[stringPosition++]
-			}
-			position += token - 0xa0
-			return string
+	} else if (token < 0xc0) {
+		// fixstr
+		let length = token - 0xa0
+		if (length < 8)
+			return simpleString(length)
+		let string = strings[stringPosition++]
+		if (string === undefined) {
+			strings = readStrings(position - 1, src.length)
+			stringPosition = 0
+			string = strings[stringPosition++]
 		}
-		else if (token < 0xc2)
-			return token === 0xc0 ? null : undefined
-		else
-			return token === 0xc3 // boolean
-	} else if (token > 0) {
-		if (!parseTable[token])
-			return 'error token ' + token
-		return parseTable[token](token)
-	} else
-		throw new Error('Unexpected end of MessagePack')
+		position += token - 0xa0
+		return string
+	} else {
+		let value
+		switch (token) {
+			case 0xc0: return null
+			case 0xc1: return
+			case 0xc2: return false
+			case 0xc3: return true
+			case 0xca:
+				value = src.readFloatBE(position)
+				position += 4
+				return value
+			case 0xcb:
+				value = src.readDoubleBE(position)
+				position += 8
+				return value
+			// uint handlers
+			case 0xcc:
+				return src[position++]
+			case 0xcd:
+				return (src[position++] << 8) + src[position++]
+			case 0xce:
+				return (src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++]
+			case 0xcf:
+				value = currentConfig.useBigInts ? src.readBigUInt64BE(position) : src.readUIntBE(position + 2, 6)
+				position += 8
+				return value
+
+			// int handlers
+			case 0xd0:
+				return src.readInt8(position++)
+			case 0xd1:
+				value = src.readInt16BE(position)
+				position += 2
+				return value
+			case 0xd2:
+				value = src.readInt16BE(position)
+				position += 4
+				return value
+			case 0xd3:
+				value = currentConfig.useBigInts ? src.readBigInt64BE(position) : src.readIntBE(position + 2, 6)
+				position += 8
+				return value
+
+			case 0xd9:
+			// str 8
+				return readString8(src[position++])
+			case 0xda:
+			// str 16
+				return readString16((src[position++] << 8) + src[position++])
+			case 0xdb:
+			// str 32
+				return readString32((src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++])
+			case 0xdc:
+			// array 16
+				return readArray((src[position++] << 8) + src[position++])
+			case 0xdd:
+			// array 32
+				return readArray((src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++])
+			case 0xde:
+			// map 16
+				return readMap((src[position++] << 8) + src[position++])
+			case 0xdf:
+			// map 32
+				return readMap((src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++])
+			default: // negative int
+				return token - 0x100
+
+		}
+	}
 }
 
 function createStructureReader(structure) {
 	return (new Function('r', 'return function(){return {' + structure.map(key => key + ':r()').join(',') + '}}'))(read)
 }
 
-for (let i = 0; i < 0x20; i++) {
-	parseTable[i + 0xe0] = () => -i
-}
-
-parseTable[0xca] = () => {
-	let value = src.readFloatBE(position)
-	position += 4
-	return value
-}
-
-parseTable[0xcb] = () => {
-	let value = src.readDoubleBE(position)
-	position += 8
-	return value
-}
-
-// uint handlers
-parseTable[0xcc] = () => {
-	return src[position++]
-}
-parseTable[0xcd] = () => {
-	return (src[position++] << 8) + src[position++]
-}
-parseTable[0xce] = () => {
-	return (src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++]
-}
-parseTable[0xcf] = () => {
-	let value = currentConfig.useBigInts ? src.readBigUInt64BE(position) : src.readUIntBE(position + 2, 6)
-	position += 8
-	return value
-}
-
-// int handlers
-parseTable[0xd0] = () => {
-	return src.readInt8(position++)
-}
-parseTable[0xd1] = () => {
-	let value = src.readInt16BE(position)
-	position += 2
-	return value
-}
-parseTable[0xd2] = () => {
-	let value = src.readInt16BE(position)
-	position += 4
-	return value
-}
-parseTable[0xd3] = () => {
-	let value = currentConfig.useBigInts ? src.readBigInt64BE(position) : src.readIntBE(position + 2, 6)
-	position += 8
-	return value
-}
-
-// str 8
+const readFixedString = readString(1)
 const readString8 = readString(2)
-parseTable[0xd9] = () => {
-	return readString8(src[position++])
-}
-// str 16
 const readString16 = readString(3)
-parseTable[0xda] = () => {
-	return readString16((src[position++] << 8) + src[position++])
-}
-// str 32
 const readString32 = readString(5)
-parseTable[0xdb] = () => {
-	readString32((src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++])
-}
-for (let i = -1; i >= -0x20; i--) {
-	parseTable[0x100 + i] = () => i
-}
 function readString(headerLength) {
 	return function readString(length) {
 		let string = strings[stringPosition++]
@@ -190,15 +184,6 @@ function readString(headerLength) {
 		return string
 	}
 }
-
-// array 16
-parseTable[0xdc] = () => {
-	return readArray((src[position++] << 8) + src[position++])
-}
-// array 32
-parseTable[0xdd] = () => {
-	return readArray((src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++])
-}
 function readArray(length) {
 	let array = new Array(length)
 	for (let i = 0; i < length; i++) {
@@ -207,14 +192,6 @@ function readArray(length) {
 	return array
 }
 
-// map 16
-parseTable[0xde] = () => {
-	return readMap((src[position++] << 8) + src[position++])
-}
-// map 32
-parseTable[0xdf] = () => {
-	return readMap((src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++])
-}
 function readMap(length) {
 	if (currentConfig.mapsAsObjects) {
 		let object = {}
@@ -232,6 +209,17 @@ function readMap(length) {
 }
 
 let fromCharCode = String.fromCharCode
+function simpleString(length) {
+	let start = position
+	for (let i = 0; i < length; i++) {
+		const byte = src[position++];
+		if ((byte & 0x80) > 0) {
+			position -= i + 1
+    			return
+    		}
+    	}
+    	return asString.slice(start, position)
+}/*
 function simpleString(length) {
 	if (length < 4) {
 		if (length < 2) {
