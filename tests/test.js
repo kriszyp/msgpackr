@@ -25,14 +25,14 @@ try {
 
 if (typeof XMLHttpRequest === 'undefined') {
 	var fs = require('fs')
-	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/samples/study-summary.json'))
+	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/samples/outcomes.json'))
 } else {
 	var xhr = new XMLHttpRequest()
 	xhr.open('GET', 'samples/outcomes.json', false)
 	xhr.send()
 	var sampleData = JSON.parse(xhr.responseText)
 }
-var ITERATIONS = 50000
+var ITERATIONS = 200000
 
 suite('msgpack-struct basic tests', function(){
 	test('serialize/parse data', function(){
@@ -89,8 +89,8 @@ suite('msgpack-struct basic tests', function(){
 
 	test.only('serialize/parse sample data', function(){
 		var data = sampleData
-		let structures = []
-		let serializer = new Serializer({ structures })
+		let structures //= []
+		let serializer = new Serializer({ structures, objectsAsMaps: false })
 		var serialized = serializer.serialize(data)
 		debugger
 		var parsed = serializer.parse(serialized)
@@ -339,7 +339,7 @@ suite('dpack performance tests', function(){
 		var data = sampleData
 		this.timeout(10000)
 		let structures = []
-		let serializer = new Serializer({ structures })
+		let serializer = new Serializer({ structures, objectsAsMaps: false })
 		var serialized = serializer.serialize(data)
 		console.log('msgpack-struct size', serialized.length)
 		for (var i = 0; i < ITERATIONS; i++) {
@@ -380,7 +380,7 @@ suite('dpack performance tests', function(){
 		var data = sampleData
 		this.timeout(10000)
 		let structures = []
-		let serializer = new Serializer({ structures })
+		let serializer = new Serializer({ structures, objectsAsMaps: false })
 
 		for (var i = 0; i < ITERATIONS; i++) {
 			//serialized = serialize(data, { shared: sharedStructure })

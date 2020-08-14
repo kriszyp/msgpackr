@@ -12,7 +12,9 @@ let srcStringEnd = 0
 let currentExtensions = []
 // the registration of the record definition extension (as "r")
 const recordDefinition = currentExtensions[0x72] = (id) => {
-	currentStructures[id] = read()
+	let structure = currentStructures[id & 0x3f] = read()
+	structure.read = createStructureReader(structure)
+	return structure.read()
 }
 // registration of bulk record definition?
 // currentExtensions[0x52] = () =>
@@ -28,11 +30,9 @@ class Parser {
 			src = source
 			setSource(source)
 		}
+		currentConfig = this
 		if (this.structures) {
 			currentStructures = this.structures
-
-			//let value = readNext()
-
 			let value = read()
 			strings = EMPTY_ARRAY
 			currentStructures = null
@@ -68,7 +68,7 @@ function read() {
 		} else if (token < 0x90) {
 			// map
 			token -= 0x80
-			if (currentConfig.mapsAsObjects) {
+			if (currentConfig.objectsAsMaps) {
 				let object = {}
 				for (let i = 0; i < token; i++) {
 					object[read()] = read()
@@ -149,8 +149,7 @@ function read() {
 			case 0xd4:
 				value = src[position++]
 				if (value == 0x72) {
-					recordDefinition(src[position++])
-					return read()
+					return recordDefinition(src[position++])
 				} else {
 					if (currentExtensions[value])
 						return currentExtensions[value](src[position++])
@@ -232,7 +231,7 @@ function readArray(length) {
 }
 
 function readMap(length) {
-	if (currentConfig.mapsAsObjects) {
+	if (currentConfig.objectsAsMaps) {
 		let object = {}
 		for (let i = 0; i < length; i++) {
 			object[read()] = read()

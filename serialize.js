@@ -4,14 +4,14 @@ class Serializer extends Parser {
 		super(options)
 		this.offset = 0
 		let target = Buffer.allocUnsafeSlow(8192) // as you might expect, allocUnsafeSlow is the fastest and safest way to allocate memory
+		let typeBuffer
 		let position = 0
 		let start
 		let safeEnd
 		let sharedStructures
+		let hasSharedUpdate
 		let structures
 		let types
-		if (!options.objectsAsMaps)
-			types = new Map()
 		let lastSharedStructuresLength = 0
 
 		this.serialize = function(value) {
@@ -19,15 +19,25 @@ class Serializer extends Parser {
 			start = position
 			safeEnd = target.length - 10
 			sharedStructures = this.structures
-			if (sharedStructures && sharedStructures.length !== lastSharedStructuresLength) {
-				for (let i = 0, l = sharedStructures.length; i < l; i++) {
-					if (sharedStructures[i])
-						types.set(sharedStructures[i].join('\x00'), i + 0x40)
+			if (sharedStructures) {
+				if (sharedStructures.length !== lastSharedStructuresLength) {
+					for (let i = 0, l = sharedStructures.length; i < l; i++) {
+						/*if (sharedStructures[i])
+							types.set(sharedStructures[i].join('\x00'), i + 0x40)*/
+					}
+					lastSharedStructuresLength = sharedStructures.length
 				}
-				lastSharedStructuresLength = sharedStructures.length
 			}
+			if (hasSharedUpdate)
+				hasSharedUpdate = true
 			structures = sharedStructures || []
 			serialize(value)
+			if (hasSharedUpdate && sharedStructures.onUpdate) {
+				if (sharedStructures.onUpdate(lastSharedStructuresLength) === false) {
+					// try again if the update failed
+					return this.serialize(value)
+				}
+			}
 			return target.slice(start, position)
 		}
 		const serialize = (value) => {
@@ -167,7 +177,7 @@ class Serializer extends Parser {
 					target[position++] = 0xc0
 				else {
 					if (value.constructor === Object) {
-						writeObject(value)
+						writeObject(value, true)
 					} else if (value.constructor === Array) {
 						length = value.length
 						if (length < 0x10) {
@@ -181,11 +191,28 @@ class Serializer extends Parser {
 							serialize(value[i])
 						}
 					} else if (value.constructor === Map) {
-						writeMap(value)
+						length = value.size
+						if (length < 0x10) {
+							target[position++] = 0x80 | length
+						} else if (length < 0x10000) {
+							target[position++] = 0xde
+							target[position++] = length >> 8
+							target[position++] = length & 0xff
+						} else {
+							target[position++] = 0xdf
+							target[position++] = length >> 24
+							target[position++] = (length >> 16) & 0xff
+							target[position++] = (length >> 8) & 0xff
+							target[position++] = length & 0xff
+						}
+						for (let [ key, entryValue ] of value) {
+							serialize(key)
+							serialize(entryValue)
+						}
 					} else if (value.constructor === Date) {
 						throw new Error('Date not implemented yet')
 					} else {	
-						writeObject(value)
+						writeObject(value, false)
 					}
 				}
 			} else if (type === 'boolean') {
@@ -203,49 +230,88 @@ class Serializer extends Parser {
 				throw new Error('Unknown type')
 			}
 		}
-		const writeMap = (map) => {
-			length = map.size
-			if (length < 0x10) {
-				target[position++] = 0x80 | length
-			} else if (length < 0x10000) {
-				target[position++] = 0xde
-				target[position++] = length >> 8
-				target[position++] = length & 0xff
-			} else {
-				target[position++] = 0xdf
-				target[position++] = length >> 24
-				target[position++] = (length >> 16) & 0xff
-				target[position++] = (length >> 8) & 0xff
-				target[position++] = length & 0xff
+
+		const writeObject = this.objectsAsMaps ? (object, safePrototype) => {
+			target[position++] = 0xde // always use map 16, so we can preallocate and set the length afterwards
+			let objectOffset = position - start
+			position += 2
+			let size = 0
+			for (let key in object) {
+				if (safePrototype || object.hasOwnProperty(key)) {
+					serialize(key)
+					serialize(object[key])
+					size++
+				}
 			}
-			for (let [ key, map ] of map) {
-				serialize(key)
-				serialize(map)
+			target[objectOffset++ + start] = size >> 8
+			target[objectOffset + start] = size & 0xff
+		} :
+	/*	sharedStructures ? 
+		(object, safePrototype) => {
+			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null))
+			let objectOffset = position++ - start
+			let wroteKeys
+			for (let key in object) {
+				if (safePrototype || object.hasOwnProperty(key)) {
+					nextTransition = transition[key]
+					if (!nextTransition) {
+						nextTransition = transition[key] = Object.create(null)
+						nextTransition.__keys__ = (transition.__keys__ || []).concat([key])
+						/*let keys = Object.keys(object)
+						if 
+						let size = 0
+						let startBranch = transition.__keys__ ? transition.__keys__.length : 0
+						for (let i = 0, l = keys.length; i++) {
+							let key = keys[i]
+							size += key.length << 2
+							if (i >= startBranch) {
+								nextTransition = nextTransition[key] = Object.create(null)
+								nextTransition.__keys__ = keys.slice(0, i + 1)
+							}
+						}
+						makeRoom(start, position + size)
+						nextTransition = transition[key]
+						target.copy(target, )
+						objectOffset
+					}
+					transition = nextTransition
+					serialize(object[key])
+				}
 			}
-		}
-		const writeObject = this.objectsAsMaps ? writeMap :
+			let id = transition.id
+			if (!id) {
+				id = transition.id = structures.push(transition.__keys__) + 63
+				if (sharedStructures.onUpdate)
+					sharedStructures.onUpdate(id, transition.__keys__)
+			}
+			target[objectOffset + start] = id
+		}*/
 		(object) => {
 			let keys = Object.keys(object)
-			let objectKey = keys.join('\x00')
-			let typeId = types.get(objectKey)
-			if (typeId) 
-				target[position++] = typeId
-			else {
-				typeId = structures.length
-				structures[typeId] = keys
-				typeId += 0x40
-				if (sharedStructures) {
-					if (sharedStructures.onUpdate) {
-						sharedStructures.onUpdate(typeId, keys)
-					}
-					target[position++] = typeId
+			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null))
+			for (let i =0, l = keys.length; i < l; i++) {
+				let key = keys[i]
+				nextTransition = transition[key]
+				if (!nextTransition) {
+					nextTransition = transition[key] = Object.create(null)
+					nextTransition.__keys__ = (transition.__keys__ || []).concat([key])
+				}
+				transition = nextTransition
+			}
+			let recordId = transition.id
+			if (recordId) {
+				target[position++] = recordId
+			} else {
+				recordId = transition.id = structures.push(transition.__keys__) + 63
+				if (sharedStructures) {// TODO: Don't necessarily add it if we are running out of room
+					target[position++] = recordId
+					hasSharedUpdate = true
 				} else {
 					target[position++] = 0xd4 // fixext 1
 					target[position++] = 0x72 // "r" record defintion extension type
-					target[position++] = typeId
+					target[position++] = recordId
 					serialize(keys)
 				}
-				types.set(objectKey, typeId)
 			}
 			// now write the values
 			for (let i =0, l = keys.length; i < l; i++)
@@ -255,6 +321,7 @@ class Serializer extends Parser {
 			let newSize = ((Math.max((end - start) << 2, target.length) + 0xff) >> 8) << 8
 			let newBuffer = Buffer.allocUnsafeSlow(newSize)
 			target.copy(newBuffer, 0, start, end)
+			start = 0
 			return target = newBuffer
 		}
 	}
