@@ -11,10 +11,10 @@ var msgpackr = try_require("..");
 
 msgpack5 = msgpack5 && msgpack5();
 msgpack_codec = msgpack_codec && msgpack_codec.msgpack;
-what_the_pack = what_the_pack.initialize(2**20);
+what_the_pack = what_the_pack && what_the_pack.initialize(2**20);
 
 var pkg = require("../package.json");
-var data = require("./example");
+var data = require("./example2.json");
 var packed = msgpack_lite.encode(data);
 var expected = JSON.stringify(data);
 

@@ -25,14 +25,14 @@ try {
 
 if (typeof XMLHttpRequest === 'undefined') {
 	var fs = require('fs')
-	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/example.json'))
+	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/samples/study.json'))
 } else {
 	var xhr = new XMLHttpRequest()
 	xhr.open('GET', 'samples/outcomes.json', false)
 	xhr.send()
 	var sampleData = JSON.parse(xhr.responseText)
 }
-var ITERATIONS = 200000
+var ITERATIONS = 20000
 
 suite('msgpack-struct basic tests', function(){
 	test('serialize/parse data', function(){
@@ -89,7 +89,7 @@ suite('msgpack-struct basic tests', function(){
 
 	test.only('serialize/parse sample data', function(){
 		var data = sampleData
-		let structures //= []
+		let structures = []
 		let serializer = new Serializer({ structures, objectsAsMaps: false })
 		var serialized = serializer.serialize(data)
 		debugger
