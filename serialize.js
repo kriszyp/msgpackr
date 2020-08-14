@@ -148,12 +148,12 @@ class Serializer extends Parser {
 						}
 					} else {
 						// negative int
-						if (value > -0x20) {
+						if (value >= -0x20) {
 							target[position++] = 0x100 + value
-						} else if (value > -0x100) {
+						} else if (value >= -0x80) {
 							target[position++] = 0xd0
 							target.writeInt8(value, position++)
-						} else if (value > -0x10000) {
+						} else if (value >= -0x8000) {
 							target[position++] = 0xd1
 							target.writeInt16BE(value, position)
 							position += 2
@@ -294,7 +294,6 @@ class Serializer extends Parser {
 				nextTransition = transition[key]
 				if (!nextTransition) {
 					nextTransition = transition[key] = Object.create(null)
-					nextTransition.__keys__ = (transition.__keys__ || []).concat([key])
 				}
 				transition = nextTransition
 			}
@@ -302,7 +301,8 @@ class Serializer extends Parser {
 			if (recordId) {
 				target[position++] = recordId
 			} else {
-				recordId = transition.id = structures.push(transition.__keys__) + 63
+				transition.__keys__ = keys
+				recordId = transition.id = structures.push(keys) + 63
 				if (sharedStructures) {// TODO: Don't necessarily add it if we are running out of room
 					target[position++] = recordId
 					hasSharedUpdate = true

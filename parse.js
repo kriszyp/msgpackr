@@ -138,7 +138,7 @@ function read() {
 				position += 2
 				return value
 			case 0xd2:
-				value = src.readInt16BE(position)
+				value = src.readInt32BE(position)
 				position += 4
 				return value
 			case 0xd3:
@@ -183,9 +183,9 @@ function read() {
 		}
 	}
 }
-
+const validName = /^[a-zA-Z_$][a-zA-Z\d_$]*$/
 function createStructureReader(structure) {
-	return (new Function('r', 'return function(){return {' + structure.map(key => key + ':r()').join(',') + '}}'))(read)
+	return (new Function('r', 'return function(){return {' + structure.map(key => validName.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '}}'))(read)
 }
 
 const readFixedString = readString(1)

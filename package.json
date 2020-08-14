@@ -11,14 +11,15 @@
   "scripts": {
     "install": "prebuild-install || node-gyp rebuild",
     "rebuild": "node-gyp rebuild",
+    "benchmark": "./tests/benchmark.js",
     "prebuild": "prebuild --all --verbose",
     "test": "./node_modules/.bin/mocha tests -u tdd"
   },
   "main": "./index.js",
   "gypfile": true,
   "dependencies": {
-    "prebuild-install": "^5.2.5",
-    "nan": "^2.13.1"
+    "nan": "^2.13.1",
+    "prebuild-install": "^5.2.5"
   },
   "optionalDependencies": {},
   "devDependencies": {
