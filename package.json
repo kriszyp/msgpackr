@@ -13,7 +13,7 @@
     "rebuild": "node-gyp rebuild",
     "benchmark": "./tests/benchmark.js",
     "prebuild": "prebuild --all --verbose",
-    "test": "./node_modules/.bin/mocha tests -u tdd"
+    "test": "./node_modules/.bin/mocha tests/test*.js -u tdd"
   },
   "main": "./index.js",
   "gypfile": true,

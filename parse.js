@@ -1,11 +1,12 @@
 let { setSource, readStrings } = require('./build/Release/msgpack.node')
 let src
+let srcEnd
 let position = 0
 let alreadySet
 const EMPTY_ARRAY = []
 let strings = EMPTY_ARRAY
 let stringPosition = 0
-let currentConfig = {}
+let currentParser = {}
 let srcString
 let srcStringStart = 0
 let srcStringEnd = 0
@@ -22,7 +23,8 @@ class Parser {
 	constructor(options) {
 		Object.assign(this, options)
 	}
-	parse(source) {
+	parse(source, end) {
+		srcEnd = end > -1 ? end : source.length
 		position = 0
 		stringPosition = 0
 		srcStringEnd = 0
@@ -30,7 +32,7 @@ class Parser {
 			src = source
 			setSource(source)
 		}
-		currentConfig = this
+		currentParser = this
 		if (this.structures) {
 			currentStructures = this.structures
 			let value = read()
@@ -58,17 +60,25 @@ function read() {
 			else {
 				let structure = currentStructures[token & 0x3f]
 				if (structure) {
-					if (!structure.read) {
+					if (!structure.read)
 						structure.read = createStructureReader(structure)
-					}
 					return structure.read()
+				} else if (currentParser.getStructures) {
+					currentParser.structures = currentStructures = currentParser.getStructures() || []
+					structure = currentStructures[token & 0x3f]
+					if (structure) {
+						if (!structure.read)
+							structure.read = createStructureReader(structure)
+						return structure.read()
+					} else
+						return token
 				} else
 					return token
 			}
 		} else if (token < 0x90) {
 			// map
 			token -= 0x80
-			if (currentConfig.objectsAsMaps) {
+			if (currentParser.objectsAsMaps) {
 				let object = {}
 				for (let i = 0; i < token; i++) {
 					object[read()] = read()
@@ -97,7 +107,7 @@ function read() {
 			return simpleString(length)
 		let string = strings[stringPosition++]
 		if (string === undefined) {
-			strings = readStrings(position - 1, src.length)
+			strings = readStrings(position - 1, srcEnd)
 			stringPosition = 0
 			string = strings[stringPosition++]
 		}
@@ -126,7 +136,7 @@ function read() {
 			case 0xce:
 				return (src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++]
 			case 0xcf:
-				value = currentConfig.useBigInts ? src.readBigUInt64BE(position) : src.readUIntBE(position + 2, 6)
+				value = currentParser.useBigInts ? src.readBigUInt64BE(position) : src.readUIntBE(position + 2, 6)
 				position += 8
 				return value
 
@@ -142,7 +152,7 @@ function read() {
 				position += 4
 				return value
 			case 0xd3:
-				value = currentConfig.useBigInts ? src.readBigInt64BE(position) : src.readIntBE(position + 2, 6)
+				value = currentParser.useBigInts ? src.readBigInt64BE(position) : src.readIntBE(position + 2, 6)
 				position += 8
 				return value
 
@@ -185,7 +195,21 @@ function read() {
 }
 const validName = /^[a-zA-Z_$][a-zA-Z\d_$]*$/
 function createStructureReader(structure) {
-	return (new Function('r', 'return function(){return {' + structure.map(key => validName.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '}}'))(read)
+	function readObject() {
+		// This initial function is quick to instantiate, but runs slower. After several iterations pay the cost to build the faster function
+		if (readObject.count++ > 2) {
+			this.read = (new Function('r', 'return function(){return {' + structure.map(key => validName.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '}}'))(read)
+			return this.read()
+		}
+		let object = {}
+		for (let i = 0, l = structure.length; i < l; i++) {
+			let key = structure[i]
+			object[key] = read()
+		}
+		return object
+	}
+	readObject.count = 0
+	return readObject
 }
 
 const readFixedString = readString(1)
@@ -196,7 +220,7 @@ function readString(headerLength) {
 	return function readString(length) {
 		let string = strings[stringPosition++]
 		if (string == null) {
-			strings = readStrings(position - headerLength, src.length)
+			strings = readStrings(position - headerLength, srcEnd)
 			stringPosition = 0
 			string = strings[stringPosition++]
 		}
@@ -231,7 +255,7 @@ function readArray(length) {
 }
 
 function readMap(length) {
-	if (currentConfig.objectsAsMaps) {
+	if (currentParser.objectsAsMaps) {
 		let object = {}
 		for (let i = 0; i < length; i++) {
 			object[read()] = read()

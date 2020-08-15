@@ -1,4 +1,5 @@
 let Parser = require('./parse').Parser
+const RECORD_SYMBOL = Symbol('record-id')
 class Serializer extends Parser {
 	constructor(options) {
 		super(options)
@@ -21,24 +22,42 @@ class Serializer extends Parser {
 			sharedStructures = this.structures
 			if (sharedStructures) {
 				if (sharedStructures.length !== lastSharedStructuresLength) {
+					// rebuild our structure transitions
+					sharedStructures.transitions = Object.create(null)
 					for (let i = 0, l = sharedStructures.length; i < l; i++) {
-						/*if (sharedStructures[i])
-							types.set(sharedStructures[i].join('\x00'), i + 0x40)*/
+						let keys = sharedStructures[i]
+						let nextTransition, transition = sharedStructures.transitions
+						for (let i =0, l = keys.length; i < l; i++) {
+							let key = keys[i]
+							nextTransition = transition[key]
+							if (!nextTransition) {
+								nextTransition = transition[key] = Object.create(null)
+							}
+							transition = nextTransition
+						}
+						transition[RECORD_SYMBOL] = i + 0x40
 					}
 					lastSharedStructuresLength = sharedStructures.length
 				}
 			}
 			if (hasSharedUpdate)
-				hasSharedUpdate = true
+				hasSharedUpdate = false
 			structures = sharedStructures || []
-			serialize(value)
-			if (hasSharedUpdate && sharedStructures.onUpdate) {
-				if (sharedStructures.onUpdate(lastSharedStructuresLength) === false) {
-					// try again if the update failed
-					return this.serialize(value)
+			try {
+				serialize(value)
+				this.offset = position // update the offset so next serialization doesn't write over our buffer, but can continue writing to same buffer sequentially
+				return target.slice(start, position) // position can change if we call serialize again in saveStructures, so we get the buffer now
+			} finally {
+				if (hasSharedUpdate && this.saveStructures) {
+					if (this.saveStructures(this.structures, lastSharedStructuresLength) === false) {
+						// get updated structures and try again if the update failed
+						if (this.getStructures) {
+							this.structures = this.getStructures() || []
+						}
+						return this.serialize(value)
+					}
 				}
 			}
-			return target.slice(start, position)
 		}
 		const serialize = (value) => {
 			if (position > safeEnd) {
@@ -297,12 +316,11 @@ class Serializer extends Parser {
 				}
 				transition = nextTransition
 			}
-			let recordId = transition.id
+			let recordId = transition[RECORD_SYMBOL]
 			if (recordId) {
 				target[position++] = recordId
 			} else {
-				transition.__keys__ = keys
-				recordId = transition.id = structures.push(keys) + 63
+				recordId = transition[RECORD_SYMBOL] = structures.push(keys) + 63
 				if (sharedStructures) {// TODO: Don't necessarily add it if we are running out of room
 					target[position++] = recordId
 					hasSharedUpdate = true
@@ -326,6 +344,7 @@ class Serializer extends Parser {
 		}
 	}
 	resetMemory() {
+		// this means we are finished using our local buffer and we can write over it safely
 		this.offset = 0
 	}
 }
