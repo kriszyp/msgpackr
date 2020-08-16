@@ -1,3 +1,4 @@
+"use strict"
 let Parser = require('./parse').Parser
 const RECORD_SYMBOL = Symbol('record-id')
 class Serializer extends Parser {
@@ -14,17 +15,31 @@ class Serializer extends Parser {
 		let structures
 		let types
 		let lastSharedStructuresLength = 0
+		let serializer = this
+		let maxSharedStructures = 32
+		let recordIdsToRemove = []
+		let transitionsCount = 0
+		let serializationsSinceTransitionRebuild = 0
+		if (this.structures && this.structures.length > maxSharedStructures) {
+			throw new Error('Too many shared structures')
+		}
 
 		this.serialize = function(value) {
-			position = this.offset
-			start = position
+			position = serializer.offset
 			safeEnd = target.length - 10
-			sharedStructures = this.structures
+			if (safeEnd - position < 0x800) {
+				// don't start too close to the end, 
+				target = Buffer.allocUnsafeSlow(target.length)
+				position = 0
+			}
+			start = position
+			sharedStructures = serializer.structures
 			if (sharedStructures) {
-				if (sharedStructures.length !== lastSharedStructuresLength) {
+				let l = Math.min(sharedStructures.length, maxSharedStructures)
+				if (sharedStructures.length !== lastSharedStructuresLength && lastSharedStructuresLength < maxSharedStructures) {
 					// rebuild our structure transitions
 					sharedStructures.transitions = Object.create(null)
-					for (let i = 0, l = sharedStructures.length; i < l; i++) {
+					for (let i = 0; i < l; i++) {
 						let keys = sharedStructures[i]
 						let nextTransition, transition = sharedStructures.transitions
 						for (let i =0, l = keys.length; i < l; i++) {
@@ -39,22 +54,43 @@ class Serializer extends Parser {
 					}
 					lastSharedStructuresLength = sharedStructures.length
 				}
+				sharedStructures.nextId = l + 0x40
 			}
 			if (hasSharedUpdate)
 				hasSharedUpdate = false
 			structures = sharedStructures || []
 			try {
 				serialize(value)
-				this.offset = position // update the offset so next serialization doesn't write over our buffer, but can continue writing to same buffer sequentially
+				serializer.offset = position // update the offset so next serialization doesn't write over our buffer, but can continue writing to same buffer sequentially
 				return target.slice(start, position) // position can change if we call serialize again in saveStructures, so we get the buffer now
 			} finally {
-				if (hasSharedUpdate && this.saveStructures) {
-					if (this.saveStructures(this.structures, lastSharedStructuresLength) === false) {
-						// get updated structures and try again if the update failed
-						if (this.getStructures) {
-							this.structures = this.getStructures() || []
+				if (sharedStructures) {
+					if (serializationsSinceTransitionRebuild < 10)
+						serializationsSinceTransitionRebuild++
+					if (recordIdsToRemove.length > 0) {
+						if (transitionsCount > 1000) {
+							// force a rebuild occasionally after a lot of transitions so it can get cleaned up
+							lastSharedStructuresLength = 0
+							serializationsSinceTransitionRebuild = 0
+							sharedStructures.transitions = null
+						} else {
+							for (let i = 0, l = recordIdsToRemove.length; i < l; i++) {
+								recordIdsToRemove[i][RECORD_SYMBOL] = 0
+							}
 						}
-						return this.serialize(value)
+						recordIdsToRemove = []
+					}
+					if (hasSharedUpdate && serializer.saveStructures) {
+						if (serializer.structures.length > maxSharedStructures) {
+							serializer.structures = serializer.structures.slice(0, maxSharedStructures)
+						}
+						if (serializer.saveStructures(serializer.structures, lastSharedStructuresLength) === false) {
+							// get updated structures and try again if the update failed
+							if (serializer.getStructures) {
+								serializer.structures = serializer.getStructures() || []
+							}
+							return serializer.serialize(value)
+						}
 					}
 				}
 			}
@@ -120,14 +156,12 @@ class Serializer extends Parser {
 					target[position++] = 0xa0 | length
 				} else if (length < 0x100) {
 					if (headerSize < 2) {
-						console.warn('Adjusting string size')
 						target.copy(target, position + 2, position + 1, position + 1 + length)
 					}
 					target[position++] = 0xd9
 					target[position++] = length
 				} else if (length < 0x10000) {
 					if (headerSize < 3) {
-						console.warn('Adjusting string size')
 						target.copy(target, position + 3, position + 2, position + 2 + length)
 					}
 					target[position++] = 0xda
@@ -135,7 +169,6 @@ class Serializer extends Parser {
 					target[position++] = length & 0xff
 				} else {
 					if (headerSize < 5) {
-						console.warn('Adjusting string size')
 						target.copy(target, position + 5, position + 3, position + 3 + length)
 					}
 					target[position++] = 0xdb
@@ -246,7 +279,7 @@ class Serializer extends Parser {
 			} else if (type === 'undefined') {
 				target[position++] = 0xc1
 			} else {
-				throw new Error('Unknown type')
+				throw new Error('Unknown type ' + type)
 			}
 		}
 
@@ -313,6 +346,7 @@ class Serializer extends Parser {
 				nextTransition = transition[key]
 				if (!nextTransition) {
 					nextTransition = transition[key] = Object.create(null)
+					transitionsCount += serializationsSinceTransitionRebuild
 				}
 				transition = nextTransition
 			}
@@ -320,14 +354,23 @@ class Serializer extends Parser {
 			if (recordId) {
 				target[position++] = recordId
 			} else {
-				recordId = transition[RECORD_SYMBOL] = structures.push(keys) + 63
-				if (sharedStructures) {// TODO: Don't necessarily add it if we are running out of room
+				recordId = structures.nextId++ || (structures.nextId = 0x40)
+				if (recordId >= 0x80) {// cycle back around
+					structures.nextId = (recordId = maxSharedStructures + 0x40) + 1
+				}
+				transition[RECORD_SYMBOL] = recordId
+				structures[0x3f & recordId] = keys
+				if (sharedStructures && sharedStructures.length <= maxSharedStructures) {
 					target[position++] = recordId
 					hasSharedUpdate = true
 				} else {
 					target[position++] = 0xd4 // fixext 1
 					target[position++] = 0x72 // "r" record defintion extension type
 					target[position++] = recordId
+					// record the removal of the id, we can maintain our shared structure
+					if (recordIdsToRemove.length >= 0x40 - maxSharedStructures)
+						recordIdsToRemove.shift()[RECORD_SYMBOL] = 0 // we are cycling back through, and have to remove old ones
+					recordIdsToRemove.push(transition)
 					serialize(keys)
 				}
 			}
@@ -336,10 +379,12 @@ class Serializer extends Parser {
 				serialize(object[keys[i]])
 		}
 		const makeRoom = (start, end) => {
-			let newSize = ((Math.max((end - start) << 2, target.length) + 0xff) >> 8) << 8
+			let newSize = ((Math.max((end - start) << 2, target.length - 1) >> 12) + 1) << 12
 			let newBuffer = Buffer.allocUnsafeSlow(newSize)
 			target.copy(newBuffer, 0, start, end)
+			position -= start
 			start = 0
+			safeEnd = newBuffer.length - 10
 			return target = newBuffer
 		}
 	}
