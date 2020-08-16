@@ -1,4 +1,5 @@
-let { setSource, readStrings } = require('./build/Release/msgpack.node')
+"use strict"
+let { setSource, extractStrings } = require('./build/Release/msgpack.node')
 let src
 let srcEnd
 let position = 0
@@ -11,6 +12,7 @@ let srcString
 let srcStringStart = 0
 let srcStringEnd = 0
 let currentExtensions = []
+let defaultOptions = { objectsAsMaps: true }
 // the registration of the record definition extension (as "r")
 const recordDefinition = currentExtensions[0x72] = (id) => {
 	let structure = currentStructures[id & 0x3f] = read()
@@ -28,20 +30,24 @@ class Parser {
 		position = 0
 		stringPosition = 0
 		srcStringEnd = 0
+		srcString = null
+		strings = EMPTY_ARRAY
 		if (src !== source) {
 			src = source
 			setSource(source)
 		}
-		currentParser = this
-		if (this.structures) {
-			currentStructures = this.structures
-			let value = read()
-			strings = EMPTY_ARRAY
-			currentStructures = null
-			return value
-		} else if (!currentStructures) {
-			currentStructures = []
-		}
+		if (this) {
+			currentParser = this
+			if (this.structures) {
+				currentStructures = this.structures
+				let value = read()
+				currentStructures = null
+				return value
+			} else if (!currentStructures) {
+				currentStructures = []
+			}
+		} else
+			currentParser = defaultOptions
 //		setSource(source)
 //		return readNext()
 		return read()
@@ -101,7 +107,7 @@ function read() {
 		}
 	} else if (token < 0xc0) {
 		// fixstr
-		//return readShortString(token - 0xa0)
+		return readFixedString(token - 0xa0)
 		let length = token - 0xa0
 		if (length < 8)
 			return simpleString(length)
@@ -218,17 +224,29 @@ const readString16 = readString(3)
 const readString32 = readString(5)
 function readString(headerLength) {
 	return function readString(length) {
+		if (srcString && srcStringEnd >= position) {
+			return srcString.slice(position - srcStringStart, (position += length) - srcStringStart)
+		}
+		srcString = null
 		let string = strings[stringPosition++]
 		if (string == null) {
-			strings = readStrings(position - headerLength, srcEnd)
+			strings = extractStrings(position - headerLength, srcEnd)
 			stringPosition = 0
 			string = strings[stringPosition++]
 		}
+		let srcStringLength = string.length
+		if (srcStringLength <= length) {
+			position += length
+			return string
+		}
+		srcString = string
+		srcStringStart = position
+		srcStringEnd = position + srcStringLength
 		position += length
-		return string
+		return string.slice(0, length) // we know we just want the beginning
 	}
 }
-function readShortString(length) {
+/*function readShortString(length) {
 	let start = position
 	let end = start + length
 	while (position < end) {
@@ -245,7 +263,7 @@ function readShortString(length) {
 		srcString = src.toString('latin1', start, srcStringEnd)
 	}
 	return srcString.slice(start - srcStringStart, end - srcStringStart)
-}
+}*/
 function readArray(length) {
 	let array = new Array(length)
 	for (let i = 0; i < length; i++) {

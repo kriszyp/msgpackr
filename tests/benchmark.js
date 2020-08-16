@@ -1,13 +1,14 @@
-var msgpack_node = try_require("msgpack");
-var msgpack_lite = try_require("msgpack-lite");
-var msgpack_js = try_require("msgpack-js");
-var msgpack_js_v5 = try_require("msgpack-js-v5");
-var msgpack5 = try_require("msgpack5");
-var msgpack_unpack = try_require("msgpack-unpack");
-var msgpack_codec = try_require("msgpack.codec");
-var notepack = try_require("notepack");
-var what_the_pack = try_require("what-the-pack");
-var msgpackr = try_require("..");
+var msgpackr = tryRequire("..");
+var msgpack_node = tryRequire("msgpack");
+var msgpack_lite = tryRequire("msgpack-lite");
+var msgpack_js = tryRequire("msgpack-js");
+var msgpack_js_v5 = tryRequire("msgpack-js-v5");
+var msgpack5 = tryRequire("msgpack5");
+var msgpack_unpack = tryRequire("msgpack-unpack");
+var msgpack_codec = tryRequire("msgpack.codec");
+var notepack = tryRequire("notepack");
+var what_the_pack = tryRequire("what-the-pack");
+var avro = tryRequire('avsc')
 
 msgpack5 = msgpack5 && msgpack5();
 msgpack_codec = msgpack_codec && msgpack_codec.msgpack;
@@ -46,13 +47,17 @@ if (JSON) {
 }
 
 if (msgpackr) {
-  let serializer = new msgpackr.Serializer({ objectsAsMaps: true })
-  buf = bench('msgpackr {objectsAsMaps: true}: serializer.serialize(obj);', serializer.serialize.bind(serializer), data);
-  obj = bench('msgpackr {objectsAsMaps: true}: serializer.parse(buf);', serializer.parse.bind(serializer), buf);
+//  let serializer = new msgpackr.Serializer({ objectsAsMaps: true })
+  buf = bench('require("msgpackr").serialize(obj);', msgpackr.serialize, data);
+//    buf = bench('require("msgpack").serialize(obj);', data => {let result = serializer.serialize(data); serializer.resetMemory(); return result;}, data);
+
+  obj = bench('require("msgpackr").parse(buf);', msgpackr.parse, buf);
   test(obj);
 
   serializer = new msgpackr.Serializer({ structures: [] })
   buf = bench('msgpackr w/ shared structures: serializer.serialize(obj);', serializer.serialize.bind(serializer), data);
+//  buf = bench('msgpackr w/ shared structures: serializer.serialize(obj);', data => {let result = serializer.serialize(data); serializer.resetMemory(); return result;}, data);
+
   obj = bench('msgpackr w/ shared structures: serializer.parse(buf);', serializer.parse.bind(serializer), buf);
   test(obj);
 }
@@ -62,7 +67,7 @@ if (msgpack_lite) {
   obj = bench('obj = require("msgpack-lite").decode(buf);', msgpack_lite.decode, packed);
   test(obj);
 }
-
+/*
 if (msgpack_node) {
   buf = bench('buf = require("msgpack").pack(obj);', msgpack_node.pack, data);
   obj = bench('obj = require("msgpack").unpack(buf);', msgpack_node.unpack, buf);
@@ -107,6 +112,12 @@ if (what_the_pack) {
 if (msgpack_unpack) {
   obj = bench('obj = require("msgpack-unpack").decode(buf);', msgpack_unpack, packed);
   test(obj);
+}
+*/
+if (avro) {
+  const type = avro.Type.forValue(data);
+  buf = bench('require("avsc")...make schema/type...type.toBuffer(obj);', type.toBuffer.bind(type), data);
+  obj = bench('require("avsc")...make schema/type...type.toBuffer(obj);', type.fromBuffer.bind(type), buf);
 }
 
 function JSON_stringify(src) {
@@ -166,7 +177,7 @@ function test(actual) {
 function SKIP() {
 }
 
-function try_require(name) {
+function tryRequire(name) {
   try {
     return require(name);
   } catch (e) {

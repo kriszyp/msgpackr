@@ -13,12 +13,89 @@ using namespace v8;
 
 typedef void (*token_handler)(int token);
 token_handler tokenTable[256] = {};
-const int MAX_TARGET_SIZE = 256;
+const int MAX_TARGET_SIZE = 255; // leave one for the queued string
+v8::Local<v8::Value> target[MAX_TARGET_SIZE];
 
 uint8_t* source;
 int position = 0;
 int writePosition = 0;
-v8::Local<v8::Value> target[MAX_TARGET_SIZE];
+int stringStart = 0;
+int lastStringEnd = 0;
+Isolate *isolate = Isolate::GetCurrent();
+void readString(int length) {
+	int start = position;
+	int end = position + length;
+	while(position < end) {
+		if (source[position] < 0x80)
+			position++;
+		else {
+			// non-latin character
+			if (lastStringEnd) {
+				target[writePosition++] = String::NewFromOneByte(isolate,  (uint8_t*) source + stringStart, v8::NewStringType::kNormal, lastStringEnd - stringStart).ToLocalChecked();
+				lastStringEnd = 0;
+			}
+			// use standard utf-8 conversion
+			target[writePosition++] = Nan::New<v8::String>((char*) source + start, (int) length).ToLocalChecked();
+			position = end;
+			return;
+		}
+	}
+	if (lastStringEnd) {
+		if (position - lastStringEnd > 40 || end - stringStart > 4000) {
+			target[writePosition++] = String::NewFromOneByte(isolate, (uint8_t*) source + stringStart, v8::NewStringType::kNormal, lastStringEnd - stringStart).ToLocalChecked();
+			stringStart = start;
+		}
+	} else {
+		stringStart = start;
+	}
+	lastStringEnd = end;
+}
+
+NAN_METHOD(extractStrings) {
+	writePosition = 0;
+	lastStringEnd = 0;
+	Local<Context> context = Nan::GetCurrentContext();
+	position = Local<Number>::Cast(info[0])->IntegerValue(context).ToChecked();
+	int size = Local<Number>::Cast(info[1])->IntegerValue(context).ToChecked();
+	next_token: while (position < size) {
+		uint8_t token = source[position++];
+		if (token < 0xa0) {
+			// all one byte tokens
+		} else if (token < 0xc0) {
+			// fixstr, we want to convert this
+			token -= 0xa0;
+			readString(token);
+			/*if (token < 8) {
+				// skip simple strings that are less than 8 characters and only latin, these are handled in JS, 
+				int strPosition = position;
+				int end = position + token;
+				while(strPosition < end) {
+					if (source[strPosition] & 0x80 == 0)
+						strPosition++;
+					else
+						break;
+				}
+				if (strPosition == end)
+					goto next_token; // processed all of them, safe to skip
+			}
+			target[writePosition++] = Nan::New<v8::String>((char*) source + position, (int) token).ToLocalChecked();
+			position += token;*/
+			if (writePosition >= MAX_TARGET_SIZE)
+				break;
+		} else {
+			if (tokenTable[token]) {
+				tokenTable[token](token);
+				if (writePosition >= MAX_TARGET_SIZE)
+					break;
+			}
+		}
+	}
+//	Isolate *isolate = Isolate::GetCurrent();
+	if (lastStringEnd)
+		target[writePosition++] = String::NewFromOneByte(isolate, (uint8_t*) source + stringStart, v8::NewStringType::kNormal, lastStringEnd - stringStart).ToLocalChecked();
+
+	info.GetReturnValue().Set(Array::New(isolate, target, writePosition));
+}
 
 void setupTokenTable() {
 	for (int i = 0; i < 256; i++) {
@@ -27,15 +104,13 @@ void setupTokenTable() {
 	// str 8
 	tokenTable[0xd9] = ([](int token) -> void {
 		int length = source[position++];
-		target[writePosition++] = Nan::New<v8::String>((char*) source + position, length).ToLocalChecked();
-		position += length;
+		readString(length);
 	});
 	// str 16
 	tokenTable[0xda] = ([](int token) -> void {
 		int length = source[position++] << 8;
 		length += source[position++];
-		target[writePosition++] = Nan::New<v8::String>((char*) source + position, length).ToLocalChecked();
-		position += length;
+		readString(length);
 	});
 	// str 32
 	tokenTable[0xdb] = ([](int token) -> void {
@@ -43,8 +118,7 @@ void setupTokenTable() {
 		length += source[position++] << 16;
 		length += source[position++] << 8;
 		length += source[position++];
-		target[writePosition++] = Nan::New<v8::String>((char*) source + position, length).ToLocalChecked();
-		position += length;
+		readString(length);
 	});
 
 	tokenTable[0xcb] = ([](int token) -> void {
@@ -124,58 +198,15 @@ void setupTokenTable() {
 		position += length;
 	});
 }
-NAN_METHOD(setSource) {
-	int length = node::Buffer::Length(info[0]);
-	position = 0;
-	source = (uint8_t*) node::Buffer::Data(info[0]);
-}
 
-NAN_METHOD(readStrings) {
-	writePosition = 0;
-	Local<Context> context = Nan::GetCurrentContext();
-	position = Local<Number>::Cast(info[0])->IntegerValue(context).ToChecked();
-	int size = Local<Number>::Cast(info[1])->IntegerValue(context).ToChecked();
-	next_token: while (position < size) {
-		uint8_t token = source[position++];
-		if (token < 0xa0) {
-			// all one byte tokens
-		} else if (token < 0xc0) {
-			// fixstr, we want to convert this
-			token -= 0xa0;
-			if (token < 8) {
-				// skip simple strings that are less than 8 characters and only latin, these are handled in JS, 
-				int strPosition = position;
-				int end = position + token;
-				while(strPosition < end) {
-					if (source[strPosition] & 0x80 == 0)
-						strPosition++;
-					else
-						break;
-				}
-				if (strPosition == end)
-					goto next_token; // processed all of them, safe to skip
-			} else {
-				target[writePosition++] = Nan::New<v8::String>((char*) source + position, (int) token).ToLocalChecked();
-				position += token;
-				if (writePosition >= MAX_TARGET_SIZE)
-					break;
-			}
-		} else {
-			if (tokenTable[token]) {
-				tokenTable[token](token);
-				if (writePosition >= MAX_TARGET_SIZE)
-					break;
-			}
-		}
-	}
-	Isolate *isolate = Isolate::GetCurrent();
-	info.GetReturnValue().Set(Array::New(isolate, target, writePosition));
+NAN_METHOD(setSource) {
+	source = (uint8_t*) node::Buffer::Data(info[0]);
 }
 
 void initializeModule(v8::Local<v8::Object> exports) {
 	setupTokenTable();
 	Nan::SetMethod(exports, "setSource", setSource);
-	Nan::SetMethod(exports, "readStrings", readStrings);
+	Nan::SetMethod(exports, "extractStrings", extractStrings);
 }
 
 NODE_MODULE(addon, initializeModule);
