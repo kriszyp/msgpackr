@@ -15,7 +15,7 @@ msgpack_codec = msgpack_codec && msgpack_codec.msgpack;
 what_the_pack = what_the_pack && what_the_pack.initialize(2**20);
 
 var pkg = require("../package.json");
-var data = require("./example2.json");
+var data = require("./example.json");
 var packed = msgpack_lite.encode(data);
 var expected = JSON.stringify(data);
 
@@ -67,7 +67,7 @@ if (msgpack_lite) {
   obj = bench('obj = require("msgpack-lite").decode(buf);', msgpack_lite.decode, packed);
   test(obj);
 }
-/*
+
 if (msgpack_node) {
   buf = bench('buf = require("msgpack").pack(obj);', msgpack_node.pack, data);
   obj = bench('obj = require("msgpack").unpack(buf);', msgpack_node.unpack, buf);
@@ -113,7 +113,7 @@ if (msgpack_unpack) {
   obj = bench('obj = require("msgpack-unpack").decode(buf);', msgpack_unpack, packed);
   test(obj);
 }
-*/
+
 if (avro) {
   const type = avro.Type.forValue(data);
   buf = bench('require("avsc")...make schema/type...type.toBuffer(obj);', type.toBuffer.bind(type), data);
