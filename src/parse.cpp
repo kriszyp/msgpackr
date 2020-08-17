@@ -25,21 +25,27 @@ Isolate *isolate = Isolate::GetCurrent();
 void readString(int length) {
 	int start = position;
 	int end = position + length;
-	while(position < end) {
-		if (source[position] < 0x80)
-			position++;
-		else {
-			// non-latin character
-			if (lastStringEnd) {
-				target[writePosition++] = String::NewFromOneByte(isolate,  (uint8_t*) source + stringStart, v8::NewStringType::kNormal, lastStringEnd - stringStart).ToLocalChecked();
-				lastStringEnd = 0;
+	if (length < 0x200) { // for larger strings, we don't bother to check every character for being latin, and just go right to creating a new string
+		while(position < end) {
+			if (source[position] < 0x80) // ensure we character is latin and can be decoded as one byte
+				position++;
+			else {
+				break;
 			}
-			// use standard utf-8 conversion
-			target[writePosition++] = Nan::New<v8::String>((char*) source + start, (int) length).ToLocalChecked();
-			position = end;
-			return;
 		}
 	}
+	if (position < end) {
+		// non-latin character
+		if (lastStringEnd) {
+			target[writePosition++] = String::NewFromOneByte(isolate,  (uint8_t*) source + stringStart, v8::NewStringType::kNormal, lastStringEnd - stringStart).ToLocalChecked();
+			lastStringEnd = 0;
+		}
+		// use standard utf-8 conversion
+		target[writePosition++] = Nan::New<v8::String>((char*) source + start, (int) length).ToLocalChecked();
+		position = end;
+		return;
+	}
+
 	if (lastStringEnd) {
 		if (position - lastStringEnd > 40 || end - stringStart > 4000) {
 			target[writePosition++] = String::NewFromOneByte(isolate, (uint8_t*) source + stringStart, v8::NewStringType::kNormal, lastStringEnd - stringStart).ToLocalChecked();

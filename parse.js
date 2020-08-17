@@ -230,6 +230,12 @@ function readString(headerLength) {
 		srcString = null
 		let string = strings[stringPosition++]
 		if (string == null) {
+			if (length < 8 && srcEnd < 128) {
+				// for small blocks, avoiding the overhead of the extract call is helpful
+				string = simpleString(length)
+				if (string != null)
+					return string
+			}
 			strings = extractStrings(position - headerLength, srcEnd)
 			stringPosition = 0
 			string = strings[stringPosition++]

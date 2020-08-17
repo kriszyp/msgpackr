@@ -28,14 +28,14 @@ try {
 
 if (typeof XMLHttpRequest === 'undefined') {
 	var fs = require('fs')
-	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/samples/study.json'))
+	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/samples/lookuptable.json'))
 } else {
 	var xhr = new XMLHttpRequest()
 	xhr.open('GET', 'samples/outcomes.json', false)
 	xhr.send()
 	var sampleData = JSON.parse(xhr.responseText)
 }
-var ITERATIONS = 200000
+var ITERATIONS = 1000000
 
 suite('msgpack-struct basic tests', function(){
 	test('serialize/parse data', function(){
@@ -165,7 +165,7 @@ suite('msgpack-struct basic tests', function(){
 	})
 
 })
-suite('msgpackr performance tests', function(){
+suite.skip('msgpackr performance tests', function(){
 	test('performance', function() {
 		var data = sampleData
 		this.timeout(10000)
@@ -192,93 +192,3 @@ suite('msgpackr performance tests', function(){
 		//console.log('serialized', serialized.length, global.propertyComparisons)
 	})
 })
-
-
-function createSchema(object) {
-	let schema = []
-	for (let key in object)	{
-		let value = object[key]
-		let childSchema
-		if (value && typeof value == 'object') {
-			childSchema = {
-				key: key
-			}
-			if (value instanceof Array) {
-				if (value[0] && typeof value[0] == 'object') {
-					childSchema.schema = true
-					childSchema.items = createSchema(value[0])
-				}
-			} else {
-				childSchema.schema = true
-				childSchema.structure = createSchema(value)
-			}
-		} else {
-			childSchema = key
-		}
-		schema.push(childSchema)
-	}
-	return schema
-}
-function writeObjectWithSchema(object, schema) {
-	let i = 0
-	let base = {}
-	let values = []
-	for (let key in object) {
-		let value = object[key]
-		let childSchema = schema[i++]
-		if (typeof childSchema == 'string' ? childSchema == key : (childSchema && childSchema.key == key)) {
-			if (childSchema.schema) {
-				if (childSchema.items) {
-					value = writeArrayWithSchema(value, childSchema.items)
-				} else {
-					value = writeObjectWithSchema(value, childSchema.structure)
-				}
-			}
-			values.push(value)
-		} else {
-			base[key] = value
-		}
-	}
-	return values
-}
-function writeArrayWithSchema(array, schema) {
-	let l = array.length
-	let target = new Array(l)
-	for (let i = 0; i < l; i++) {
-		target[i] = writeObjectWithSchema(array[i], schema)
-	}
-	return target
-}
-function readObjectWithSchema(values, schema) {
-	let l = values.length
-	let target = {}
-	for (let i = 0; i < l;) {
-		let childSchema = schema[i]
-		let value = values[i++]
-		if (typeof childSchema == 'string') {
-			target[childSchema] = value
-		}
-		else {
-			if (typeof value == 'object' && value) {
-				if (childSchema.items) {
-					value = readArrayWithSchema(value, childSchema.items)
-				} else if (childSchema.structure) {
-					value = readObjectWithSchema(value, childSchema.structure)
-				}
-			}
-			target[childSchema.key] = value
-		}
-	}
-	return target
-}
-function readArrayWithSchema(values, schema) {
-	let l = values.length
-	let target = new Array(l)
-	for (let i = 0; i < l; i++) {
-		target[i] = readObjectWithSchema(values[i], schema)
-	}
-	return target
-}
-function internalize(object) {
-	return eval('(' + JSON.stringify(object) +')')
-}
