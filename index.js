@@ -1,6 +1,6 @@
-exports.Serializer = require('./serialize').Serializer
-exports.Parser = require('./parse').Parser
-let serializer = new exports.Serializer({ objectsAsMaps: true })
-exports.parse = serializer.parse
-exports.serialize = serializer.serialize
+exports.Packr = require('./pack').Packr
+exports.Unpackr = require('./unpack').Unpackr
+let packr = new exports.Packr({ objectsAsMaps: true })
+exports.unpack = packr.unpack
+exports.pack = packr.pack
 

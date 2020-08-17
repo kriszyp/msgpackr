@@ -7,7 +7,7 @@ let alreadySet
 const EMPTY_ARRAY = []
 let strings = EMPTY_ARRAY
 let stringPosition = 0
-let currentParser = {}
+let currentUnpackr = {}
 let srcString
 let srcStringStart = 0
 let srcStringEnd = 0
@@ -21,11 +21,11 @@ const recordDefinition = currentExtensions[0x72] = (id) => {
 }
 // registration of bulk record definition?
 // currentExtensions[0x52] = () =>
-class Parser {
+class Unpackr {
 	constructor(options) {
 		Object.assign(this, options)
 	}
-	parse(source, end) {
+	unpack(source, end) {
 		srcEnd = end > -1 ? end : source.length
 		position = 0
 		stringPosition = 0
@@ -37,7 +37,7 @@ class Parser {
 			setSource(source)
 		}
 		if (this) {
-			currentParser = this
+			currentUnpackr = this
 			if (this.structures) {
 				currentStructures = this.structures
 				let value = read()
@@ -47,15 +47,14 @@ class Parser {
 				currentStructures = []
 			}
 		} else
-			currentParser = defaultOptions
+			currentUnpackr = defaultOptions
 //		setSource(source)
 //		return readNext()
 		return read()
 	}
 }
-let parseTable = new Array(256)
 let currentStructures
-exports.Parser = Parser
+exports.Unpackr = Unpackr
 
 function read() {
 	let token = src[position++]
@@ -69,8 +68,8 @@ function read() {
 					if (!structure.read)
 						structure.read = createStructureReader(structure)
 					return structure.read()
-				} else if (currentParser.getStructures) {
-					currentParser.structures = currentStructures = currentParser.getStructures() || []
+				} else if (currentUnpackr.getStructures) {
+					currentUnpackr.structures = currentStructures = currentUnpackr.getStructures() || []
 					structure = currentStructures[token & 0x3f]
 					if (structure) {
 						if (!structure.read)
@@ -84,7 +83,7 @@ function read() {
 		} else if (token < 0x90) {
 			// map
 			token -= 0x80
-			if (currentParser.objectsAsMaps) {
+			if (currentUnpackr.objectsAsMaps) {
 				let object = {}
 				for (let i = 0; i < token; i++) {
 					object[read()] = read()
@@ -142,7 +141,7 @@ function read() {
 			case 0xce:
 				return (src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++]
 			case 0xcf:
-				value = currentParser.useBigInts ? src.readBigUInt64BE(position) : src.readUIntBE(position + 2, 6)
+				value = currentUnpackr.useBigInts ? src.readBigUInt64BE(position) : src.readUIntBE(position + 2, 6)
 				position += 8
 				return value
 
@@ -158,7 +157,7 @@ function read() {
 				position += 4
 				return value
 			case 0xd3:
-				value = currentParser.useBigInts ? src.readBigInt64BE(position) : src.readIntBE(position + 2, 6)
+				value = currentUnpackr.useBigInts ? src.readBigInt64BE(position) : src.readIntBE(position + 2, 6)
 				position += 8
 				return value
 
@@ -279,7 +278,7 @@ function readArray(length) {
 }
 
 function readMap(length) {
-	if (currentParser.objectsAsMaps) {
+	if (currentUnpackr.objectsAsMaps) {
 		let object = {}
 		for (let i = 0; i < length; i++) {
 			object[read()] = read()

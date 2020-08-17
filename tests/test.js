@@ -11,9 +11,9 @@ function tryRequire(module) {
 if (typeof chai === 'undefined') { chai = require('chai') }
 assert = chai.assert
 //if (typeof msgpack-struct === 'undefined') { msgpack-struct = require('..') }
-var Serializer = require('..').Serializer
-var parse = require('..').parse
-var serialize = require('..').serialize
+var Packr = require('..').Packr
+var unpack = require('..').unpack
+var pack = require('..').pack
 
 
 var zlib = tryRequire('zlib')
@@ -38,7 +38,7 @@ if (typeof XMLHttpRequest === 'undefined') {
 var ITERATIONS = 1000000
 
 suite('msgpack-struct basic tests', function(){
-	test('serialize/parse data', function(){
+	test('pack/unpack data', function(){
 		var data = {
 			data: [
 				{ a: 1, name: 'one', type: 'odd', isOdd: true },
@@ -61,10 +61,10 @@ suite('msgpack-struct basic tests', function(){
 			]
 		}
 		let structures = []
-		let serializer = new Serializer({ structures })
-		var serialized = serializer.serialize(data)
-		var parsed = serializer.parse(serialized)
-		assert.deepEqual(parsed, data)
+		let packr = new Packr({ structures })
+		var packd = packr.pack(data)
+		var unpackd = packr.unpack(packd)
+		assert.deepEqual(unpackd, data)
 	})
 
 	test('mixed array', function(){
@@ -83,20 +83,20 @@ suite('msgpack-struct basic tests', function(){
 			]
 		]
 		let structures = []
-		let serializer = new Serializer({ structures })
-		var serialized = serializer.serialize(data)
-		var parsed = serializer.parse(serialized)
-		assert.deepEqual(parsed, data)
+		let packr = new Packr({ structures })
+		var packd = packr.pack(data)
+		var unpackd = packr.unpack(packd)
+		assert.deepEqual(unpackd, data)
 	})
 
-	test('serialize/parse sample data', function(){
+	test('pack/unpack sample data', function(){
 		var data = sampleData
 		let structures = []
-		let serializer = new Serializer({ structures, objectsAsMaps: false })
+		let packr = new Packr({ structures, objectsAsMaps: false })
 		debugger
-		var serialized = serializer.serialize(data)
-		var parsed = serializer.parse(serialized)
-		assert.deepEqual(parsed, data)
+		var packd = packr.pack(data)
+		var unpackd = packr.unpack(packd)
+		assert.deepEqual(unpackd, data)
 	})
 
 	test.skip('extended class', function(){
@@ -114,9 +114,9 @@ suite('msgpack-struct basic tests', function(){
 		// TODO: create two of these
 		var options = new Options()
 		options.addExtension(Extended, 'Extended')
-		var serialized = serialize(data, options)
-		var parsed = parse(serialized, options)
-		assert.equal(parsed.extendedInstance.getDouble(), 8)
+		var packd = pack(data, options)
+		var unpackd = unpack(packd, options)
+		assert.equal(unpackd.extendedInstance.getDouble(), 8)
 	})
 
 
@@ -130,12 +130,12 @@ suite('msgpack-struct basic tests', function(){
 			map: map,
 			//date: new Date(1532219539819)
 		}
-		let serializer = new Serializer()
-		var serialized = serializer.serialize(data)
-		var parsed = serializer.parse(serialized)
-		assert.equal(parsed.map.get(4), 'four')
-		assert.equal(parsed.map.get('three'), 3)
-		//assert.equal(parsed.date.getTime(), 1532219539819)
+		let packr = new Packr()
+		var packd = packr.pack(data)
+		var unpackd = packr.unpack(packd)
+		assert.equal(unpackd.map.get(4), 'four')
+		assert.equal(unpackd.map.get('three'), 3)
+		//assert.equal(unpackd.date.getTime(), 1532219539819)
 	})
 
 	test('numbers', function(){
@@ -151,17 +151,17 @@ suite('msgpack-struct basic tests', function(){
 			//negativeZero: -0,
 			Infinity: Infinity
 		}
-		var serialized = serialize(data)
-		var parsed = parse(serialized)
-		assert.deepEqual(parsed, data)
+		var packd = pack(data)
+		var unpackd = unpack(packd)
+		assert.deepEqual(unpackd, data)
 	})
 
 	test('utf16 causing expansion', function() {
 		this.timeout(10000)
 		let data = {fixstr: 'ᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝ', str8:'ᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝ'}
-		var serialized = serialize(data)
-		parsed = parse(serialized)
-		assert.deepEqual(parsed, data)
+		var packd = pack(data)
+		unpackd = unpack(packd)
+		assert.deepEqual(unpackd, data)
 	})
 
 })
@@ -170,25 +170,25 @@ suite.skip('msgpackr performance tests', function(){
 		var data = sampleData
 		this.timeout(10000)
 		let structures = []
-		let serializer = new Serializer({ structures, objectsAsMaps: false })
-		var serialized = serializer.serialize(data)
-		console.log('msgpack-struct size', serialized.length)
+		let packr = new Packr({ structures, objectsAsMaps: false })
+		var packd = packr.pack(data)
+		console.log('msgpack-struct size', packd.length)
 		for (var i = 0; i < ITERATIONS; i++) {
-			var parsed = serializer.parse(serialized)
+			var unpackd = packr.unpack(packd)
 		}
 	})
-	test('performance serialize', function() {
+	test('performance pack', function() {
 		var data = sampleData
 		this.timeout(10000)
 		let structures = []
-		let serializer = new Serializer({ structures, objectsAsMaps: false })
+		let packr = new Packr({ structures, objectsAsMaps: false })
 
 		for (var i = 0; i < ITERATIONS; i++) {
-			//serialized = serialize(data, { shared: sharedStructure })
-			var serialized = serializer.serialize(data)
-			serializer.resetMemory()
-			//var serializedGzip = deflateSync(serialized)
+			//packd = pack(data, { shared: sharedStructure })
+			var packd = packr.pack(data)
+			packr.resetMemory()
+			//var packdGzip = deflateSync(packd)
 		}
-		//console.log('serialized', serialized.length, global.propertyComparisons)
+		//console.log('packd', packd.length, global.propertyComparisons)
 	})
 })

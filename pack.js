@@ -1,7 +1,7 @@
 "use strict"
-let Parser = require('./parse').Parser
+let Unpackr = require('./unpack').Unpackr
 const RECORD_SYMBOL = Symbol('record-id')
-class Serializer extends Parser {
+class Packr extends Unpackr {
 	constructor(options) {
 		super(options)
 		this.offset = 0
@@ -15,7 +15,7 @@ class Serializer extends Parser {
 		let structures
 		let types
 		let lastSharedStructuresLength = 0
-		let serializer = this
+		let packr = this
 		let maxSharedStructures = 32
 		let recordIdsToRemove = []
 		let transitionsCount = 0
@@ -24,8 +24,8 @@ class Serializer extends Parser {
 			throw new Error('Too many shared structures')
 		}
 
-		this.serialize = function(value) {
-			position = serializer.offset
+		this.pack = function(value) {
+			position = packr.offset
 			safeEnd = target.length - 10
 			if (safeEnd - position < 0x800) {
 				// don't start too close to the end, 
@@ -33,7 +33,7 @@ class Serializer extends Parser {
 				position = 0
 			}
 			start = position
-			sharedStructures = serializer.structures
+			sharedStructures = packr.structures
 			if (sharedStructures) {
 				let l = Math.min(sharedStructures.length, maxSharedStructures)
 				if (sharedStructures.length !== lastSharedStructuresLength && lastSharedStructuresLength < maxSharedStructures) {
@@ -60,9 +60,9 @@ class Serializer extends Parser {
 				hasSharedUpdate = false
 			structures = sharedStructures || []
 			try {
-				serialize(value)
-				serializer.offset = position // update the offset so next serialization doesn't write over our buffer, but can continue writing to same buffer sequentially
-				return target.slice(start, position) // position can change if we call serialize again in saveStructures, so we get the buffer now
+				pack(value)
+				packr.offset = position // update the offset so next serialization doesn't write over our buffer, but can continue writing to same buffer sequentially
+				return target.slice(start, position) // position can change if we call pack again in saveStructures, so we get the buffer now
 			} finally {
 				if (sharedStructures) {
 					if (serializationsSinceTransitionRebuild < 10)
@@ -80,22 +80,22 @@ class Serializer extends Parser {
 						}
 						recordIdsToRemove = []
 					}
-					if (hasSharedUpdate && serializer.saveStructures) {
-						if (serializer.structures.length > maxSharedStructures) {
-							serializer.structures = serializer.structures.slice(0, maxSharedStructures)
+					if (hasSharedUpdate && packr.saveStructures) {
+						if (packr.structures.length > maxSharedStructures) {
+							packr.structures = packr.structures.slice(0, maxSharedStructures)
 						}
-						if (serializer.saveStructures(serializer.structures, lastSharedStructuresLength) === false) {
+						if (packr.saveStructures(packr.structures, lastSharedStructuresLength) === false) {
 							// get updated structures and try again if the update failed
-							if (serializer.getStructures) {
-								serializer.structures = serializer.getStructures() || []
+							if (packr.getStructures) {
+								packr.structures = packr.getStructures() || []
 							}
-							return serializer.serialize(value)
+							return packr.pack(value)
 						}
 					}
 				}
 			}
 		}
-		const serialize = (value) => {
+		const pack = (value) => {
 			if (position > safeEnd) {
 				target = makeRoom(start, position)
 				start = 0
@@ -240,7 +240,7 @@ class Serializer extends Parser {
 							target[position++] = length & 0xff
 						} // TODO array 32
 						for (let i = 0; i < length; i++) {
-							serialize(value[i])
+							pack(value[i])
 						}
 					} else if (value.constructor === Map) {
 						length = value.size
@@ -258,8 +258,8 @@ class Serializer extends Parser {
 							target[position++] = length & 0xff
 						}
 						for (let [ key, entryValue ] of value) {
-							serialize(key)
-							serialize(entryValue)
+							pack(key)
+							pack(entryValue)
 						}
 					} else if (value.constructor === Date) {
 						throw new Error('Date not implemented yet')
@@ -290,8 +290,8 @@ class Serializer extends Parser {
 			let size = 0
 			for (let key in object) {
 				if (safePrototype || object.hasOwnProperty(key)) {
-					serialize(key)
-					serialize(object[key])
+					pack(key)
+					pack(object[key])
 					size++
 				}
 			}
@@ -327,7 +327,7 @@ class Serializer extends Parser {
 						objectOffset
 					}
 					transition = nextTransition
-					serialize(object[key])
+					pack(object[key])
 				}
 			}
 			let id = transition.id
@@ -371,12 +371,12 @@ class Serializer extends Parser {
 					if (recordIdsToRemove.length >= 0x40 - maxSharedStructures)
 						recordIdsToRemove.shift()[RECORD_SYMBOL] = 0 // we are cycling back through, and have to remove old ones
 					recordIdsToRemove.push(transition)
-					serialize(keys)
+					pack(keys)
 				}
 			}
 			// now write the values
 			for (let i =0, l = keys.length; i < l; i++)
-				serialize(object[keys[i]])
+				pack(object[keys[i]])
 		}
 		const makeRoom = (start, end) => {
 			let newSize = ((Math.max((end - start) << 2, target.length - 1) >> 12) + 1) << 12
@@ -393,4 +393,4 @@ class Serializer extends Parser {
 		this.offset = 0
 	}
 }
-exports.Serializer = Serializer
+exports.Packr = Packr

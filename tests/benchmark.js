@@ -15,7 +15,7 @@ msgpack_codec = msgpack_codec && msgpack_codec.msgpack;
 what_the_pack = what_the_pack && what_the_pack.initialize(2**20);
 
 var pkg = require("../package.json");
-var data = require("./example.json");
+var data = require("./samples/small.json");
 var packed = msgpack_lite.encode(data);
 var expected = JSON.stringify(data);
 
@@ -47,18 +47,18 @@ if (JSON) {
 }
 
 if (msgpackr) {
-//  let serializer = new msgpackr.Serializer({ objectsAsMaps: true })
-  buf = bench('require("msgpackr").serialize(obj);', msgpackr.serialize, data);
-//    buf = bench('require("msgpack").serialize(obj);', data => {let result = serializer.serialize(data); serializer.resetMemory(); return result;}, data);
+//  let packr = new msgpackr.Packr({ objectsAsMaps: true })
+  buf = bench('require("msgpackr").pack(obj);', msgpackr.serialize, data);
+//    buf = bench('require("msgpack").serialize(obj);', data => {let result = packr.serialize(data); packr.resetMemory(); return result;}, data);
 
-  obj = bench('require("msgpackr").parse(buf);', msgpackr.parse, buf);
+  obj = bench('require("msgpackr").unpack(buf);', msgpackr.parse, buf);
   test(obj);
 
-  serializer = new msgpackr.Serializer({ structures: [] })
-  buf = bench('msgpackr w/ shared structures: serializer.serialize(obj);', serializer.serialize.bind(serializer), data);
-//  buf = bench('msgpackr w/ shared structures: serializer.serialize(obj);', data => {let result = serializer.serialize(data); serializer.resetMemory(); return result;}, data);
+  packr = new msgpackr.Packr({ structures: [] })
+  buf = bench('msgpackr w/ shared structures: packr.pack(obj);', packr.pack.bind(packr), data);
+//  buf = bench('msgpackr w/ shared structures: packr.pack(obj);', data => {let result = packr.pack(data); packr.resetMemory(); return result;}, data);
 
-  obj = bench('msgpackr w/ shared structures: serializer.parse(buf);', serializer.parse.bind(serializer), buf);
+  obj = bench('msgpackr w/ shared structures: packr.unpack(buf);', packr.unpack.bind(packr), buf);
   test(obj);
 }
 
