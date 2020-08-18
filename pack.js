@@ -35,11 +35,11 @@ class Packr extends Unpackr {
 			start = position
 			sharedStructures = packr.structures
 			if (sharedStructures) {
-				let l = Math.min(sharedStructures.length, maxSharedStructures)
-				if (sharedStructures.length !== lastSharedStructuresLength && lastSharedStructuresLength < maxSharedStructures) {
+				let sharedStructuresLength = Math.min(sharedStructures.length, maxSharedStructures)
+				if (!sharedStructures.transitions) {
 					// rebuild our structure transitions
 					sharedStructures.transitions = Object.create(null)
-					for (let i = 0; i < l; i++) {
+					for (let i = 0; i < sharedStructuresLength; i++) {
 						let keys = sharedStructures[i]
 						let nextTransition, transition = sharedStructures.transitions
 						for (let i =0, l = keys.length; i < l; i++) {
@@ -54,7 +54,7 @@ class Packr extends Unpackr {
 					}
 					lastSharedStructuresLength = sharedStructures.length
 				}
-				sharedStructures.nextId = l + 0x40
+				sharedStructures.nextId = sharedStructuresLength + 0x40
 			}
 			if (hasSharedUpdate)
 				hasSharedUpdate = false
@@ -70,9 +70,8 @@ class Packr extends Unpackr {
 					if (recordIdsToRemove.length > 0) {
 						if (transitionsCount > 1000) {
 							// force a rebuild occasionally after a lot of transitions so it can get cleaned up
-							lastSharedStructuresLength = 0
-							serializationsSinceTransitionRebuild = 0
 							sharedStructures.transitions = null
+							serializationsSinceTransitionRebuild = 0
 						} else {
 							for (let i = 0, l = recordIdsToRemove.length; i < l; i++) {
 								recordIdsToRemove[i][RECORD_SYMBOL] = 0
@@ -84,6 +83,7 @@ class Packr extends Unpackr {
 						if (packr.structures.length > maxSharedStructures) {
 							packr.structures = packr.structures.slice(0, maxSharedStructures)
 						}
+
 						if (packr.saveStructures(packr.structures, lastSharedStructuresLength) === false) {
 							// get updated structures and try again if the update failed
 							if (packr.getStructures) {
@@ -91,6 +91,7 @@ class Packr extends Unpackr {
 							}
 							return packr.pack(value)
 						}
+						lastSharedStructuresLength = packr.structures.length
 					}
 				}
 			}
