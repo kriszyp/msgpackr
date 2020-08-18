@@ -1,6 +1,6 @@
 # msgpackr
 
-msgpackr is an extremely fast MessagePack NodeJS/JavaScript implementation. At the time of writing, it is several times faster than any other known implementations, faster than Avro (for JS), and generally even faster than native JSON.stringify/unpack. It also includes an optional record extension, for defining record structures that makes MessagePack even faster and more compact, often over twice as fast as even native JSON methods and many times faster any other JS implementations.
+msgpackr is an extremely fast MessagePack NodeJS/JavaScript implementation. At the time of writing, it is several times faster than any other known implementations, faster than Avro (for JS), and generally even faster than native JSON.stringify/parse. It also includes an optional record extension, for defining record structures that makes MessagePack even faster and more compact, often over twice as fast as even native JSON methods and many times faster any other JS implementations.
 
 ## Basic Usage
 
@@ -15,10 +15,10 @@ import { unpack, pack } from 'msgpackr';
 let packdAsBuffer = pack(value);
 let data = unpack(packdAsBuffer);
 ```
-This `pack` function will generate standard MessagePack without any extensions that should be compatible with any standard MessagePack unpackr. It will pack JavaScript objects as MessagePack maps by default. The `unpack` function will depack MessagePack maps as an `Object` with the properties from the map.
+This `pack` function will generate standard MessagePack without any extensions that should be compatible with any standard MessagePack serializer. It will pack JavaScript objects as MessagePack maps by default. The `unpack` function will deserialize MessagePack maps as an `Object` with the properties from the map.
 
 # Record / Object Structures
-There is a critical different between maps or dictionaries that hold an arbitrary set of keys and values, and record or object structures that have a well-defined set of fields that may have many instances using that structure. By using the record extension, this distinction is preserved in MessagePack and the encoding can reuse structures not only provides better type preservation, but can yield signficantly more compact encodings and increases parsing/deserialization performance by 2-3x. msgpackr automatically generates record definitions that are reused and referenced by objects with the same structure. There are a number of ways to use this to our advantage. For large object structure with a repeating objects with similar structures, the record can yield benefits. To use the record structures extension, we create a new Packr or PackrStream instance. By default a new Packr or PackrStream instance will have the record extension enabled:
+There is a critical difference between maps (or dictionaries) that hold an arbitrary set of keys and values, and records or object structures that have a well-defined set of fields which may have many instances using that same structure. By using the record extension, this distinction is preserved in MessagePack and the encoding can reuse structures and not only provides better type preservation, but yield signficantly more compact encodings and increase parsing/deserialization performance by 2-3x. msgpackr automatically generates record definitions that are reused and referenced by objects with the same structure. There are a number of ways to use this to our advantage. For large object structures with repeating nested objects with similar structures, simply serializing with the record extension can yield benefits. To use the record structures extension, we create a new `Packr` instance. By default a new `Packr` instance will have the record extension enabled:
 ```
 import { Packr } from 'msgpackr';
 let packr = Packr();
@@ -26,7 +26,7 @@ packr.pack(myBigData);
 
 ```
 
-One way to further leverage the benefits of the msgpackr record structures is to use streams that naturally allow for data to reuse previous record structures. We can use the PackrStream instance that will have the record extension enabled:
+Another way to further leverage the benefits of the msgpackr record structures is to use streams that naturally allow for data to reuse based on previous record structures. We can use the `PackrStream` instance that will have also the record extension enabled by default:
 
 ```
 import { PackrStream } from 'msgpackr';
@@ -44,31 +44,29 @@ stream1.write(myData);
 stream2.on('data', (data) => {
 	// received data
 }
-
 ```
+When creating a new `Packr` or `PackrStream` instance, we can enable or disable the record structure extension with the `objectsAsMaps` property. When this is `true`, the record structure extension will be disabled, and all objects will be serialized using MessageMap maps, and all maps will be deserialized to JS `Object`s as properties.
 
 ## Shared Record Structures
-Another valuable way of using msgpackr is for storing data, such as in a database or in files. If a number of objects are being stored with common data structures, a shared structure can be used to greatly improve data storage and deserialization efficiency. We just need to provide a to store the generated shared structure so it is available to depack stored data in the future.
+Another valuable way of using msgpackr record extension is for storing data, such as in a database or in files. If a number of objects with common data structures, are being stored, a shared structure can be used to greatly improve data storage and deserialization efficiency. We just need to provide a way to store the generated shared structure so it is available to deserialize stored data in the future:
 
 ```
 import { Packr } from 'msgpackr';
 let packr = Packr({
 	getStructures() {
+		// storing our data in file (but we could also store in a db or key-value store)
 		return unpack(readFileSync('my-shared-structures.mp')) || [];
 	},
-	saveStructures() {
-		writeFileSync('my-shared-structures.mp')
-	}
+	saveStructures(structures) {
+		writeFileSync('my-shared-structures.mp', pack(structures))
+	},
 	structures: []
 });
-packr.pack(myBigData);
 
 ```
 
-
-
 ### resetMemory
-During the serialization process, data is written to buffers. Allocating new buffers is a relatively expensive process, and the `resetMemory` method can help allow reuse buffers that will further improve performance. The `resetMemory` method can be called when previously created buffer(s) are no longer needed. For example, if we packd an object, and wrote it to a database, we could indicate that we are done:
+During the serialization process, data is written to buffers. Allocating new buffers is a relatively expensive process, and the `resetMemory` method can help allow reuse of buffers that will further improve performance. The `resetMemory` method can be called when previously created buffer(s) are no longer needed. For example, if we serialized an object, and wrote it to a database, we could indicate that we are done:
 ```
 let buffer = packr.pack(data);
 writeToStorageSync(buffer);
