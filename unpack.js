@@ -1,5 +1,5 @@
 "use strict"
-let { setSource, extractStrings } = require('./build/Release/msgpack.node')
+let { setSource, extractStrings } = require('./build/Release/msgpackr.node')
 let src
 let srcEnd
 let position = 0
@@ -36,25 +36,36 @@ class Unpackr {
 			src = source
 			setSource(source)
 		}
+		let value
 		if (this) {
 			currentUnpackr = this
 			if (this.structures) {
 				currentStructures = this.structures
-				let value = read()
-				currentStructures = null
+				value = read()
+				if (position >= srcEnd) {
+					// finished reading this source, cleanup references
+					currentStructures = null
+					src = null
+				}
 				return value
-			} else if (!currentStructures) {
+			} else if (!currentStructures || currentStructures.length > 0) {
 				currentStructures = []
 			}
 		} else
 			currentUnpackr = defaultOptions
 //		setSource(source)
 //		return readNext()
-		return read()
+		value = read()
+		src = null
+		return value
 	}
 }
 let currentStructures
 exports.Unpackr = Unpackr
+exports.read = read
+exports.getPosition = () => {
+	return position
+}
 
 function read() {
 	let token = src[position++]
@@ -193,7 +204,14 @@ function read() {
 			// map 32
 				return readMap((src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++])
 			default: // negative int
-				return token - 0x100
+				if (token >= 0xe0)
+					return token - 0x100
+				if (token === undefined) {
+					let error = new Error('Unexpected end of MessagePack data')
+					error.incomplete = true
+					throw error
+				}
+				throw new Error('Unknown MessagePack token ' + token)
 
 		}
 	}
@@ -373,19 +391,3 @@ function simpleString(length) {
 
 	}
 }
-
-/*
-function simpleString(length) {
-  const out = new Array(length);
-  for (let i = 0; i < length; i++) {
-    const byte = src[position++];
-    if ((byte & 0x80) === 0) {
-      // 1 byte
-      out[i] = byte;
-    } else {
-    	position -= i + 1
-    	return
-    }
-  }
-  return String.fromCharCode.apply(String, out)
-}*/

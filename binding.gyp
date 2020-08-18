@@ -4,10 +4,10 @@
   },
   "targets": [
     {
-      "target_name": "msgpack",
+      "target_name": "msgpackr",
       "win_delay_load_hook": "false",
       "sources": [
-        "src/parse.cpp",
+        "src/extract.cpp",
       ],
       "include_dirs": [
         "<!(node -e \"require('nan')\")",

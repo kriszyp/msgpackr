@@ -18,6 +18,7 @@
   "main": "./index.js",
   "gypfile": true,
   "dependencies": {
+    "async": "^3.2.0",
     "msgpack-lite": "^0.1.26",
     "nan": "^2.13.1",
     "notepack": "0.0.2",

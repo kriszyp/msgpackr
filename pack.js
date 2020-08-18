@@ -17,6 +17,11 @@ class Packr extends Unpackr {
 		let lastSharedStructuresLength = 0
 		let packr = this
 		let maxSharedStructures = 32
+		let isSequential = options && options.sequential
+		if (isSequential) {
+			maxSharedStructures = 0
+			this.structures = []
+		}
 		let recordIdsToRemove = []
 		let transitionsCount = 0
 		let serializationsSinceTransitionRebuild = 0
@@ -35,7 +40,9 @@ class Packr extends Unpackr {
 			start = position
 			sharedStructures = packr.structures
 			if (sharedStructures) {
-				let sharedStructuresLength = Math.min(sharedStructures.length, maxSharedStructures)
+				let sharedStructuresLength = sharedStructures.length
+				if (sharedStructuresLength >  maxSharedStructures && !isSequential)
+					sharedStructuresLength = maxSharedStructures
 				if (!sharedStructures.transitions) {
 					// rebuild our structure transitions
 					sharedStructures.transitions = Object.create(null)
@@ -54,7 +61,8 @@ class Packr extends Unpackr {
 					}
 					lastSharedStructuresLength = sharedStructures.length
 				}
-				sharedStructures.nextId = sharedStructuresLength + 0x40
+				if (!isSequential)
+					sharedStructures.nextId = sharedStructuresLength + 0x40
 			}
 			if (hasSharedUpdate)
 				hasSharedUpdate = false
@@ -67,15 +75,15 @@ class Packr extends Unpackr {
 				if (sharedStructures) {
 					if (serializationsSinceTransitionRebuild < 10)
 						serializationsSinceTransitionRebuild++
-					if (recordIdsToRemove.length > 0) {
-						if (transitionsCount > 1000) {
-							// force a rebuild occasionally after a lot of transitions so it can get cleaned up
-							sharedStructures.transitions = null
-							serializationsSinceTransitionRebuild = 0
-						} else {
-							for (let i = 0, l = recordIdsToRemove.length; i < l; i++) {
-								recordIdsToRemove[i][RECORD_SYMBOL] = 0
-							}
+					if (transitionsCount > 1000) {
+						// force a rebuild occasionally after a lot of transitions so it can get cleaned up
+						sharedStructures.transitions = null
+						serializationsSinceTransitionRebuild = 0
+						if (recordIdsToRemove.length > 0)
+							recordIdsToRemove = []
+					} else if (recordIdsToRemove.length > 0 && !isSequential) {
+						for (let i = 0, l = recordIdsToRemove.length; i < l; i++) {
+							recordIdsToRemove[i][RECORD_SYMBOL] = 0
 						}
 						recordIdsToRemove = []
 					}

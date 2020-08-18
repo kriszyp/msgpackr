@@ -15,7 +15,7 @@ msgpack_codec = msgpack_codec && msgpack_codec.msgpack;
 what_the_pack = what_the_pack && what_the_pack.initialize(2**20);
 
 var pkg = require("../package.json");
-var data = require("./samples/small.json");
+var data = require("./example4.json");
 var packed = msgpack_lite.encode(data);
 var expected = JSON.stringify(data);
 
@@ -48,10 +48,10 @@ if (JSON) {
 
 if (msgpackr) {
 //  let packr = new msgpackr.Packr({ objectsAsMaps: true })
-  buf = bench('require("msgpackr").pack(obj);', msgpackr.serialize, data);
+  buf = bench('require("msgpackr").pack(obj);', msgpackr.pack, data);
 //    buf = bench('require("msgpack").serialize(obj);', data => {let result = packr.serialize(data); packr.resetMemory(); return result;}, data);
 
-  obj = bench('require("msgpackr").unpack(buf);', msgpackr.parse, buf);
+  obj = bench('require("msgpackr").unpack(buf);', msgpackr.unpack, buf);
   test(obj);
 
   packr = new msgpackr.Packr({ structures: [] })

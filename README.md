@@ -74,6 +74,7 @@ writeToStorageSync(buffer);
 packr.resetMemory()
 // future serialization can now reuse memory for better performance
 ```
+The use of `resetMemory` is never required, buffers will still be handled and cleaned up through GC if not used, it just provides a small performance boost.
 
 
 

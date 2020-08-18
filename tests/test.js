@@ -12,6 +12,8 @@ if (typeof chai === 'undefined') { chai = require('chai') }
 assert = chai.assert
 //if (typeof msgpack-struct === 'undefined') { msgpack-struct = require('..') }
 var Packr = require('..').Packr
+var PackrStream = require('..').PackrStream
+var UnpackrStream = require('..').UnpackrStream
 var unpack = require('..').unpack
 var pack = require('..').pack
 
@@ -162,6 +164,35 @@ suite('msgpack-struct basic tests', function(){
 		var packd = pack(data)
 		unpackd = unpack(packd)
 		assert.deepEqual(unpackd, data)
+	})
+	test('serialize/parse stream', () => {
+		const serializeStream = new PackrStream({
+		})
+		const parseStream = new UnpackrStream()
+		serializeStream.pipe(parseStream)
+		const received = []
+		parseStream.on('data', data => {
+			received.push(data)
+		})
+		debugger
+		const messages = [{
+			name: 'first'
+		}, {
+			name: 'second'
+		}, {
+			name: 'third'
+		}, {
+			name: 'third',
+			extra: [1, 3, { foo: 'hi'}, 'bye']
+		}]
+		for (const message of messages)
+			serializeStream.write(message)
+		return new Promise((resolve, reject) => {
+			setTimeout(() => {
+				assert.deepEqual(received, messages)
+				resolve()
+			}, 10)
+		})
 	})
 
 })
