@@ -105,10 +105,9 @@ class Packr extends Unpackr {
 			}
 		}
 		const pack = (value) => {
-			if (position > safeEnd) {
-				target = makeRoom(start, position)
-				start = 0
-			}
+			if (position > safeEnd)
+				target = makeRoom(position)
+
 			var type = typeof value
 			var length
 			if (type === 'string') {
@@ -125,10 +124,9 @@ class Packr extends Unpackr {
 					headerSize = 5
 				}
 				let maxBytes = strLength * 3
-				if (position + maxBytes > safeEnd) {
-					target = makeRoom(start, position + maxBytes)
-					start = 0
-				}
+				if (position + maxBytes > safeEnd)
+					target = makeRoom(position + maxBytes)
+
 				if (strLength < 0x40) {
 					let strPosition = position + headerSize
 					// this is all copied from avsc project
@@ -237,9 +235,10 @@ class Packr extends Unpackr {
 				if (!value)
 					target[position++] = 0xc0
 				else {
-					if (value.constructor === Object) {
+					let constructor = value.constructor
+					if (constructor === Object) {
 						writeObject(value, true)
-					} else if (value.constructor === Array) {
+					} else if (constructor === Array) {
 						length = value.length
 						if (length < 0x10) {
 							target[position++] = 0x90 | length
@@ -251,7 +250,7 @@ class Packr extends Unpackr {
 						for (let i = 0; i < length; i++) {
 							pack(value[i])
 						}
-					} else if (value.constructor === Map) {
+					} else if (constructor === Map) {
 						length = value.size
 						if (length < 0x10) {
 							target[position++] = 0x80 | length
@@ -270,8 +269,28 @@ class Packr extends Unpackr {
 							pack(key)
 							pack(entryValue)
 						}
-					} else if (value.constructor === Date) {
+					} else if (constructor === Date) {
 						throw new Error('Date not implemented yet')
+					} else if (constructor === Buffer) {
+						length = value.length
+						if (length < 0x100) {
+							target[position++] = 0xc4
+							target[position++] = length
+						} else if (length < 0x10000) {
+							target[position++] = 0xc5
+							target[position++] = length >> 8
+							target[position++] = length & 0xff
+						} else {
+							target[position++] = 0xc6
+							target[position++] = length >> 24
+							target[position++] = (length >> 16) & 0xff
+							target[position++] = (length >> 8) & 0xff
+							target[position++] = length & 0xff
+						}
+						if (position + length > safeEnd)
+							makeRoom(position + length)
+						value.copy(target, position)
+						position += length
 					} else {	
 						writeObject(value, false)
 					}
@@ -307,7 +326,7 @@ class Packr extends Unpackr {
 			target[objectOffset++ + start] = size >> 8
 			target[objectOffset + start] = size & 0xff
 		} :
-	/*	sharedStructures ? 
+	/*	sharedStructures ?  // For highly stable structures, using for-in can a little bit faster
 		(object, safePrototype) => {
 			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null))
 			let objectOffset = position++ - start
@@ -330,7 +349,7 @@ class Packr extends Unpackr {
 								nextTransition.__keys__ = keys.slice(0, i + 1)
 							}
 						}
-						makeRoom(start, position + size)
+						makeRoom(position + size)
 						nextTransition = transition[key]
 						target.copy(target, )
 						objectOffset
@@ -387,7 +406,7 @@ class Packr extends Unpackr {
 			for (let i =0, l = keys.length; i < l; i++)
 				pack(object[keys[i]])
 		}
-		const makeRoom = (start, end) => {
+		const makeRoom = (end) => {
 			let newSize = ((Math.max((end - start) << 2, target.length - 1) >> 12) + 1) << 12
 			let newBuffer = Buffer.allocUnsafeSlow(newSize)
 			target.copy(newBuffer, 0, start, end)

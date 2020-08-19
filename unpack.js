@@ -19,6 +19,7 @@ const recordDefinition = currentExtensions[0x72] = (id) => {
 	structure.read = createStructureReader(structure)
 	return structure.read()
 }
+currentExtensions[0] = (data) => {} // notepack defines extension 0 to mean undefined, so use that as the default here
 // registration of bulk record definition?
 // currentExtensions[0x52] = () =>
 class Unpackr {
@@ -136,6 +137,24 @@ function read() {
 			case 0xc1: return; // "never-used", just use it for undefined for now
 			case 0xc2: return false
 			case 0xc3: return true
+			case 0xc4:
+				// bin 8
+				return readBin(src[position++])
+			case 0xc5:
+				// bin 16
+				return readBin((src[position++] << 8) + src[position++])
+			case 0xc6:
+				// bin 32
+				return readBin((src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++])
+			case 0xc7:
+				// ext 8
+				return readExt(src[position++])
+			case 0xc8:
+				// ext 16
+				return readExt((src[position++] << 8) + src[position++])
+			case 0xc9:
+				// ext 32
+				return readExt((src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++])
 			case 0xca:
 				value = src.readFloatBE(position)
 				position += 4
@@ -173,6 +192,7 @@ function read() {
 				return value
 
 			case 0xd4:
+				// fixext 1
 				value = src[position++]
 				if (value == 0x72) {
 					return recordDefinition(src[position++])
@@ -180,8 +200,24 @@ function read() {
 					if (currentExtensions[value])
 						return currentExtensions[value](src[position++])
 					else
-						throw new Error('Unknown extension ' + byte)
+						throw new Error('Unknown extension ' + value)
 				}
+			case 0xd5:
+				// fixext 2
+				value = src[position++]
+				return readExt(2)
+			case 0xd6:
+				// fixext 4
+				value = src[position++]
+				return readExt(4)
+			case 0xd7:
+				// fixext 8
+				value = src[position++]
+				return readExt(8)
+			case 0xd8:
+				// fixext 16
+				value = src[position++]
+				return readExt(16)
 			case 0xd9:
 			// str 8
 				return readString8(src[position++])
@@ -390,4 +426,16 @@ function simpleString(length) {
 		}
 
 	}
+}
+
+function readBin(length) {
+	return src.slice(position, position += length)
+}
+function readExt(length) {
+	let type = src[position++]
+	if (currentExtensions[type]) {
+		return currentExtensions[type](src.slice(position, position += length))
+	}
+	else
+		throw new Error('Unknown extension type ' + type)
 }
