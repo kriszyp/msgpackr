@@ -1,6 +1,6 @@
 # msgpackr
 
-The msgpackr package is an extremely fast MessagePack NodeJS/JavaScript implementation. At the time of writing, it is several times faster than any other known implementations, faster than Avro (for JS), and generally even faster than native JSON.stringify/parse. It also includes an optional record extension (the `r` in msgpackr), for defining record structures that makes MessagePack even faster and more compact, often over twice as fast as even native JSON methods and many times faster than other JS implementations.
+The msgpackr package is an extremely fast MessagePack NodeJS/JavaScript implementation. At the time of writing, it is significantly faster than any other known implementations, faster than Avro (for JS), and generally even faster than native JSON.stringify/parse. It also includes an optional record extension (the `r` in msgpackr), for defining record structures that makes MessagePack even faster and more compact, often over twice as fast as even native JSON methods and several times faster than other JS implementations.
 
 ## Basic Usage
 
@@ -12,13 +12,13 @@ npm install msgpackr
 And import or require it for basic unpack and pack functions:
 ```
 import { unpack, pack } from 'msgpackr';
-let packdAsBuffer = pack(value);
-let data = unpack(packdAsBuffer);
+let serializedAsBuffer = pack(value);
+let data = unpack(serializedAsBuffer);
 ```
-This `pack` function will generate standard MessagePack without any extensions that should be compatible with any standard MessagePack serializer. It will pack JavaScript objects as MessagePack maps by default. The `unpack` function will deserialize MessagePack maps as an `Object` with the properties from the map.
+This `pack` function will generate standard MessagePack without any extensions that should be compatible with any standard MessagePack parser/decoder. It will serialize JavaScript objects as MessagePack `map`s by default. The `unpack` function will deserialize MessagePack `map`s as an `Object` with the properties from the map.
 
 # Record / Object Structures
-There is a critical difference between maps (or dictionaries) that hold an arbitrary set of keys and values (JavaScript `Map`s are optimal for this), and records or object structures that have a well-defined set of fields which may have many instances using that same structure (most objects in JS). By using the record extension, this distinction is preserved in MessagePack and the encoding can reuse structures and not only provides better type preservation, but yield signficantly more compact encodings and increase parsing/deserialization performance by 2-3x. Msgpackr automatically generates record definitions that are reused and referenced by objects with the same structure. There are a number of ways to use this to our advantage. For large object structures with repeating nested objects with similar structures, simply serializing with the record extension can yield benefits. To use the record structures extension, we create a new `Packr` instance. By default a new `Packr` instance will have the record extension enabled:
+There is a critical difference between maps (or dictionaries) that hold an arbitrary set of keys and values (JavaScript `Map`s are best for these), and records or object structures that have a well-defined set of fields which may have many instances using that same structure (most objects in JS). By using the record extension, this distinction is preserved in MessagePack and the encoding can reuse structures and not only provides better type preservation, but yield much more compact encodings and increase parsing/deserialization performance by 2-3x. Msgpackr automatically generates record definitions that are reused and referenced by objects with the same structure. There are a number of ways to use this to our advantage. For large object structures with repeating nested objects with similar structures, simply serializing with the record extension can yield benefits. To use the record structures extension, we create a new `Packr` instance. By default a new `Packr` instance will have the record extension enabled:
 ```
 import { Packr } from 'msgpackr';
 let packr = Packr();
@@ -103,7 +103,7 @@ require("avsc")...make schema/type...type.toBuffer(obj);   |   99300 |  5001 |  
 Here is a benchmark of streaming data (again borrowed from `msgpack-lite`'s benchmarking), where msgpackr is able to take advantage of the structured record extension and really pull away from other tools:
 operation (1000000 x 2)                          |   op    |  ms   |  op/s
 ------------------------------------------------ | ------: | ----: | -----:
-new PackrStream().write(obj);                    |  733334 |   383 | 2610966
+new PackrStream().write(obj);                    |  1000000 |   382 | 2617801
 stream.write(msgpack.encode(obj));               | 1000000 |  2948 | 339213
 stream.write(notepack.encode(obj));              | 1000000 |   914 | 1094091
 msgpack.Encoder().on("data",ondata).encode(obj); | 1000000 |  1537 | 650618

@@ -55,7 +55,7 @@ var list = [
 function encode5(callback) {
   var stream = new PackrStream();
   var cnt = counter(callback);
-  stream.on("data", cnt.buf);
+  stream.on("data", cnt.inc);
   stream.on("end", cnt.end);
   for (var j = 0; j < opcount; j++) {
     stream.write(data);
