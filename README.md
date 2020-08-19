@@ -79,35 +79,42 @@ packr.resetMemory()
 The use of `resetMemory` is never required, buffers will still be handled and cleaned up through GC if not used, it just provides a small performance boost.
 
 ## Performance
-
+msgpackr is fast. Really fast. Here is comparison with the next fastest JS projects. It also includes comparison to V8 native JSON functionality, and JavaScript Avro (`avsc`, a very optimized Avro implementation):
 
 operation                                                  |   op   |   ms  |  op/s
 ---------------------------------------------------------- | ------: | ----: | -----:
-buf = Buffer(JSON.stringify(obj));                         | 1215400 |  5000 | 243080
-obj = JSON.parse(buf);                                     | 1290100 |  5000 | 258019
-msgpackr {objectsAsMaps: true}: packr.pack(obj); | 2936100 |  5000 | 587220
-msgpackr {objectsAsMaps: true}: packr.unpack(buf);     | 1729800 |  5000 | 345960
-msgpackr w/ shared structures: packr.pack(obj);  | 3393200 |  5000 | 678640
-msgpackr w/ shared structures: packr.unpack(buf);      | 4491900 |  5000 | 898380
-buf = require("msgpack-lite").encode(obj);                 |  430300 |  5000 |  86060
-obj = require("msgpack-lite").decode(buf);                 |  268300 |  5001 |  53649
-buf = require("notepack").encode(obj);                     | 1113200 |  5000 | 222640
-obj = require("notepack").decode(buf);                     |  543800 |  5000 | 108760
-require("what-the-pack")... encoder.encode(obj);           | 1019800 |  5000 | 203960
-require("what-the-pack")... encoder.decode(buf);           |  535200 |  5000 | 107040
+buf = Buffer(JSON.stringify(obj));                         |   82000 |  5004 |  16386
+obj = JSON.parse(buf);                                     |   88600 |  5000 |  17720
+require("msgpackr").pack(obj);                             |  161500 |  5002 |  32287
+require("msgpackr").unpack(buf);                           |   94600 |  5004 |  18904
+msgpackr w/ shared structures: packr.pack(obj);            |  178400 |  5002 |  35665
+msgpackr w/ shared structures: packr.unpack(buf);          |  376700 |  5000 |  75340
+buf = require("msgpack-lite").encode(obj);                 |   30100 |  5012 |   6005
+obj = require("msgpack-lite").decode(buf);                 |   16200 |  5001 |   3239
+buf = require("notepack").encode(obj);                     |   62600 |  5005 |  12507
+obj = require("notepack").decode(buf);                     |   32400 |  5007 |   6470
+require("what-the-pack")... encoder.encode(obj);           |   63500 |  5002 |  12694
+require("what-the-pack")... encoder.decode(buf);           |   32000 |  5001 |   6398
+require("avsc")...make schema/type...type.toBuffer(obj);   |   84600 |  5003 |  16909
+require("avsc")...make schema/type...type.toBuffer(obj);   |   99300 |  5001 |  19856
 
+(`avsc` is schema-based and more comparable in style to msgpackr with shared structures).
 
 ### Record Structure Extension Definition
 The record struction extension uses extension id 0x72 ("r") to declare the use of this functionality. The extension "data" byte (or bytes) identifies the byte or bytes used to identify the start of a record in the subsequent MessagePack block or stream. The identifier byte (or the first byte in a sequence) must be from 0x40 - 0x7f (and therefore replaces one byte representations of positive integers 64 - 127). The extension decaration must be immediately follow by an MessagePack array that defines the field names of the record structure.
 
 Once a record identifier and record field names have been defined, the parser/decoder should proceed to read the next value. Any subsequent use of the record identifier as a value in the block or stream should parsed as a record instance, and the next n values, where is n is the number of fields (as defined in the array of field names), should be read as the values of the fields. For example, here we have defined a structure with fields "foo" and "bar", with the record identifier 0x40, and then read a record instance that defines the field values of 4 and 2, respectively:
 ```
-+--------+--------+--------+~~~~~~~~~~+--------+--------+--------+
-|  0xd4  |  0x72  |  0x40  | array: [ "foo", "bar" ] | 0x40 | 0x04 | 0x02 |
-+--------+--------+--------+~~~~~~~~~~+--------+--------+--------+
++--------+--------+--------+~~~~~~~~~~~~~~~~~~~~~~~~~+--------+--------+--------+
+|  0xd4  |  0x72  |  0x40  | array: [ "foo", "bar" ] |  0x40  |  0x04  |  0x02  |
++--------+--------+--------+~~~~~~~~~~~~~~~~~~~~~~~~~+--------+--------+--------+
 ```
 Which should generate an object that would correspond to JSON:
 ```
 { "name" : 4, "bar": 2}
 ```
 
+
+### License
+
+MIT!
