@@ -134,7 +134,7 @@ function read() {
 		let value
 		switch (token) {
 			case 0xc0: return null
-			case 0xc1: return; // "never-used", just use it for undefined for now
+			case 0xc1: return; // "never-used", just return undefined for now
 			case 0xc2: return false
 			case 0xc3: return true
 			case 0xc4:

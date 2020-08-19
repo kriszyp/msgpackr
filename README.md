@@ -129,7 +129,9 @@ Which should generate an object that would correspond to JSON:
 { "name" : 4, "bar": 2}
 ```
 
+### Additional value types
+msgpackr supports `undefined` (using fixext1 + type: 0 + data: 0 to match other JS implementations), NaN, Infinity, and -Infinity (these have standard IEEE 754 representations with doubles/floats).
 
 ### License
 
-MIT!
+MIT
