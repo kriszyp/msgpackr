@@ -39,16 +39,16 @@ if (argv[0] - 0) limit = argv.shift() - 0;
 
 var list = [
   ['new PackrStream().write(obj);', encode5],
-  ['stream.write(msgpack.encode(obj));', encode1],
-  ['stream.write(notepack.encode(obj));', encode4],
-  ['msgpack.Encoder().on("data",ondata).encode(obj);', encode2],
-  ['msgpack.createEncodeStream().write(obj);', encode3],
-//  ['stream.write(Buffer.from(JSON.stringify(obj)));', stringify],
   ['new UnpackrStream().write(buf);', decode5],
+  ['stream.write(msgpack.encode(obj));', encode1],
   ['stream.write(msgpack.decode(buf));', decode1],
+  ['stream.write(notepack.encode(obj));', encode4],
   ['stream.write(notepack.decode(buf));', decode4],
-  ['msgpack.Decoder().on("data",ondata).decode(buf);', decode2],
+  ['msgpack.Encoder().on("data",ondata).encode(obj);', encode2],
   ['msgpack.createDecodeStream().write(buf);', decode3],
+  ['msgpack.createEncodeStream().write(obj);', encode3],
+  ['msgpack.Decoder().on("data",ondata).decode(buf);', decode2],
+//  ['stream.write(Buffer.from(JSON.stringify(obj)));', stringify],
 //  ['stream.write(JSON.parse(buf));', parse]
 ];
 

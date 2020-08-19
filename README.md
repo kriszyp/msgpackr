@@ -101,18 +101,19 @@ require("avsc")...make schema/type...type.toBuffer(obj);   |   99300 |  5001 |  
 (`avsc` is schema-based and more comparable in style to msgpackr with shared structures).
 
 Here is a benchmark of streaming data (again borrowed from `msgpack-lite`'s benchmarking), where msgpackr is able to take advantage of the structured record extension and really pull away from other tools:
+
 operation (1000000 x 2)                          |   op    |  ms   |  op/s
 ------------------------------------------------ | ------: | ----: | -----:
-new PackrStream().write(obj);                    |  1000000 |   382 | 2617801
-stream.write(msgpack.encode(obj));               | 1000000 |  2948 | 339213
-stream.write(notepack.encode(obj));              | 1000000 |   914 | 1094091
-msgpack.Encoder().on("data",ondata).encode(obj); | 1000000 |  1537 | 650618
-msgpack.createEncodeStream().write(obj);         | 1000000 |  1398 | 715307
-new UnpackrStream().write(buf);                  | 1000000 |   256 | 3906250
-stream.write(msgpack.decode(buf));               | 1000000 |  2006 | 498504
-stream.write(notepack.decode(buf));              | 1000000 |  1006 | 994035
-msgpack.Decoder().on("data",ondata).decode(buf); | 1000000 |  2135 | 468384
-msgpack.createDecodeStream().write(buf);         | 1000000 |  2071 | 482858
+new PackrStream().write(obj);                    | 1000000 |   372 | 2688172
+new UnpackrStream().write(buf);                  | 1000000 |   247 | 4048582
+stream.write(msgpack.encode(obj));               | 1000000 |  2898 | 345065
+stream.write(msgpack.decode(buf));               | 1000000 |  1969 | 507872
+stream.write(notepack.encode(obj));              | 1000000 |   901 | 1109877
+stream.write(notepack.decode(buf));              | 1000000 |  1012 | 988142
+msgpack.Encoder().on("data",ondata).encode(obj); | 1000000 |  1763 | 567214
+msgpack.createDecodeStream().write(buf);         | 1000000 |  2222 | 450045
+msgpack.createEncodeStream().write(obj);         | 1000000 |  1577 | 634115
+msgpack.Decoder().on("data",ondata).decode(buf); | 1000000 |  2246 | 445235
 
 ### Record Structure Extension Definition
 The record struction extension uses extension id 0x72 ("r") to declare the use of this functionality. The extension "data" byte (or bytes) identifies the byte or bytes used to identify the start of a record in the subsequent MessagePack block or stream. The identifier byte (or the first byte in a sequence) must be from 0x40 - 0x7f (and therefore replaces one byte representations of positive integers 64 - 127). The extension decaration must be immediately follow by an MessagePack array that defines the field names of the record structure.
