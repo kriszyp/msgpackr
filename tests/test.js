@@ -1,4 +1,4 @@
-var inspector = require('inspector')
+//var inspector = require('inspector')
 //inspector.open(9330, null, true)
 
 function tryRequire(module) {

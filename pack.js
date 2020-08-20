@@ -35,6 +35,7 @@ class Packr extends Unpackr {
 			if (safeEnd - position < 0x800) {
 				// don't start too close to the end, 
 				target = Buffer.allocUnsafeSlow(target.length)
+				safeEnd = target.length - 10
 				position = 0
 			}
 			start = position
@@ -392,7 +393,11 @@ class Packr extends Unpackr {
 			if (recordId) {
 				target[position++] = recordId
 			} else {
-				recordId = structures.nextId++ || (structures.nextId = 0x40)
+				recordId = structures.nextId++
+				if (!recordId) {
+					recordId = 0x40
+					structures.nextId = 0x41
+				}
 				if (recordId >= 0x80) {// cycle back around
 					structures.nextId = (recordId = maxSharedStructures + 0x40) + 1
 				}

@@ -22,10 +22,10 @@ int writePosition = 0;
 int stringStart = 0;
 int lastStringEnd = 0;
 Isolate *isolate = Isolate::GetCurrent();
-void readString(int length) {
+void readString(int length, bool allowStringBlocks) {
 	int start = position;
 	int end = position + length;
-	if (length < 0x200) { // for larger strings, we don't bother to check every character for being latin, and just go right to creating a new string
+	if (allowStringBlocks) { // for larger strings, we don't bother to check every character for being latin, and just go right to creating a new string
 		while(position < end) {
 			if (source[position] < 0x80) // ensure we character is latin and can be decoded as one byte
 				position++;
@@ -70,7 +70,7 @@ NAN_METHOD(extractStrings) {
 		} else if (token < 0xc0) {
 			// fixstr, we want to convert this
 			token -= 0xa0;
-			readString(token);
+			readString(token, true);
 			/*if (token < 8) {
 				// skip simple strings that are less than 8 characters and only latin, these are handled in JS, 
 				int strPosition = position;
@@ -110,13 +110,13 @@ void setupTokenTable() {
 	// str 8
 	tokenTable[0xd9] = ([](int token) -> void {
 		int length = source[position++];
-		readString(length);
+		readString(length, true);
 	});
 	// str 16
 	tokenTable[0xda] = ([](int token) -> void {
 		int length = source[position++] << 8;
 		length += source[position++];
-		readString(length);
+		readString(length, false);
 	});
 	// str 32
 	tokenTable[0xdb] = ([](int token) -> void {
@@ -124,7 +124,7 @@ void setupTokenTable() {
 		length += source[position++] << 16;
 		length += source[position++] << 8;
 		length += source[position++];
-		readString(length);
+		readString(length, false);
 	});
 
 	tokenTable[0xcb] = ([](int token) -> void {

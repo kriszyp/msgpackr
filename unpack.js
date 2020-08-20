@@ -1,5 +1,10 @@
 "use strict"
-let { setSource, extractStrings } = tryRequire('./build/Release/msgpackr.node')
+let setSource = () => {} // don't need to do anything without the native support here
+let decoder
+try {
+	decoder = new TextDecoder()
+} catch(error) {}
+let extractStrings
 let src
 let srcEnd
 let position = 0
@@ -72,6 +77,10 @@ exports.read = read
 exports.getPosition = () => {
 	return position
 }
+exports.setExtractor = (extractor) => {
+	setSource = extractor.setSource
+	extractStrings = extractor.extractStrings
+}
 
 function read() {
 	let token = src[position++]
@@ -123,18 +132,17 @@ function read() {
 		}
 	} else if (token < 0xc0) {
 		// fixstr
-		return readFixedString(token - 0xa0)
 		let length = token - 0xa0
-		if (length < 8)
-			return simpleString(length)
-		let string = strings[stringPosition++]
-		if (string === undefined) {
-			strings = readStrings(position - 1, srcEnd)
-			stringPosition = 0
-			string = strings[stringPosition++]
+		if (srcStringEnd >= position) {
+			return srcString.slice(position - srcStringStart, (position += length) - srcStringStart)
 		}
-		position += length
-		return string
+		if (srcStringEnd == 0 && length < 8 && srcEnd < 128) {
+			// for small blocks, avoiding the overhead of the extract call is helpful
+			let string = simpleString(length)
+			if (string != null)
+				return string
+		}
+		return readFixedString(length)
 	} else {
 		let value
 		switch (token) {
@@ -225,7 +233,11 @@ function read() {
 				return readExt(16)
 			case 0xd9:
 			// str 8
-				return readString8(src[position++])
+				value = src[position++]
+				if (srcStringEnd >= position) {
+					return srcString.slice(position - srcStringStart, (position += value) - srcStringStart)
+				}
+				return readString8(value)
 			case 0xda:
 			// str 16
 				return readString16((src[position++] << 8) + src[position++])
@@ -282,19 +294,9 @@ const readString16 = readString(3)
 const readString32 = readString(5)
 function readString(headerLength) {
 	return function readString(length) {
-		if (srcString && srcStringEnd >= position) {
-			return srcString.slice(position - srcStringStart, (position += length) - srcStringStart)
-		}
-		srcString = null
 		let string = strings[stringPosition++]
 		if (string == null) {
-			if (length < 8 && srcEnd < 128) {
-				// for small blocks, avoiding the overhead of the extract call is helpful
-				string = simpleString(length)
-				if (string != null)
-					return string
-			}
-			strings = extractStrings(position - headerLength, srcEnd)
+			strings = extractStrings ? extractStrings(position - headerLength, srcEnd) : [decoder.decode(src.slice(position, position + length))]
 			stringPosition = 0
 			string = strings[stringPosition++]
 		}
@@ -443,12 +445,4 @@ function readExt(length) {
 	}
 	else
 		throw new Error('Unknown extension type ' + type)
-}
-function tryRequire(moduleId) {
-	try {
-		return require(moduleId)
-	} catch (error) {
-		console.error(error)
-		return {}
-	}
 }

@@ -117,7 +117,7 @@ if (msgpack_unpack) {
 if (avro) {
   const type = avro.Type.forValue(data);
   buf = bench('require("avsc")...make schema/type...type.toBuffer(obj);', type.toBuffer.bind(type), data);
-  obj = bench('require("avsc")...make schema/type...type.toBuffer(obj);', type.fromBuffer.bind(type), buf);
+  obj = bench('require("avsc")...make schema/type...type.fromBuffer(obj);', type.fromBuffer.bind(type), buf);
 }
 
 function JSON_stringify(src) {

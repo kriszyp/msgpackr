@@ -18,8 +18,13 @@
   "main": "./index.js",
   "gypfile": true,
   "dependencies": {
+    "msgpack-lite": "^0.1.26",
     "nan": "^2.13.1",
     "prebuild-install": "^5.2.5"
+  },
+  "exports": {
+    "node": "./index.js",
+    "browser": "./browser.js"
   },
   "optionalDependencies": {},
   "devDependencies": {
