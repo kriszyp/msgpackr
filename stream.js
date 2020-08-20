@@ -25,15 +25,11 @@ class PackrStream extends Transform {
 
 class UnpackrStream extends Transform {
 	constructor(options) {
-		if (options) {
-			options.objectMode = true
-		} else {
-			options = {
-				objectMode: true,
-				structures: [],
-			}
-		}
+		if (!options)
+			options = {}
+		options.objectMode = true
 		super(options)
+		options.structures = []
 		this.unpackr = new Unpackr(options)
 	}
 	_transform(chunk, encoding, callback) {

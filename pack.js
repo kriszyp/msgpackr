@@ -270,7 +270,14 @@ class Packr extends Unpackr {
 							pack(entryValue)
 						}
 					} else if (constructor === Date) {
-						throw new Error('Date not implemented yet')
+						// using the 32 timestamp for now, TODO: implement support for 64-bit and 128-bit
+						length = value.getTime() / 1000
+						target[position++] = 0xd6
+						target[position++] = 0xff
+						target[position++] = length >> 24
+						target[position++] = (length >> 16) & 0xff
+						target[position++] = (length >> 8) & 0xff
+						target[position++] = length & 0xff
 					} else if (constructor === Buffer) {
 						length = value.length
 						if (length < 0x100) {

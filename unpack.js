@@ -1,5 +1,5 @@
 "use strict"
-let { setSource, extractStrings } = require('./build/Release/msgpackr.node')
+let { setSource, extractStrings } = tryRequire('./build/Release/msgpackr.node')
 let src
 let srcEnd
 let position = 0
@@ -20,6 +20,11 @@ const recordDefinition = currentExtensions[0x72] = (id) => {
 	return structure.read()
 }
 currentExtensions[0] = (data) => {} // notepack defines extension 0 to mean undefined, so use that as the default here
+currentExtensions[0xd6] = (data) => {
+	// 32-bit date extension
+	return new Date(((data[0] << 24) + (data[1] << 16) + (data[2] << 8) + data[3]) * 1000)
+
+} // notepack defines extension 0 to mean undefined, so use that as the default here
 // registration of bulk record definition?
 // currentExtensions[0x52] = () =>
 class Unpackr {
@@ -438,4 +443,12 @@ function readExt(length) {
 	}
 	else
 		throw new Error('Unknown extension type ' + type)
+}
+function tryRequire(moduleId) {
+	try {
+		return require(moduleId)
+	} catch (error) {
+		console.error(error)
+		return {}
+	}
 }
