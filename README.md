@@ -2,7 +2,7 @@
 
 The msgpackr package is an extremely fast MessagePack NodeJS/JavaScript implementation. At the time of writing, it is significantly faster than any other known implementations, faster than Avro (for JS), and generally even faster than native JSON.stringify/parse. It also includes an optional record extension (the `r` in msgpackr), for defining record structures that makes MessagePack even faster and more compact, often over twice as fast as even native JSON functions and several times faster than other JS implementations.
 
-# Basic Usage
+## Basic Usage
 
 Install with:
 
@@ -17,7 +17,7 @@ let data = unpack(serializedAsBuffer);
 ```
 This `pack` function will generate standard MessagePack without any extensions that should be compatible with any standard MessagePack parser/decoder. It will serialize JavaScript objects as MessagePack `map`s by default. The `unpack` function will deserialize MessagePack `map`s as an `Object` with the properties from the map.
 
-## Streams
+### Streams
 We can use the including streaming functionality (which further improves performance). The `PackrStream` is a transform stream that can be used to serialize objects to a binary stream (writing to network/socket, IPC, etc.), and the `UnpackrStream` can be used to deserialize objects from a binary sream (reading from network/socket, etc.):
 
 ```
@@ -41,7 +41,7 @@ receivingStream.on('data', (data) => {
 ```
  The `PackrStream` and `UnpackrStream` instances  will have also the record structure extension enabled by default (see below).
 
-# Record / Object Structures
+## Record / Object Structures
 There is a critical difference between maps (or dictionaries) that hold an arbitrary set of keys and values (JavaScript `Map`s are best for these), and records or object structures that have a well-defined set of fields which may have many instances using that same structure (most objects in JS). By using the record extension, this distinction is preserved in MessagePack and the encoding can reuse structures and not only provides better type preservation, but yield much more compact encodings and increase parsing/deserialization performance by 2-3x. Msgpackr automatically generates record definitions that are reused and referenced by objects with the same structure. There are a number of ways to use this to our advantage. For large object structures with repeating nested objects with similar structures, simply serializing with the record extension can yield benefits. To use the record structures extension, we create a new `Packr` instance. By default a new `Packr` instance will have the record extension enabled:
 ```
 import { Packr } from 'msgpackr';
@@ -54,7 +54,7 @@ Another way to further leverage the benefits of the msgpackr record structures i
 
 When creating a new `Packr`, `PackrStream`, or `UnpackrStream` instance, we can enable or disable the record structure extension with the `objectsAsMaps` property. When this is `true`, the record structure extension will be disabled, and all objects will revert to being serialized using MessageMap `map`s, and all `map`s will be deserialized to JS `Object`s as properties (like the standalone `pack` and `unpack` functions).
 
-## Shared Record Structures
+### Shared Record Structures
 Another useful way of using msgpackr, and the record extension, is for storing data in a databases, files, or other storage systems. If a number of objects with common data structures are being stored, a shared structure can be used to greatly improve data storage and deserialization efficiency. We just need to provide a way to store the generated shared structure so it is available to deserialize stored data in the future:
 
 ```
@@ -72,7 +72,7 @@ let packr = Packr({
 
 ```
 
-### resetMemory
+#### resetMemory
 During the serialization process, data is written to buffers. Allocating new buffers is a relatively expensive process, and the `resetMemory` method can help allow reuse of buffers that will further improve performance. The `resetMemory` method can be called when previously created buffer(s) are no longer needed. For example, if we serialized an object, and wrote it to a database, we could indicate that we are done:
 ```
 let buffer = packr.pack(data);
@@ -83,8 +83,8 @@ packr.resetMemory()
 ```
 The use of `resetMemory` is never required, buffers will still be handled and cleaned up through GC if not used, it just provides a small performance boost.
 
-# Performance
-msgpackr is fast. Really fast. Here is comparison with the next fastest JS projects using the benchmark tool from `msgpack-lite` (and data is from some clinical research data we use that has a good mix of different value types and structures). It also includes comparison to V8 native JSON functionality, and JavaScript Avro (`avsc`, a very optimized Avro implementation):
+## Performance
+Msgpackr is fast. Really fast. Here is comparison with the next fastest JS projects using the benchmark tool from `msgpack-lite` (and the sample data is from some clinical research data we use that has a good mix of different value types and structures). It also includes comparison to V8 native JSON functionality, and JavaScript Avro (`avsc`, a very optimized Avro implementation):
 
 operation                                                  |   op   |   ms  |  op/s
 ---------------------------------------------------------- | ------: | ----: | -----:
@@ -105,7 +105,7 @@ require("avsc")...make schema/type...type.toBuffer(obj);   |   99300 |  5001 |  
 
 (`avsc` is schema-based and more comparable in style to msgpackr with shared structures).
 
-Here is a benchmark of streaming data (again borrowed from `msgpack-lite`'s benchmarking), where msgpackr is able to take advantage of the structured record extension and really pull away from other tools:
+Here is a benchmark of streaming data (again borrowed from `msgpack-lite`'s benchmarking), where msgpackr is able to take advantage of the structured record extension and really demonstrate its performance capabilities:
 
 operation (1000000 x 2)                          |   op    |  ms   |  op/s
 ------------------------------------------------ | ------: | ----: | -----:
@@ -120,9 +120,8 @@ msgpack.createDecodeStream().write(buf);         | 1000000 |  2222 | 450045
 msgpack.createEncodeStream().write(obj);         | 1000000 |  1577 | 634115
 msgpack.Decoder().on("data",ondata).decode(buf); | 1000000 |  2246 | 445235
 
-# Extensions
 ## Record Structure Extension Definition
-The record struction extension uses extension id 0x72 ("r") to declare the use of this functionality. The extension "data" byte (or bytes) identifies the byte or bytes used to identify the start of a record in the subsequent MessagePack block or stream. The identifier byte (or the first byte in a sequence) must be from 0x40 - 0x7f (and therefore replaces one byte representations of positive integers 64 - 127). The extension decaration must be immediately follow by an MessagePack array that defines the field names of the record structure.
+The record struction extension uses extension id 0x72 ("r") to declare the use of this functionality. The extension "data" byte (or bytes) identifies the byte or bytes used to identify the start of a record in the subsequent MessagePack block or stream. The identifier byte (or the first byte in a sequence) must be from 0x40 - 0x7f (and therefore replaces one byte representations of positive integers 64 - 127, which can alternately be represented with int or uint types). The extension declaration must be immediately follow by an MessagePack array that defines the field names of the record structure.
 
 Once a record identifier and record field names have been defined, the parser/decoder should proceed to read the next value. Any subsequent use of the record identifier as a value in the block or stream should parsed as a record instance, and the next n values, where is n is the number of fields (as defined in the array of field names), should be read as the values of the fields. For example, here we have defined a structure with fields "foo" and "bar", with the record identifier 0x40, and then read a record instance that defines the field values of 4 and 2, respectively:
 ```
@@ -138,6 +137,6 @@ Which should generate an object that would correspond to JSON:
 ## Additional value types
 msgpackr supports `undefined` (using fixext1 + type: 0 + data: 0 to match other JS implementations), `NaN`, `Infinity`, and `-Infinity` (using standard IEEE 754 representations with doubles/floats).
 
-# License
+## License
 
 MIT
