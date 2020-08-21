@@ -95,7 +95,8 @@ function read() {
 						structure.read = createStructureReader(structure)
 					return structure.read()
 				} else if (currentUnpackr.getStructures) {
-					currentUnpackr.structures = currentStructures = currentUnpackr.getStructures() || []
+					// we have to preserve our state anytime we provide a means for external code to re-execute unpack
+					currentUnpackr.structures = currentStructures = saveState(() => currentUnpackr.getStructures()) || []
 					structure = currentStructures[token & 0x3f]
 					if (structure) {
 						if (!structure.read)
@@ -445,4 +446,27 @@ function readExt(length) {
 	}
 	else
 		throw new Error('Unknown extension type ' + type)
+}
+
+function saveState(callback) {
+	let savedSrcEnd = srcEnd
+	let savedPosition = position
+	let savedStringPosition = stringPosition
+	let savedSrcStringEnd = srcStringEnd
+	let savedSrcString = srcString
+	let savedStrings = strings
+	let savedSrc = src
+	let savedStructures = currentStructures
+	let savedPackr = currentUnpackr
+	let value = callback()
+	srcEnd = savedSrcEnd
+	position = savedPosition
+	stringPosition = savedStringPosition
+	srcStringEnd = savedSrcStringEnd
+	srcString = savedSrcString
+	strings = savedStrings
+	src = savedSrc
+	currentStructures = savedStructures
+	currentUnpackr = savedPackr
+	return value
 }
