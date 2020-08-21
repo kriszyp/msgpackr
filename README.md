@@ -103,6 +103,7 @@ require("what-the-pack")... encoder.decode(buf);           |   32000 |  5001 |  
 require("avsc")...make schema/type...type.toBuffer(obj);   |   84600 |  5003 |  16909
 require("avsc")...make schema/type...type.toBuffer(obj);   |   99300 |  5001 |  19856
 
+All benchmarks were performed on Node 14.8.0 (Windows i7-4770 3.4Ghz).
 (`avsc` is schema-based and more comparable in style to msgpackr with shared structures).
 
 Here is a benchmark of streaming data (again borrowed from `msgpack-lite`'s benchmarking), where msgpackr is able to take advantage of the structured record extension and really demonstrate its performance capabilities:

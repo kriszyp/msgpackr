@@ -453,7 +453,8 @@ function saveState(callback) {
 	let savedSrcStringEnd = srcStringEnd
 	let savedSrcString = srcString
 	let savedStrings = strings
-	let savedSrc = src
+	// TODO: We may need to revisit this if we do more external calls to user code (since it could be slow)
+	let savedSrc = Buffer.from(src.slice(0, srcEnd)) // we copy the data in case it changes while external data is processed
 	let savedStructures = currentStructures
 	let savedPackr = currentUnpackr
 	let value = callback()
