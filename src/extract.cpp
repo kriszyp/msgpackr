@@ -63,6 +63,8 @@ NAN_METHOD(extractStrings) {
 	Local<Context> context = Nan::GetCurrentContext();
 	position = Local<Number>::Cast(info[0])->IntegerValue(context).ToChecked();
 	int size = Local<Number>::Cast(info[1])->IntegerValue(context).ToChecked();
+	if (info[2]->IsArrayBufferView())
+		source = (uint8_t*) node::Buffer::Data(info[2]);
 	next_token: while (position < size) {
 		uint8_t token = source[position++];
 		if (token < 0xa0) {
@@ -205,13 +207,8 @@ void setupTokenTable() {
 	});
 }
 
-NAN_METHOD(setSource) {
-	source = (uint8_t*) node::Buffer::Data(info[0]);
-}
-
 void initializeModule(v8::Local<v8::Object> exports) {
 	setupTokenTable();
-	Nan::SetMethod(exports, "setSource", setSource);
 	Nan::SetMethod(exports, "extractStrings", extractStrings);
 }
 

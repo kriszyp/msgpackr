@@ -2,7 +2,7 @@ exports.Packr = require('./pack').Packr
 let unpackModule = require('./unpack')
 let extractor = tryRequire('./build/Release/msgpackr.node')
 if (extractor)
-	unpackModule.setExtractor(extractor)
+	unpackModule.setExtractor(extractor.extractStrings)
 exports.Unpackr = unpackModule.Unpackr
 exports.PackrStream = require('./stream').PackrStream
 exports.UnpackrStream = require('./stream').UnpackrStream

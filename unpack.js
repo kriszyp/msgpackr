@@ -1,5 +1,4 @@
 "use strict"
-let setSource = () => {} // don't need to do anything without the native support here
 let decoder
 try {
 	decoder = new TextDecoder()
@@ -43,10 +42,10 @@ class Unpackr {
 		srcStringEnd = 0
 		srcString = null
 		strings = EMPTY_ARRAY
-		if (src !== source) {
-			src = source
-			setSource(source)
-		}
+//		if (src !== source) {
+		src = source
+///			setSource(source)
+//		}
 		let value
 		if (this) {
 			currentUnpackr = this
@@ -78,8 +77,7 @@ exports.getPosition = () => {
 	return position
 }
 exports.setExtractor = (extractor) => {
-	setSource = extractor.setSource
-	extractStrings = extractor.extractStrings
+	extractStrings = extractor
 }
 
 function read() {
@@ -297,7 +295,7 @@ function readString(headerLength) {
 	return function readString(length) {
 		let string = strings[stringPosition++]
 		if (string == null) {
-			strings = extractStrings ? extractStrings(position - headerLength, srcEnd) : [decoder.decode(src.slice(position, position + length))]
+			strings = extractStrings ? extractStrings(position - headerLength, srcEnd, src) : [decoder.decode(src.slice(position, position + length))]
 			stringPosition = 0
 			string = strings[stringPosition++]
 		}
