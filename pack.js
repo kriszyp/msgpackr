@@ -247,7 +247,13 @@ class Packr extends Unpackr {
 							target[position++] = 0xdc
 							target[position++] = length >> 8
 							target[position++] = length & 0xff
-						} // TODO array 32
+						} else {
+							target[position++] = 0xdd
+							target[position++] = length >> 24
+							target[position++] = (length >> 16) & 0xff
+							target[position++] = (length >> 8) & 0xff
+							target[position++] = length & 0xff						}
+						}
 						for (let i = 0; i < length; i++) {
 							pack(value[i])
 						}
