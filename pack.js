@@ -252,7 +252,7 @@ class Packr extends Unpackr {
 							target[position++] = length >> 24
 							target[position++] = (length >> 16) & 0xff
 							target[position++] = (length >> 8) & 0xff
-							target[position++] = length & 0xff						}
+							target[position++] = length & 0xff
 						}
 						for (let i = 0; i < length; i++) {
 							pack(value[i])
