@@ -1,5 +1,6 @@
 var msgpackr = tryRequire("..");
 var msgpack_node = tryRequire("msgpack");
+var msgpack_msgpack = tryRequire("@msgpack/msgpack");
 var msgpack_lite = tryRequire("msgpack-lite");
 var msgpack_js = tryRequire("msgpack-js");
 var msgpack_js_v5 = tryRequire("msgpack-js-v5");
@@ -15,7 +16,7 @@ msgpack_codec = msgpack_codec && msgpack_codec.msgpack;
 what_the_pack = what_the_pack && what_the_pack.initialize(2**20);
 
 var pkg = require("../package.json");
-var data = require("./samples/outcomes.json");
+var data = require("./sample-large.json");
 var packed = msgpack_lite.encode(data);
 var expected = JSON.stringify(data);
 
@@ -65,6 +66,12 @@ if (msgpackr) {
 if (msgpack_lite) {
   buf = bench('buf = require("msgpack-lite").encode(obj);', msgpack_lite.encode, data);
   obj = bench('obj = require("msgpack-lite").decode(buf);', msgpack_lite.decode, packed);
+  test(obj);
+}
+
+if (msgpack_msgpack) {
+  buf = bench('buf = require("@msgpack/msgpack").encode(obj);', msgpack_msgpack.encode, data);
+  obj = bench('obj = require("@msgpack/msgpack").decode(buf);', msgpack_msgpack.decode, buf);
   test(obj);
 }
 
