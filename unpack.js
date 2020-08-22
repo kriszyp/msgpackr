@@ -45,7 +45,7 @@ class Unpackr {
 		strings = EMPTY_ARRAY
 //		if (src !== source) {
 		src = source
-		dataView = source.dataView || (source.dataView = new DataView(source.buffer, source.byteOffset, source.byteLength))
+		dataView = source.dataView
 		//dataView = new DataView(source.buffer, source.byteOffset, source.byteLength)
 ///			setSource(source)
 //		}
@@ -169,10 +169,14 @@ function read() {
 				// ext 32
 				return readExt((src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++])
 			case 0xca:
+				if (!dataView)
+					dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength))
 				value = dataView.getFloat32(position)
 				position += 4
 				return value
 			case 0xcb:
+				if (!dataView)
+					dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength))
 				value = dataView.getFloat64(position)
 				position += 8
 				return value
@@ -190,16 +194,24 @@ function read() {
 
 			// int handlers
 			case 0xd0:
+				if (!dataView)
+					dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength))
 				return dataView.getInt8(position++)
 			case 0xd1:
+				if (!dataView)
+					dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength))
 				value = dataView.getInt16(position)
 				position += 2
 				return value
 			case 0xd2:
+				if (!dataView)
+					dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength))
 				value = dataView.getInt32(position)
 				position += 4
 				return value
 			case 0xd3:
+				if (!dataView)
+					dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength))
 				value = currentUnpackr.useBigInts ? dataView.getBigInt64(position) : src.readIntBE(position + 2, 6)
 				position += 8
 				return value
@@ -525,5 +537,6 @@ function saveState(callback) {
 	src = savedSrc
 	currentStructures = savedStructures
 	currentUnpackr = savedPackr
+	dataView = null
 	return value
 }
