@@ -16,6 +16,7 @@ let srcString
 let srcStringStart = 0
 let srcStringEnd = 0
 let currentExtensions = []
+let dataView
 let defaultOptions = { objectsAsMaps: true }
 // the registration of the record definition extension (as "r")
 const recordDefinition = currentExtensions[0x72] = (id) => {
@@ -44,6 +45,9 @@ class Unpackr {
 		strings = EMPTY_ARRAY
 //		if (src !== source) {
 		src = source
+		//let buffer = source.buffer
+		//dataView = buffer.dataView || (buffer.dataView = new DataView(source.buffer))
+		dataView = new DataView(source.buffer, source.byteOffset, source.byteLength)
 ///			setSource(source)
 //		}
 		let value
@@ -166,11 +170,11 @@ function read() {
 				// ext 32
 				return readExt((src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++])
 			case 0xca:
-				value = src.readFloatBE(position)
+				value = dataView.getFloat32(position)
 				position += 4
 				return value
 			case 0xcb:
-				value = src.readDoubleBE(position)
+				value = dataView.getFloat64(position)
 				position += 8
 				return value
 			// uint handlers
@@ -181,23 +185,23 @@ function read() {
 			case 0xce:
 				return (src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++]
 			case 0xcf:
-				value = currentUnpackr.useBigInts ? src.readBigUInt64BE(position) : src.readUIntBE(position + 2, 6)
+				value = currentUnpackr.useBigInts ? dataView.getBigUInt64(position) : src.readUIntBE(position + 2, 6)
 				position += 8
 				return value
 
 			// int handlers
 			case 0xd0:
-				return src.readInt8(position++)
+				return dataView.getInt8(position++)
 			case 0xd1:
-				value = src.readInt16BE(position)
+				value = dataView.getInt16(position)
 				position += 2
 				return value
 			case 0xd2:
-				value = src.readInt32BE(position)
+				value = dataView.getInt32(position)
 				position += 4
 				return value
 			case 0xd3:
-				value = currentUnpackr.useBigInts ? src.readBigInt64BE(position) : src.readIntBE(position + 2, 6)
+				value = currentUnpackr.useBigInts ? dataView.getBigInt64(position) : src.readIntBE(position + 2, 6)
 				position += 8
 				return value
 
