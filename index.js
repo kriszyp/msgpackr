@@ -1,6 +1,6 @@
 exports.Packr = require('./pack').Packr
 let unpackModule = require('./unpack')
-let extractor = tryRequire('./build/Release/msgpackr.node')
+let extractor = tryRequire('msgpackr-extract')
 if (extractor)
 	unpackModule.setExtractor(extractor.extractStrings)
 exports.Unpackr = unpackModule.Unpackr
@@ -14,6 +14,9 @@ function tryRequire(moduleId) {
 	try {
 		return require(moduleId)
 	} catch (error) {
-		console.warn('Native extraction module not loaded, msgpackr will still run, but with decreased performance. ' + error.message.split('\n')[0])
+		if (typeof window == 'undefined')
+			console.warn('Native extraction module not loaded, msgpackr will still run, but with decreased performance. ' + error.message.split('\n')[0])
+		else
+			console.warn('For browser usage, directly use msgpackr/unpack or msgpackr/pack modules. ' + error.message.split('\n')[0])
 	}
 }

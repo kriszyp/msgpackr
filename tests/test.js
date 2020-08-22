@@ -10,7 +10,7 @@ function tryRequire(module) {
 }
 if (typeof chai === 'undefined') { chai = require('chai') }
 assert = chai.assert
-//if (typeof msgpack-struct === 'undefined') { msgpack-struct = require('..') }
+//if (typeof msgpackr === 'undefined') { msgpackr = require('..') }
 var Packr = require('..').Packr
 var PackrStream = require('..').PackrStream
 var UnpackrStream = require('..').UnpackrStream
@@ -39,7 +39,7 @@ if (typeof XMLHttpRequest === 'undefined') {
 }
 var ITERATIONS = 1000000
 
-suite('msgpack-struct basic tests', function(){
+suite('msgpackr basic tests', function(){
 	test('pack/unpack data', function(){
 		var data = {
 			data: [
@@ -232,7 +232,7 @@ suite.skip('msgpackr performance tests', function(){
 		let structures = []
 		let packr = new Packr({ structures, objectsAsMaps: false })
 		var serialized = packr.pack(data)
-		console.log('msgpack-struct size', serialized.length)
+		console.log('msgpackr size', serialized.length)
 		for (var i = 0; i < ITERATIONS; i++) {
 			var deserialized = packr.unpack(serialized)
 		}

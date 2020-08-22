@@ -1,7 +1,7 @@
 {
   "name": "msgpackr",
   "author": "Kris Zyp",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "description": "Fast MessagePack implementation with extension for record structures",
   "license": "MIT",
   "repository": {
@@ -9,23 +9,13 @@
     "url": "http://github.com/kriszyp/msgpackr"
   },
   "scripts": {
-    "install": "prebuild-install || node-gyp rebuild",
-    "rebuild": "node-gyp rebuild",
     "benchmark": "./tests/benchmark.js",
-    "prebuild": "prebuild --all --verbose",
     "test": "./node_modules/.bin/mocha tests/test*.js -u tdd"
   },
   "main": "./index.js",
-  "gypfile": true,
-  "dependencies": {
-    "nan": "^2.13.1",
-    "prebuild-install": "^5.2.5"
+  "optionalDependencies": {
+    "msgpackr-extract": "^0.1.0"
   },
-  "exports": {
-    "node": "./index.js",
-    "browser": "./browser.js"
-  },
-  "optionalDependencies": {},
   "devDependencies": {
     "@types/node": "latest",
     "chai": "^4",

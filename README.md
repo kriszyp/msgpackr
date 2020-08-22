@@ -141,3 +141,7 @@ msgpackr supports `undefined` (using fixext1 + type: 0 + data: 0 to match other 
 ## License
 
 MIT
+
+### Credits
+
+Various projects have been inspirations for this, and code has been borrowed from https://github.com/msgpack/msgpack-javascript and https://github.com/mtth/avsc.
