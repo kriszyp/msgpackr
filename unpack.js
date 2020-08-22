@@ -16,7 +16,7 @@ let srcString
 let srcStringStart = 0
 let srcStringEnd = 0
 let currentExtensions = []
-let dataView
+let useBuffer = true
 let defaultOptions = { objectsAsMaps: true }
 // the registration of the record definition extension (as "r")
 const recordDefinition = currentExtensions[0x72] = (id) => {
@@ -45,10 +45,9 @@ class Unpackr {
 		strings = EMPTY_ARRAY
 //		if (src !== source) {
 		src = source
-		dataView = source.dataView
-		//dataView = new DataView(source.buffer, source.byteOffset, source.byteLength)
-///			setSource(source)
-//		}
+		useBuffer = !!src.readDoubleBE
+		if (!useBuffer)
+			dataView = new DataView(source.buffer, source.byteOffset, source.byteLength)
 		let value
 		if (this) {
 			currentUnpackr = this
@@ -169,50 +168,43 @@ function read() {
 				// ext 32
 				return readExt((src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++])
 			case 0xca:
-				if (!dataView)
-					dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength))
-				value = dataView.getFloat32(position)
+				value = useBuffer ? src.readFloatBE(position) : dataView.getFloat32(position)
 				position += 4
 				return value
 			case 0xcb:
-				if (!dataView)
-					dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength))
-				value = dataView.getFloat64(position)
+				value = useBuffer ? src.readDoubleBE(position) : dataView.getFloat64(position)
 				position += 8
 				return value
 			// uint handlers
-			case 0xcc:
+			case 0xcc: // uint8
 				return src[position++]
-			case 0xcd:
-				return (src[position++] << 8) + src[position++]
-			case 0xce:
-				return (src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++]
+			case 0xcd: // uint16
+				value = useBuffer ? src.readUInt16BE(position) : dataView.getUint16(position)
+				position += 2
+				return value
+			case 0xce: // uint32
+				value = useBuffer ? src.readUInt32BE(position) : dataView.getUint32(position)
+				position += 4
+				return value
 			case 0xcf:
-				value = currentUnpackr.useBigInts ? dataView.getBigUInt64(position) : src.readUIntBE(position + 2, 6)
+				value = currentUnpackr.useBigInts ? useBuffer ? src.readBigUInt64BE(position) : dataView.getBigUInt64(position) : useBuffer ? src.readUIntBE(position + 2, 6) : dataView.getBigUInt64(position)
 				position += 8
 				return value
 
 			// int handlers
 			case 0xd0:
-				if (!dataView)
-					dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength))
-				return dataView.getInt8(position++)
+				value = src[position++]
+				return value < 0x80 ? value : (value - 0x100)
 			case 0xd1:
-				if (!dataView)
-					dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength))
-				value = dataView.getInt16(position)
+				value = useBuffer ? src.readInt16BE(position) : dataView.getInt16(position)
 				position += 2
 				return value
-			case 0xd2:
-				if (!dataView)
-					dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength))
-				value = dataView.getInt32(position)
+			case 0xd2: // can directly translate since sign-bit ends up exactly in right place
+				value = useBuffer ? src.readInt32BE(position) : dataView.getInt32(position)
 				position += 4
 				return value
 			case 0xd3:
-				if (!dataView)
-					dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength))
-				value = currentUnpackr.useBigInts ? dataView.getBigInt64(position) : src.readIntBE(position + 2, 6)
+				value = currentUnpackr.useBigInts ? useBuffer ? src.readBigInt64BE(position) : dataView.getBigInt64(position) : useBuffer ? src.readIntBE(position + 2, 6) : dataView.getBigInt64(position)
 				position += 8
 				return value
 
@@ -537,6 +529,8 @@ function saveState(callback) {
 	src = savedSrc
 	currentStructures = savedStructures
 	currentUnpackr = savedPackr
-	dataView = null
+	useBuffer = !!src.readDoubleBE
+	if (!useBuffer)
+		dataView = new DataView(source.buffer, source.byteOffset, source.byteLength)
 	return value
 }
