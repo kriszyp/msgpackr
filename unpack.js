@@ -451,6 +451,7 @@ function saveState(callback) {
 	let savedSrcEnd = srcEnd
 	let savedPosition = position
 	let savedStringPosition = stringPosition
+	let savedSrcStringStart = srcStringStart
 	let savedSrcStringEnd = srcStringEnd
 	let savedSrcString = srcString
 	let savedStrings = strings
@@ -462,6 +463,7 @@ function saveState(callback) {
 	srcEnd = savedSrcEnd
 	position = savedPosition
 	stringPosition = savedStringPosition
+	srcStringStart = savedSrcStringStart
 	srcStringEnd = savedSrcStringEnd
 	srcString = savedSrcString
 	strings = savedStrings
