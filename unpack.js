@@ -45,9 +45,8 @@ class Unpackr {
 		strings = EMPTY_ARRAY
 //		if (src !== source) {
 		src = source
-		//let buffer = source.buffer
-		//dataView = buffer.dataView || (buffer.dataView = new DataView(source.buffer))
-		dataView = new DataView(source.buffer, source.byteOffset, source.byteLength)
+		dataView = source.dataView || (source.dataView = new DataView(source.buffer, source.byteOffset, source.byteLength))
+		//dataView = new DataView(source.buffer, source.byteOffset, source.byteLength)
 ///			setSource(source)
 //		}
 		let value
