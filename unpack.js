@@ -94,7 +94,8 @@ function read() {
 					return structure.read()
 				} else if (currentUnpackr.getStructures) {
 					// we have to preserve our state anytime we provide a means for external code to re-execute unpack
-					currentUnpackr.structures = currentStructures = saveState(() => currentUnpackr.getStructures()) || []
+					let updatedStructures = saveState(() => currentUnpackr.getStructures()) || []
+					currentStructures.splice.apply(currentStructures, [0, updatedStructures.length].concat(updatedStructures))
 					structure = currentStructures[token & 0x3f]
 					if (structure) {
 						if (!structure.read)
