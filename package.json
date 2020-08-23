@@ -19,6 +19,9 @@
   "devDependencies": {
     "@types/node": "latest",
     "chai": "^4",
-    "mocha": "^4"
+    "mocha": "^4",
+    "webpack": "^4.44.1",
+    "webpack-cli": "^3.3.2",
+    "webpack-command": "^0.4.1"
   }
 }

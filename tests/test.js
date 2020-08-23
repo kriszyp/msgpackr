@@ -10,12 +10,12 @@ function tryRequire(module) {
 }
 if (typeof chai === 'undefined') { chai = require('chai') }
 assert = chai.assert
-//if (typeof msgpackr === 'undefined') { msgpackr = require('..') }
-var Packr = require('..').Packr
-var PackrStream = require('..').PackrStream
-var UnpackrStream = require('..').UnpackrStream
-var unpack = require('..').unpack
-var pack = require('..').pack
+if (typeof msgpackr === 'undefined') { msgpackr = require('..') }
+var Packr = msgpackr.Packr
+var PackrStream = msgpackr.PackrStream
+var UnpackrStream = msgpackr.UnpackrStream
+var unpack = msgpackr.unpack
+var pack = msgpackr.pack
 
 
 var zlib = tryRequire('zlib')
