@@ -1,5 +1,9 @@
 "use strict"
 let Unpackr = require('./unpack').Unpackr
+let encoder
+try {
+	encoder = new TextEncoder()
+} catch (error) {}
 const RECORD_SYMBOL = Symbol('record-id')
 class Packr extends Unpackr {
 	constructor(options) {
@@ -16,6 +20,13 @@ class Packr extends Unpackr {
 		let structures
 		let types
 		let lastSharedStructuresLength = 0
+		let encodeUtf8 = target.utf8Write ? function(string, position, maxBytes) {
+			return target.utf8Write(string, position, maxBytes)
+		} : encoder.encodeInto ?
+			function(string, position) {
+				return encoder.encodeInto(string, target.subarray(position))
+			} : false
+
 		let packr = this
 		let maxSharedStructures = 32
 		let isSequential = options && options.sequential
@@ -130,36 +141,34 @@ class Packr extends Unpackr {
 				if (position + maxBytes > safeEnd)
 					target = makeRoom(position + maxBytes)
 
-				if (strLength < 0x40) {
-					let strPosition = position + headerSize
-					// this is all copied from avsc project
-						let i, c1, c2;
-						for (i = 0; i < strLength; i++) {
-							c1 = value.charCodeAt(i);
-							if (c1 < 0x80) {
-								target[strPosition++] = c1;
-							} else if (c1 < 0x800) {
-								target[strPosition++] = c1 >> 6 | 0xc0;
-								target[strPosition++] = c1 & 0x3f | 0x80;
-							} else if (
-								(c1 & 0xfc00) === 0xd800 &&
-								((c2 = value.charCodeAt(i + 1)) & 0xfc00) === 0xdc00
-							) {
-								c1 = 0x10000 + ((c1 & 0x03ff) << 10) + (c2 & 0x03ff);
-								i++;
-								target[strPosition++] = c1 >> 18 | 0xf0;
-								target[strPosition++] = c1 >> 12 & 0x3f | 0x80;
-								target[strPosition++] = c1 >> 6 & 0x3f | 0x80;
-								target[strPosition++] = c1 & 0x3f | 0x80;
-							} else {
-								target[strPosition++] = c1 >> 12 | 0xe0;
-								target[strPosition++] = c1 >> 6 & 0x3f | 0x80;
-								target[strPosition++] = c1 & 0x3f | 0x80;
-							}
+				if (strLength < 0x40 || !encodeUtf8) {
+					let i, c1, c2, strPosition = position + headerSize
+					for (i = 0; i < strLength; i++) {
+						c1 = value.charCodeAt(i)
+						if (c1 < 0x80) {
+							target[strPosition++] = c1
+						} else if (c1 < 0x800) {
+							target[strPosition++] = c1 >> 6 | 0xc0
+							target[strPosition++] = c1 & 0x3f | 0x80
+						} else if (
+							(c1 & 0xfc00) === 0xd800 &&
+							((c2 = value.charCodeAt(i + 1)) & 0xfc00) === 0xdc00
+						) {
+							c1 = 0x10000 + ((c1 & 0x03ff) << 10) + (c2 & 0x03ff)
+							i++
+							target[strPosition++] = c1 >> 18 | 0xf0
+							target[strPosition++] = c1 >> 12 & 0x3f | 0x80
+							target[strPosition++] = c1 >> 6 & 0x3f | 0x80
+							target[strPosition++] = c1 & 0x3f | 0x80
+						} else {
+							target[strPosition++] = c1 >> 12 | 0xe0
+							target[strPosition++] = c1 >> 6 & 0x3f | 0x80
+							target[strPosition++] = c1 & 0x3f | 0x80
 						}
-						length = strPosition - position - headerSize
+					}
+					length = strPosition - position - headerSize
 				} else {
-					length = target.utf8Write(value, position + headerSize, maxBytes)
+					length = encodeUtf8(value, position + headerSize, maxBytes)
 				}
 
 				if (length < 0x20) {
