@@ -16,7 +16,7 @@ msgpack_codec = msgpack_codec && msgpack_codec.msgpack;
 what_the_pack = what_the_pack && what_the_pack.initialize(2**20);
 
 var pkg = require("../package.json");
-var data = require("./sample-large.json");
+var data = require("./example4.json");
 var packed = msgpack_lite.encode(data);
 var expected = JSON.stringify(data);
 
