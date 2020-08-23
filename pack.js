@@ -5,7 +5,8 @@ class Packr extends Unpackr {
 	constructor(options) {
 		super(options)
 		this.offset = 0
-		let target = Buffer.allocUnsafeSlow(8192) // as you might expect, allocUnsafeSlow is the fastest and safest way to allocate memory
+		let target = new ByteArray(8192) // as you might expect, allocUnsafeSlow is the fastest and safest way to allocate memory
+		let targetView = new DataView(target.buffer, 0, 8192)
 		let typeBuffer
 		let position = 0
 		let start
@@ -34,7 +35,8 @@ class Packr extends Unpackr {
 			safeEnd = target.length - 10
 			if (safeEnd - position < 0x800) {
 				// don't start too close to the end, 
-				target = Buffer.allocUnsafeSlow(target.length)
+				target = new ByteArray(target.length)
+				targetView = new DataView(target.buffer, 0, target.length)
 				safeEnd = target.length - 10
 				position = 0
 			}
@@ -180,10 +182,8 @@ class Packr extends Unpackr {
 						target.copy(target, position + 5, position + 3, position + 3 + length)
 					}
 					target[position++] = 0xdb
-					target[position++] = length >> 24
-					target[position++] = (length >> 16) & 0xff
-					target[position++] = (length >> 8) & 0xff
-					target[position++] = length & 0xff
+					targetView.setUint32(position, length)
+					position += 4
 				}
 				position += length
 			} else if (type === 'number') {
@@ -201,10 +201,8 @@ class Packr extends Unpackr {
 							target[position++] = value & 0xff
 						} else {
 							target[position++] = 0xce
-							target[position++] = value >> 24
-							target[position++] = (value >> 16) & 0xff
-							target[position++] = (value >> 8) & 0xff
-							target[position++] = value & 0xff
+							targetView.setUint32(position, value)
+							position += 4
 						}
 					} else {
 						// negative int
@@ -212,21 +210,21 @@ class Packr extends Unpackr {
 							target[position++] = 0x100 + value
 						} else if (value >= -0x80) {
 							target[position++] = 0xd0
-							target.writeInt8(value, position++)
+							target[position++] = value + 0x100
 						} else if (value >= -0x8000) {
 							target[position++] = 0xd1
-							target.writeInt16BE(value, position)
+							targetView.setInt16(position, value)
 							position += 2
 						} else {
 							target[position++] = 0xd2
-							target.writeInt32BE(value, position)
+							targetView.setInt32(position, value)
 							position += 4
 						}
 					}
 				} else {
 					// very difficult to tell if float is sufficient, just use double for now
 					target[position++] = 0xcb
-					target.writeDoubleBE(value, position)
+					targetView.setFloat64(position, value)
 					/*if (!target[position[4] && !target[position[5] && !target[position[6] && !target[position[7] && !(target[0] & 0x78) < ) {
 						// something like this can be represented as a float
 					}*/
@@ -249,10 +247,8 @@ class Packr extends Unpackr {
 							target[position++] = length & 0xff
 						} else {
 							target[position++] = 0xdd
-							target[position++] = length >> 24
-							target[position++] = (length >> 16) & 0xff
-							target[position++] = (length >> 8) & 0xff
-							target[position++] = length & 0xff
+							targetView.setUint32(position, value)
+							position += 4
 						}
 						for (let i = 0; i < length; i++) {
 							pack(value[i])
@@ -267,10 +263,8 @@ class Packr extends Unpackr {
 							target[position++] = length & 0xff
 						} else {
 							target[position++] = 0xdf
-							target[position++] = length >> 24
-							target[position++] = (length >> 16) & 0xff
-							target[position++] = (length >> 8) & 0xff
-							target[position++] = length & 0xff
+							targetView.setUint32(position, value)
+							position += 4
 						}
 						for (let [ key, entryValue ] of value) {
 							pack(key)
@@ -281,10 +275,8 @@ class Packr extends Unpackr {
 						length = value.getTime() / 1000
 						target[position++] = 0xd6
 						target[position++] = 0xff
-						target[position++] = length >> 24
-						target[position++] = (length >> 16) & 0xff
-						target[position++] = (length >> 8) & 0xff
-						target[position++] = length & 0xff
+						targetView.setUint32(position, length)
+						position += 4
 					} else if (constructor === Buffer) {
 						length = value.length
 						if (length < 0x100) {
@@ -296,10 +288,8 @@ class Packr extends Unpackr {
 							target[position++] = length & 0xff
 						} else {
 							target[position++] = 0xc6
-							target[position++] = length >> 24
-							target[position++] = (length >> 16) & 0xff
-							target[position++] = (length >> 8) & 0xff
-							target[position++] = length & 0xff
+							targetView.setUint32(position, length)
+							position += 4
 						}
 						if (position + length > safeEnd)
 							makeRoom(position + length)
@@ -314,9 +304,9 @@ class Packr extends Unpackr {
 			} else if (type === 'bigint') {
 				target[position++] = 0xd3
 				if (value < 9223372036854776000 && value > -9223372036854776000)
-					target.writeBigInt64BE(value, position)
+					targetView.setBigInt64(position, value)
 				else
-					target.writeDoubleBE(value, position)
+					targetView.setFloat64(position, value)
 				position += 8
 			} else if (type === 'undefined') {
 				//target[position++] = 0xc1 // this is the "never-used" byte
@@ -429,7 +419,8 @@ class Packr extends Unpackr {
 		}
 		const makeRoom = (end) => {
 			let newSize = ((Math.max((end - start) << 2, target.length - 1) >> 12) + 1) << 12
-			let newBuffer = Buffer.allocUnsafeSlow(newSize)
+			let newBuffer = new ByteArray(newSize)
+			targetView = new DataView(newBuffer.buffer, 0, newSize)
 			target.copy(newBuffer, 0, start, end)
 			position -= start
 			start = 0
@@ -443,3 +434,5 @@ class Packr extends Unpackr {
 	}
 }
 exports.Packr = Packr
+
+let ByteArray = typeof window == 'undefined' ? Buffer.allocUnsafeSlow : Uint8Array
