@@ -24,7 +24,7 @@ class Packr extends Unpackr {
 			return target.utf8Write(string, position, maxBytes)
 		} : encoder.encodeInto ?
 			function(string, position) {
-				return encoder.encodeInto(string, target.subarray(position))
+				return encoder.encodeInto(string, target.subarray(position)).written
 			} : false
 
 		let packr = this
@@ -84,7 +84,7 @@ class Packr extends Unpackr {
 			try {
 				pack(value)
 				packr.offset = position // update the offset so next serialization doesn't write over our buffer, but can continue writing to same buffer sequentially
-				return target.slice(start, position) // position can change if we call pack again in saveStructures, so we get the buffer now
+				return target.subarray(start, position) // position can change if we call pack again in saveStructures, so we get the buffer now
 			} finally {
 				if (sharedStructures) {
 					if (serializationsSinceTransitionRebuild < 10)
@@ -175,20 +175,20 @@ class Packr extends Unpackr {
 					target[position++] = 0xa0 | length
 				} else if (length < 0x100) {
 					if (headerSize < 2) {
-						target.copy(target, position + 2, position + 1, position + 1 + length)
+						target.copyWithin(position + 2, position + 1, position + 1 + length)
 					}
 					target[position++] = 0xd9
 					target[position++] = length
 				} else if (length < 0x10000) {
 					if (headerSize < 3) {
-						target.copy(target, position + 3, position + 2, position + 2 + length)
+						target.copyWithin(position + 3, position + 2, position + 2 + length)
 					}
 					target[position++] = 0xda
 					target[position++] = length >> 8
 					target[position++] = length & 0xff
 				} else {
 					if (headerSize < 5) {
-						target.copy(target, position + 5, position + 3, position + 3 + length)
+						target.copyWithin(position + 5, position + 3, position + 3 + length)
 					}
 					target[position++] = 0xdb
 					targetView.setUint32(position, length)
@@ -302,7 +302,10 @@ class Packr extends Unpackr {
 						}
 						if (position + length > safeEnd)
 							makeRoom(position + length)
-						value.copy(target, position)
+						if (value.copy)
+							value.copy(target, position)
+						else
+							copyBinary(value, target, position, 0, value.length)
 						position += length
 					} else {	
 						writeObject(value, false)
@@ -431,6 +434,10 @@ class Packr extends Unpackr {
 			let newBuffer = new ByteArray(newSize)
 			targetView = new DataView(newBuffer.buffer, 0, newSize)
 			target.copy(newBuffer, 0, start, end)
+			if (target.copy)
+				target.copy(newBuffer, 0, start, end)
+			else
+				copyBinary(target, newBuffer, 0, start, end)
 			position -= start
 			start = 0
 			safeEnd = newBuffer.length - 10
@@ -445,3 +452,8 @@ class Packr extends Unpackr {
 exports.Packr = Packr
 
 let ByteArray = typeof window == 'undefined' ? Buffer.allocUnsafeSlow : Uint8Array
+function copyBinary(source, target, targetOffset, offset, endOffset) {
+	while (offset < endOffset) {
+		target[targetOffset++] = source[offset++]
+	}
+}
