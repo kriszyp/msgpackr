@@ -12,7 +12,7 @@ module.exports = {
     node: { Buffer: false },
     devtool: 'source-map',
     optimization: {
-        minimize: false
+        minimize: true
     },
-    mode: 'development'
+    //mode: 'development'
 };

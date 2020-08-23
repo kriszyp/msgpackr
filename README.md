@@ -1,6 +1,6 @@
 # msgpackr
 
-The msgpackr package is an extremely fast MessagePack NodeJS/JavaScript implementation. At the time of writing, it is significantly faster than any other known implementations, faster than Avro (for JS), and generally even faster than native JSON.stringify/parse. It also includes an optional record extension (the `r` in msgpackr), for defining record structures that makes MessagePack even faster and more compact, often over twice as fast as even native JSON functions and several times faster than other JS implementations.
+The msgpackr package is an extremely fast MessagePack NodeJS/JavaScript implementation. At the time of writing, it is significantly faster than any other known implementations, faster than Avro (for JS), and generally faster than native JSON.stringify/parse. It also includes an optional record extension (the `r` in msgpackr), for defining record structures that makes MessagePack even faster and more compact, often over twice as fast as even native JSON functions and several times faster than other JS implementations.
 
 ## Basic Usage
 
@@ -17,8 +17,11 @@ let data = unpack(serializedAsBuffer);
 ```
 This `pack` function will generate standard MessagePack without any extensions that should be compatible with any standard MessagePack parser/decoder. It will serialize JavaScript objects as MessagePack `map`s by default. The `unpack` function will deserialize MessagePack `map`s as an `Object` with the properties from the map.
 
+## Node Usage
+The msgpackr package is optimized for NodeJS usage (and will use a node addon for performance boost as an optional dependency).
+
 ### Streams
-We can use the including streaming functionality (which further improves performance). The `PackrStream` is a transform stream that can be used to serialize objects to a binary stream (writing to network/socket, IPC, etc.), and the `UnpackrStream` can be used to deserialize objects from a binary sream (reading from network/socket, etc.):
+We can use the including streaming functionality (which further improves performance). The `PackrStream` is a NodeJS transform stream that can be used to serialize objects to a binary stream (writing to network/socket, IPC, etc.), and the `UnpackrStream` can be used to deserialize objects from a binary sream (reading from network/socket, etc.):
 
 ```
 import { PackrStream } from 'msgpackr';
@@ -40,6 +43,13 @@ receivingStream.on('data', (data) => {
 });
 ```
  The `PackrStream` and `UnpackrStream` instances  will have also the record structure extension enabled by default (see below).
+
+## Browser Usage
+Msgpackr works as standalone JavaScript as well, and runs on modern browsers. It includes a bundled script for ease of direct loading. For module-based development, it is recommended that you directly import the module of interest, to minimize dependencies that get pulled into your application:
+```
+import { unpack } from 'msgpackr/unpack' // if you only need the unpack
+```
+(It is worth noting that while msgpackr works well in browsers, the MessagePack format itself is usually not an ideal format for web use. If you want compact data, brotli or gzip are most effective in compressing, and MessagePack's character frequency tends to defeat Huffman encoding used by these standard compression algorithms, resulting in less compact data than compressed JSON. The modern browser architecture is heavily optimized for parsing JSON from HTTP traffic, and it is difficult to achieve the same level of overall efficiency and ease with MessagePack.)
 
 ## Record / Object Structures
 There is a critical difference between maps (or dictionaries) that hold an arbitrary set of keys and values (JavaScript `Map`s are best for these), and records or object structures that have a well-defined set of fields which may have many instances using that same structure (most objects in JS). By using the record extension, this distinction is preserved in MessagePack and the encoding can reuse structures and not only provides better type preservation, but yield much more compact encodings and increase parsing/deserialization performance by 2-3x. Msgpackr automatically generates record definitions that are reused and referenced by objects with the same structure. There are a number of ways to use this to our advantage. For large object structures with repeating nested objects with similar structures, simply serializing with the record extension can yield benefits. To use the record structures extension, we create a new `Packr` instance. By default a new `Packr` instance will have the record extension enabled:
@@ -71,17 +81,6 @@ let packr = Packr({
 });
 
 ```
-
-#### resetMemory
-During the serialization process, data is written to buffers. Allocating new buffers is a relatively expensive process, and the `resetMemory` method can help allow reuse of buffers that will further improve performance. The `resetMemory` method can be called when previously created buffer(s) are no longer needed. For example, if we serialized an object, and wrote it to a database, we could indicate that we are done:
-```
-let buffer = packr.pack(data);
-writeToStorageSync(buffer);
-// finished with buffer, we can reset the memory on our packr now:
-packr.resetMemory()
-// future serialization can now reuse memory for better performance
-```
-The use of `resetMemory` is never required, buffers will still be handled and cleaned up through GC if not used, it just provides a small performance boost.
 
 ## Performance
 Msgpackr is fast. Really fast. Here is comparison with the next fastest JS projects using the benchmark tool from `msgpack-lite` (and the sample data is from some clinical research data we use that has a good mix of different value types and structures). It also includes comparison to V8 native JSON functionality, and JavaScript Avro (`avsc`, a very optimized Avro implementation):
@@ -120,6 +119,22 @@ msgpack.Encoder().on("data",ondata).encode(obj); | 1000000 |  1763 | 567214
 msgpack.createDecodeStream().write(buf);         | 1000000 |  2222 | 450045
 msgpack.createEncodeStream().write(obj);         | 1000000 |  1577 | 634115
 msgpack.Decoder().on("data",ondata).decode(buf); | 1000000 |  2246 | 445235
+
+See the benchmark.md for more benchmarks and information about benchmarking.
+
+### Additional Performance Optimizations
+Msgpackr is already fast, but here are some tips for making it faster. Msgpackr is designed to work well with reusable buffers. Allocating new buffers can be relatively expensive, so if you have Node addons, it can be much faster to reuse buffers and use memcpy to copy data into existing buffers. Then msgpackr `unpack` can be executed on the same buffer, with new data.
+
+#### resetMemory
+During the serialization process, data is written to buffers. Allocating new buffers is a relatively expensive process, and the `resetMemory` method can help allow reuse of buffers that will further improve performance. The `resetMemory` method can be called when previously created buffer(s) are no longer needed. For example, if we serialized an object, and wrote it to a database, we could indicate that we are done:
+```
+let buffer = packr.pack(data);
+writeToStorageSync(buffer);
+// finished with buffer, we can reset the memory on our packr now:
+packr.resetMemory()
+// future serialization can now reuse memory for better performance
+```
+The use of `resetMemory` is never required, buffers will still be handled and cleaned up through GC if not used, it just provides a small performance boost.
 
 ## Record Structure Extension Definition
 The record struction extension uses extension id 0x72 ("r") to declare the use of this functionality. The extension "data" byte (or bytes) identifies the byte or bytes used to identify the start of a record in the subsequent MessagePack block or stream. The identifier byte (or the first byte in a sequence) must be from 0x40 - 0x7f (and therefore replaces one byte representations of positive integers 64 - 127, which can alternately be represented with int or uint types). The extension declaration must be immediately follow by an MessagePack array that defines the field names of the record structure.
