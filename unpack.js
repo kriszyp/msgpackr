@@ -16,7 +16,7 @@ let srcString
 let srcStringStart = 0
 let srcStringEnd = 0
 let currentExtensions = []
-let useBuffer = true
+let dataView
 let defaultOptions = { objectsAsMaps: true }
 // the registration of the record definition extension (as "r")
 const recordDefinition = currentExtensions[0x72] = (id) => {
@@ -43,11 +43,11 @@ class Unpackr {
 		srcStringEnd = 0
 		srcString = null
 		strings = EMPTY_ARRAY
-//		if (src !== source) {
 		src = source
-		useBuffer = !!src.readDoubleBE
-		if (!useBuffer)
-			dataView = new DataView(source.buffer, source.byteOffset, source.byteLength)
+		// this provides cached access to the data view for a buffer if it is getting reused, which is a recommend
+		// technique for getting data from a database where it can be copied into an existing buffer instead of creating
+		// new ones
+		dataView = source.dataView || (new DataView(source.buffer, source.byteOffset, source.byteLength))
 		let value
 		if (this) {
 			currentUnpackr = this
@@ -65,8 +65,6 @@ class Unpackr {
 			}
 		} else
 			currentUnpackr = defaultOptions
-//		setSource(source)
-//		return readNext()
 		value = read()
 		src = null
 		return value
@@ -154,57 +152,64 @@ function read() {
 				return readBin(src[position++])
 			case 0xc5:
 				// bin 16
-				return readBin((src[position++] << 8) + src[position++])
+				value = dataView.getUint16(position)
+				position += 2
+				return readBin(value)
 			case 0xc6:
 				// bin 32
-				return readBin((src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++])
+				value = dataView.getUint32(position)
+				position += 4
+				return readBin(value)
 			case 0xc7:
 				// ext 8
 				return readExt(src[position++])
 			case 0xc8:
 				// ext 16
-				return readExt((src[position++] << 8) + src[position++])
+				value = dataView.getUint16(position)
+				position += 2
+				return readExt(value)
 			case 0xc9:
 				// ext 32
-				return readExt((src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++])
+				value = dataView.getUint32(position)
+				position += 4
+				return readExt(value)
 			case 0xca:
-				value = useBuffer ? src.readFloatBE(position) : dataView.getFloat32(position)
+				value = dataView.getFloat32(position)
 				position += 4
 				return value
 			case 0xcb:
-				value = useBuffer ? src.readDoubleBE(position) : dataView.getFloat64(position)
+				value = dataView.getFloat64(position)
 				position += 8
 				return value
 			// uint handlers
-			case 0xcc: // uint8
+			case 0xcc:
 				return src[position++]
-			case 0xcd: // uint16
-				value = useBuffer ? src.readUInt16BE(position) : dataView.getUint16(position)
+			case 0xcd:
+				value = dataView.getUint16(position)
 				position += 2
 				return value
-			case 0xce: // uint32
-				value = useBuffer ? src.readUInt32BE(position) : dataView.getUint32(position)
+			case 0xce:
+				value = dataView.getUint32(position)
 				position += 4
 				return value
 			case 0xcf:
-				value = currentUnpackr.useBigInts ? useBuffer ? src.readBigUInt64BE(position) : dataView.getBigUInt64(position) : useBuffer ? src.readUIntBE(position + 2, 6) : dataView.getBigUInt64(position)
+				value = currentUnpackr.useBigInts ? dataView.getBigUInt64(position) : src.readUIntBE(position + 2, 6)
 				position += 8
 				return value
 
 			// int handlers
 			case 0xd0:
-				value = src[position++]
-				return value < 0x80 ? value : (value - 0x100)
+				return dataView.getInt8(position++)
 			case 0xd1:
-				value = useBuffer ? src.readInt16BE(position) : dataView.getInt16(position)
+				value = dataView.getInt16(position)
 				position += 2
 				return value
-			case 0xd2: // can directly translate since sign-bit ends up exactly in right place
-				value = useBuffer ? src.readInt32BE(position) : dataView.getInt32(position)
+			case 0xd2:
+				value = dataView.getInt32(position)
 				position += 4
 				return value
 			case 0xd3:
-				value = currentUnpackr.useBigInts ? useBuffer ? src.readBigInt64BE(position) : dataView.getBigInt64(position) : useBuffer ? src.readIntBE(position + 2, 6) : dataView.getBigInt64(position)
+				value = currentUnpackr.useBigInts ? dataView.getBigInt64(position) : src.readIntBE(position + 2, 6)
 				position += 8
 				return value
 
@@ -244,22 +249,34 @@ function read() {
 				return readString8(value)
 			case 0xda:
 			// str 16
-				return readString16((src[position++] << 8) + src[position++])
+				value = dataView.getUint16(position)
+				position += 2
+				return readString16(value)
 			case 0xdb:
 			// str 32
-				return readString32((src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++])
+				value = dataView.getUint32(position)
+				position += 4
+				return readString32(value)
 			case 0xdc:
 			// array 16
-				return readArray((src[position++] << 8) + src[position++])
+				value = dataView.getUint16(position)
+				position += 2
+				return readArray(value)
 			case 0xdd:
 			// array 32
-				return readArray((src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++])
+				value = dataView.getUint32(position)
+				position += 4
+				return readArray(value)
 			case 0xde:
 			// map 16
-				return readMap((src[position++] << 8) + src[position++])
+				value = dataView.getUint16(position)
+				position += 2
+				return readMap(value)
 			case 0xdf:
 			// map 32
-				return readMap((src[position++] << 24) + (src[position++] << 16) + (src[position++] << 8) + src[position++])
+				value = dataView.getUint32(position)
+				position += 4
+				return readMap(value)
 			default: // negative int
 				if (token >= 0xe0)
 					return token - 0x100
@@ -529,8 +546,6 @@ function saveState(callback) {
 	src = savedSrc
 	currentStructures = savedStructures
 	currentUnpackr = savedPackr
-	useBuffer = !!src.readDoubleBE
-	if (!useBuffer)
-		dataView = new DataView(source.buffer, source.byteOffset, source.byteLength)
+	dataView = dataView = new DataView(src.buffer, src.byteOffset, src.byteLength)
 	return value
 }
