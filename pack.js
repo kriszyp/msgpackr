@@ -108,9 +108,7 @@ class Packr extends Unpackr {
 
 						if (packr.saveStructures(packr.structures, lastSharedStructuresLength) === false) {
 							// get updated structures and try again if the update failed
-							if (packr.getStructures) {
-								packr.structures = packr.getStructures() || []
-							}
+							packr.structures = packr.getStructures() || []
 							return packr.pack(value)
 						}
 						lastSharedStructuresLength = packr.structures.length
@@ -256,7 +254,7 @@ class Packr extends Unpackr {
 							target[position++] = length & 0xff
 						} else {
 							target[position++] = 0xdd
-							targetView.setUint32(position, value)
+							targetView.setUint32(position, length)
 							position += 4
 						}
 						for (let i = 0; i < length; i++) {
@@ -272,7 +270,7 @@ class Packr extends Unpackr {
 							target[position++] = length & 0xff
 						} else {
 							target[position++] = 0xdf
-							targetView.setUint32(position, value)
+							targetView.setUint32(position, length)
 							position += 4
 						}
 						for (let [ key, entryValue ] of value) {
