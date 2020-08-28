@@ -193,7 +193,7 @@ function read() {
 				position += 4
 				return value
 			case 0xcf:
-				value = currentUnpackr.useBigInts ? dataView.getBigUInt64(position) : src.readUIntBE(position + 2, 6)
+				value = dataView.getBigUInt64(position)
 				position += 8
 				return value
 
@@ -209,7 +209,7 @@ function read() {
 				position += 4
 				return value
 			case 0xd3:
-				value = currentUnpackr.useBigInts ? dataView.getBigInt64(position) : src.readIntBE(position + 2, 6)
+				value = dataView.getBigInt64(position)
 				position += 8
 				return value
 

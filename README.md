@@ -1,15 +1,15 @@
 # msgpackr
 
-The msgpackr package is an extremely fast MessagePack NodeJS/JavaScript implementation. At the time of writing, it is significantly faster than any other known implementations, faster than Avro (for JS), and generally faster than native JSON.stringify/parse. It also includes an optional record extension (the `r` in msgpackr), for defining record structures that makes MessagePack even faster and more compact, often over twice as fast as even native JSON functions and several times faster than other JS implementations.
+The msgpackr package is an extremely fast MessagePack NodeJS/JavaScript implementation. At the time of writing, it is significantly faster than any other known implementations, faster than Avro (for JS), and generally faster than native JSON.stringify/parse. It also includes an optional record extension (the `r` in msgpackr), for defining record structures that makes MessagePack even faster and more compact, often over twice as fast as even native JSON functions and several times faster than other JS implementations. See the performance section for more details.
 
 ## Basic Usage
 
 Install with:
 
 ```
-npm install msgpackr
+npm i msgpackr
 ```
-And import or require it for basic serialization/encoding (`pack`) and deserialization/decoding (`unpack`) functions:
+And `import` or `require` it for basic standard serialization/encoding (`pack`) and deserialization/decoding (`unpack`) functions:
 ```
 import { unpack, pack } from 'msgpackr';
 let serializedAsBuffer = pack(value);
@@ -18,7 +18,7 @@ let data = unpack(serializedAsBuffer);
 This `pack` function will generate standard MessagePack without any extensions that should be compatible with any standard MessagePack parser/decoder. It will serialize JavaScript objects as MessagePack `map`s by default. The `unpack` function will deserialize MessagePack `map`s as an `Object` with the properties from the map.
 
 ## Node Usage
-The msgpackr package is optimized for NodeJS usage (and will use a node addon for performance boost as an optional dependency).
+The msgpackr package runs on any modern JS platform, but is optimized for NodeJS usage (and will use a node addon for performance boost as an optional dependency).
 
 ### Streams
 We can use the including streaming functionality (which further improves performance). The `PackrStream` is a NodeJS transform stream that can be used to serialize objects to a binary stream (writing to network/socket, IPC, etc.), and the `UnpackrStream` can be used to deserialize objects from a binary sream (reading from network/socket, etc.):
@@ -79,28 +79,35 @@ let packr = Packr({
 	},
 	structures: []
 });
-
 ```
+Msgpackr will automatically add and saves structures as it encounters any new object structures (up to a limit of 32). It will always add structures in incremental/compatible way: Any object encoded with an earlier structure can be decoded with a later version (as long as it is persisted).
+
+## Options
+The following options properties can be provided to the Packr or Unpackr constructor:
+* `objectsAsMaps` - Turning this on disables the record extension and stores JavaScript objects as MessagePack maps, and unpacks maps as JavaScript `Object`s.
+* `structures` - Provides the array of structures that is to be used for record extension, if you want the structures saved and used again.
 
 ## Performance
 Msgpackr is fast. Really fast. Here is comparison with the next fastest JS projects using the benchmark tool from `msgpack-lite` (and the sample data is from some clinical research data we use that has a good mix of different value types and structures). It also includes comparison to V8 native JSON functionality, and JavaScript Avro (`avsc`, a very optimized Avro implementation):
 
 operation                                                  |   op   |   ms  |  op/s
 ---------------------------------------------------------- | ------: | ----: | -----:
-buf = Buffer(JSON.stringify(obj));                         |   82000 |  5004 |  16386
-obj = JSON.parse(buf);                                     |   88600 |  5000 |  17720
-require("msgpackr").pack(obj);                             |  161500 |  5002 |  32287
-require("msgpackr").unpack(buf);                           |   94600 |  5004 |  18904
-msgpackr w/ shared structures: packr.pack(obj);            |  178400 |  5002 |  35665
-msgpackr w/ shared structures: packr.unpack(buf);          |  376700 |  5000 |  75340
-buf = require("msgpack-lite").encode(obj);                 |   30100 |  5012 |   6005
-obj = require("msgpack-lite").decode(buf);                 |   16200 |  5001 |   3239
-buf = require("notepack").encode(obj);                     |   62600 |  5005 |  12507
-obj = require("notepack").decode(buf);                     |   32400 |  5007 |   6470
-require("what-the-pack")... encoder.encode(obj);           |   63500 |  5002 |  12694
-require("what-the-pack")... encoder.decode(buf);           |   32000 |  5001 |   6398
-require("avsc")...make schema/type...type.toBuffer(obj);   |   84600 |  5003 |  16909
-require("avsc")...make schema/type...type.toBuffer(obj);   |   99300 |  5001 |  19856
+buf = Buffer(JSON.stringify(obj));                         |   75900 |  5003 |  15170
+obj = JSON.parse(buf);                                     |   90800 |  5002 |  18152
+require("msgpackr").pack(obj);                             |  158400 |  5000 |  31680
+require("msgpackr").unpack(buf);                           |   99200 |  5003 |  19828
+msgpackr w/ shared structures: packr.pack(obj);            |  183400 |  5002 |  36665
+msgpackr w/ shared structures: packr.unpack(buf);          |  415000 |  5000 |  83000
+buf = require("msgpack-lite").encode(obj);                 |   30600 |  5005 |   6113
+obj = require("msgpack-lite").decode(buf);                 |   15900 |  5030 |   3161
+buf = require("@msgpack/msgpack").encode(obj);             |  101200 |  5001 |  20235
+obj = require("@msgpack/msgpack").decode(buf);             |   71200 |  5004 |  14228
+buf = require("msgpack5")().encode(obj);                   |    8100 |  5041 |   1606
+obj = require("msgpack5")().decode(buf);                   |   14000 |  5014 |   2792
+buf = require("notepack").encode(obj);                     |   65300 |  5006 |  13044
+obj = require("notepack").decode(buf);                     |   32300 |  5001 |   6458
+require("avsc")...make schema/type...type.toBuffer(obj);   |   86900 |  5002 |  17373
+require("avsc")...make schema/type...type.fromBuffer(obj); |  106100 |  5000 |  21220
 
 All benchmarks were performed on Node 14.8.0 (Windows i7-4770 3.4Ghz).
 (`avsc` is schema-based and more comparable in style to msgpackr with shared structures).
@@ -123,7 +130,10 @@ msgpack.Decoder().on("data",ondata).decode(buf); | 1000000 |  2246 | 445235
 See the benchmark.md for more benchmarks and information about benchmarking.
 
 ### Additional Performance Optimizations
-Msgpackr is already fast, but here are some tips for making it faster. Msgpackr is designed to work well with reusable buffers. Allocating new buffers can be relatively expensive, so if you have Node addons, it can be much faster to reuse buffers and use memcpy to copy data into existing buffers. Then msgpackr `unpack` can be executed on the same buffer, with new data.
+Msgpackr is already fast, but here are some tips for making it faster.
+
+#### Buffer Reuse
+Msgpackr is designed to work well with reusable buffers. Allocating new buffers can be relatively expensive, so if you have Node addons, it can be much faster to reuse buffers and use memcpy to copy data into existing buffers. Then msgpackr `unpack` can be executed on the same buffer, with new data.
 
 #### Arena Allocation (`resetMemory()`)
 During the serialization process, data is written to buffers. Allocating new buffers is a relatively expensive process, and the `resetMemory` method can help allow reuse of buffers that will further improve performance. The `resetMemory` method can be called when previously created buffer(s) are no longer needed. For example, if we serialized an object, and wrote it to a database, we could indicate that we are done:

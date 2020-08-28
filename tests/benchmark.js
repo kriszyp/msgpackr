@@ -10,6 +10,7 @@ var msgpack_codec = tryRequire("msgpack.codec");
 var notepack = tryRequire("notepack");
 var what_the_pack = tryRequire("what-the-pack");
 var avro = tryRequire('avsc')
+var cbor = tryRequire('cbor')
 
 msgpack5 = msgpack5 && msgpack5();
 msgpack_codec = msgpack_codec && msgpack_codec.msgpack;
@@ -17,7 +18,7 @@ what_the_pack = what_the_pack && what_the_pack.initialize(2**20);
 
 var pkg = require("../package.json");
 var data = require("./example4.json");
-var packed = msgpack_lite.encode(data);
+var packed = msgpack_lite && msgpack_lite.encode(data);
 var expected = JSON.stringify(data);
 
 var argv = Array.prototype.slice.call(process.argv, 2);
@@ -125,6 +126,11 @@ if (avro) {
   const type = avro.Type.forValue(data);
   buf = bench('require("avsc")...make schema/type...type.toBuffer(obj);', type.toBuffer.bind(type), data);
   obj = bench('require("avsc")...make schema/type...type.fromBuffer(obj);', type.fromBuffer.bind(type), buf);
+}
+if (cbor) {
+  buf = bench('buf = require("cbor").encode(obj);', cbor.encode, data);
+  obj = bench('obj = require("cbor").decode(buf);', cbor.decode, buf);
+  test(obj);
 }
 
 function JSON_stringify(src) {

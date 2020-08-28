@@ -4,6 +4,9 @@
   "version": "0.2.0",
   "description": "Fast MessagePack implementation with extension for record structures",
   "license": "MIT",
+  "keywords": [
+    "msgpack"
+  ],
   "repository": {
     "type": "git",
     "url": "http://github.com/kriszyp/msgpackr"

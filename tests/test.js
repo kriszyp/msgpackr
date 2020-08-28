@@ -30,7 +30,7 @@ try {
 
 if (typeof XMLHttpRequest === 'undefined') {
 	var fs = require('fs')
-	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/example.json'))
+	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/example4.json'))
 } else {
 	var xhr = new XMLHttpRequest()
 	xhr.open('GET', 'samples/outcomes.json', false)
