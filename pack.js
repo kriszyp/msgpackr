@@ -89,10 +89,11 @@ class Packr extends Unpackr {
 				if (sharedStructures) {
 					if (serializationsSinceTransitionRebuild < 10)
 						serializationsSinceTransitionRebuild++
-					if (transitionsCount > 1000) {
+					if (transitionsCount > 5000) {
 						// force a rebuild occasionally after a lot of transitions so it can get cleaned up
 						sharedStructures.transitions = null
 						serializationsSinceTransitionRebuild = 0
+						transitionsCount = 0
 						if (recordIdsToRemove.length > 0)
 							recordIdsToRemove = []
 					} else if (recordIdsToRemove.length > 0 && !isSequential) {
@@ -385,13 +386,13 @@ class Packr extends Unpackr {
 		}*/
 		(object) => {
 			let keys = Object.keys(object)
-			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null))
+			let nextTransition, hasNewTransition, transition = structures.transitions || (structures.transitions = Object.create(null))
 			for (let i =0, l = keys.length; i < l; i++) {
 				let key = keys[i]
 				nextTransition = transition[key]
 				if (!nextTransition) {
 					nextTransition = transition[key] = Object.create(null)
-					transitionsCount += serializationsSinceTransitionRebuild
+					hasNewTransition = true
 				}
 				transition = nextTransition
 			}
@@ -416,6 +417,8 @@ class Packr extends Unpackr {
 					target[position++] = 0xd4 // fixext 1
 					target[position++] = 0x72 // "r" record defintion extension type
 					target[position++] = recordId
+					if (hasNewTransition)
+						transitionsCount += serializationsSinceTransitionRebuild
 					// record the removal of the id, we can maintain our shared structure
 					if (recordIdsToRemove.length >= 0x40 - maxSharedStructures)
 						recordIdsToRemove.shift()[RECORD_SYMBOL] = 0 // we are cycling back through, and have to remove old ones

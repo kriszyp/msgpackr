@@ -1,7 +1,7 @@
 {
   "name": "msgpackr",
   "author": "Kris Zyp",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "Fast MessagePack implementation with extension for record structures",
   "license": "MIT",
   "keywords": [
@@ -17,7 +17,7 @@
   },
   "main": "./index.js",
   "optionalDependencies": {
-    "msgpackr-extract": "^0.1.0"
+    "msgpackr-extract": "^0.1.1"
   },
   "devDependencies": {
     "@types/node": "latest",
