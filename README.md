@@ -1,4 +1,4 @@
-# cbor-x
+# cbor-x (Uncompleted, not ready for use, being ported from msgpack)
 
 The cbor-x encodeage is an extremely fast CBOR NodeJS/JavaScript implementation. At the time of writing, it is significantly faster than any other known implementations, faster than Avro (for JS), and generally faster than native JSON.stringify/parse. It also includes an optional record extension (the `r` in cbor-x), for defining record structures that makes CBOR even faster and more compact, often over twice as fast as even native JSON functions and several times faster than other JS implementations. See the performance section for more details.
 
@@ -104,8 +104,8 @@ buf = require("@msgpack/msgpack").encode(obj);             |  101200 |  5001 |  
 obj = require("@msgpack/msgpack").decode(buf);             |   71200 |  5004 |  14228
 buf = require("msgpack5")().encode(obj);                   |    8100 |  5041 |   1606
 obj = require("msgpack5")().decode(buf);                   |   14000 |  5014 |   2792
-buf = require("noteencode").encode(obj);                     |   65300 |  5006 |  13044
-obj = require("noteencode").decode(buf);                     |   32300 |  5001 |   6458
+buf = require("notepack").encode(obj);                     |   65300 |  5006 |  13044
+obj = require("notepack").decode(buf);                     |   32300 |  5001 |   6458
 require("avsc")...make schema/type...type.toBuffer(obj);   |   86900 |  5002 |  17373
 require("avsc")...make schema/type...type.fromBuffer(obj); |  106100 |  5000 |  21220
 
@@ -120,8 +120,8 @@ new EncoderStream().write(obj);                    | 1000000 |   372 | 2688172
 new DecoderStream().write(buf);                  | 1000000 |   247 | 4048582
 stream.write(msgpack.encode(obj));               | 1000000 |  2898 | 345065
 stream.write(msgpack.decode(buf));               | 1000000 |  1969 | 507872
-stream.write(noteencode.encode(obj));              | 1000000 |   901 | 1109877
-stream.write(noteencode.decode(buf));              | 1000000 |  1012 | 988142
+stream.write(notepack.encode(obj));              | 1000000 |   901 | 1109877
+stream.write(notepack.decode(buf));              | 1000000 |  1012 | 988142
 msgpack.Encoder().on("data",ondata).encode(obj); | 1000000 |  1763 | 567214
 msgpack.createDecodeStream().write(buf);         | 1000000 |  2222 | 450045
 msgpack.createEncodeStream().write(obj);         | 1000000 |  1577 | 634115
