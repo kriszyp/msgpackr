@@ -1,7 +1,7 @@
 {
   "name": "msgpackr",
   "author": "Kris Zyp",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Fast MessagePack implementation with extension for record structures",
   "license": "MIT",
   "keywords": [
@@ -12,7 +12,7 @@
     "url": "http://github.com/kriszyp/msgpackr"
   },
   "scripts": {
-    "benchmark": "./tests/benchmark.js",
+    "benchmark": "node ./tests/benchmark.js",
     "test": "./node_modules/.bin/mocha tests/test*.js -u tdd"
   },
   "main": "./index.js",

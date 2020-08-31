@@ -133,9 +133,9 @@ function read() {
 		if (srcStringEnd >= position) {
 			return srcString.slice(position - srcStringStart, (position += length) - srcStringStart)
 		}
-		if (srcStringEnd == 0 && length < 8 && srcEnd < 128) {
+		if (srcStringEnd == 0 && srcEnd < 120 && length < 16) {
 			// for small blocks, avoiding the overhead of the extract call is helpful
-			let string = simpleString(length)
+			let string = /*length < 16 ? */shortStringInJS(length)// : longStringInJS(length)
 			if (string != null)
 				return string
 		}
@@ -431,18 +431,20 @@ function readMap(length) {
 }
 
 let fromCharCode = String.fromCharCode
-/*function simpleString(length) {
+function longStringInJS(length) {
 	let start = position
+	let bytes = new Array(length)
 	for (let i = 0; i < length; i++) {
 		const byte = src[position++];
 		if ((byte & 0x80) > 0) {
-			position -= i + 1
+			position = start
     			return
     		}
+    		bytes[i] = byte
     	}
-    	return asString.slice(start, position)
-}*/
-function simpleString(length) {
+    	return fromCharCode.apply(String, bytes)
+}
+function shortStringInJS(length) {
 	if (length < 4) {
 		if (length < 2) {
 			if (length === 0)
@@ -485,13 +487,13 @@ function simpleString(length) {
 				return fromCharCode(a, b, c, d)
 			else {
 				let e = src[position++]
-				if ((e & 0x80) > 1) {
+				if ((e & 0x80) > 0) {
 					position -= 5
 					return
 				}
 				return fromCharCode(a, b, c, d, e)
 			}
-		} else {
+		} else if (length < 8) {
 			let e = src[position++]
 			let f = src[position++]
 			if ((e & 0x80) > 0 || (f & 0x80) > 0) {
@@ -502,12 +504,83 @@ function simpleString(length) {
 				return fromCharCode(a, b, c, d, e, f)
 			let g = src[position++]
 			if ((g & 0x80) > 0) {
-				position -= 3
+				position -= 7
 				return
 			}
 			return fromCharCode(a, b, c, d, e, f, g)
+		} else {
+			let e = src[position++]
+			let f = src[position++]
+			let g = src[position++]
+			let h = src[position++]
+			if ((e & 0x80) > 0 || (f & 0x80) > 0 || (g & 0x80) > 0 || (h & 0x80) > 0) {
+				position -= 8
+				return
+			}
+			if (length < 10) {
+				if (length === 8)
+					return fromCharCode(a, b, c, d, e, f, g, h)
+				else {
+					let i = src[position++]
+					if ((i & 0x80) > 0) {
+						position -= 9
+						return
+					}
+					return fromCharCode(a, b, c, d, e, f, g, h, i)
+				}
+			} else if (length < 12) {
+				let i = src[position++]
+				let j = src[position++]
+				if ((i & 0x80) > 0 || (j & 0x80) > 0) {
+					position -= 10
+					return
+				}
+				if (length < 11)
+					return fromCharCode(a, b, c, d, e, f, g, h, i, j)
+				let k = src[position++]
+				if ((k & 0x80) > 0) {
+					position -= 11
+					return
+				}
+				return fromCharCode(a, b, c, d, e, f, g, h, i, j, k)
+			} else {
+				let i = src[position++]
+				let j = src[position++]
+				let k = src[position++]
+				let l = src[position++]
+				if ((i & 0x80) > 0 || (j & 0x80) > 0 || (k & 0x80) > 0 || (l & 0x80) > 0) {
+					position -= 12
+					return
+				}
+				if (length < 14) {
+					if (length === 12)
+						return fromCharCode(a, b, c, d, e, f, g, h, i, j, k, l)
+					else {
+						let m = src[position++]
+						if ((m & 0x80) > 0) {
+							position -= 13
+							return
+						}
+						return fromCharCode(a, b, c, d, e, f, g, h, i, j, k, l, m)
+					}
+				} else {
+					let m = src[position++]
+					let n = src[position++]
+					if ((m & 0x80) > 0 || (n & 0x80) > 0) {
+						position -= 14
+						return
+					}
+					if (length < 15)
+						return fromCharCode(a, b, c, d, e, f, g, h, i, j, k, l, m, n)
+					let o = src[position++]
+					if ((o & 0x80) > 0) {
+						position -= 15
+						return
+					}
+					return fromCharCode(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o)
+				}
+			}
 		}
-
 	}
 }
 
