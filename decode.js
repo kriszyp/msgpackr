@@ -11,7 +11,7 @@ let alreadySet
 const EMPTY_ARRAY = []
 let strings = EMPTY_ARRAY
 let stringPosition = 0
-let currentUnpackr = {}
+let currentDecoder = {}
 let srcString
 let srcStringStart = 0
 let srcStringEnd = 0
@@ -32,11 +32,11 @@ currentExtensions[0xd6] = (data) => {
 } // notepack defines extension 0 to mean undefined, so use that as the default here
 // registration of bulk record definition?
 // currentExtensions[0x52] = () =>
-class Unpackr {
+class Decoder {
 	constructor(options) {
 		Object.assign(this, options)
 	}
-	unpack(source, end) {
+	decode(source, end) {
 		srcEnd = end > -1 ? end : source.length
 		position = 0
 		stringPosition = 0
@@ -50,7 +50,7 @@ class Unpackr {
 		dataView = source.dataView || (new DataView(source.buffer, source.byteOffset, source.byteLength))
 		let value
 		if (this) {
-			currentUnpackr = this
+			currentDecoder = this
 			if (this.structures) {
 				currentStructures = this.structures
 				value = read()
@@ -64,14 +64,14 @@ class Unpackr {
 				currentStructures = []
 			}
 		} else
-			currentUnpackr = defaultOptions
+			currentDecoder = defaultOptions
 		value = read()
 		src = null
 		return value
 	}
 }
 let currentStructures
-exports.Unpackr = Unpackr
+exports.Decoder = Decoder
 exports.read = read
 exports.getPosition = () => {
 	return position
@@ -89,9 +89,9 @@ function read() {
 					if (!structure.read)
 						structure.read = createStructureReader(structure)
 					return structure.read()
-				} else if (currentUnpackr.getStructures) {
-					// we have to preserve our state anytime we provide a means for external code to re-execute unpack
-					let updatedStructures = saveState(() => currentUnpackr.getStructures()) || []
+				} else if (currentDecoder.getStructures) {
+					// we have to preserve our state anytime we provide a means for external code to re-execute decode
+					let updatedStructures = saveState(() => currentDecoder.getStructures()) || []
 					currentStructures.splice.apply(currentStructures, [0, updatedStructures.length].concat(updatedStructures))
 					structure = currentStructures[token & 0x3f]
 					if (structure) {
@@ -106,7 +106,7 @@ function read() {
 		} else if (token < 0x90) {
 			// map
 			token -= 0x80
-			if (currentUnpackr.objectsAsMaps) {
+			if (currentDecoder.objectsAsMaps) {
 				let object = {}
 				for (let i = 0; i < token; i++) {
 					object[read()] = read()
@@ -415,7 +415,7 @@ function readArray(length) {
 }
 
 function readMap(length) {
-	if (currentUnpackr.objectsAsMaps) {
+	if (currentDecoder.objectsAsMaps) {
 		let object = {}
 		for (let i = 0; i < length; i++) {
 			object[read()] = read()
@@ -607,7 +607,7 @@ function saveState(callback) {
 	// TODO: We may need to revisit this if we do more external calls to user code (since it could be slow)
 	let savedSrc = Buffer.from(src.slice(0, srcEnd)) // we copy the data in case it changes while external data is processed
 	let savedStructures = currentStructures
-	let savedPackr = currentUnpackr
+	let savedPackr = currentDecoder
 	let value = callback()
 	srcEnd = savedSrcEnd
 	position = savedPosition
@@ -618,7 +618,7 @@ function saveState(callback) {
 	strings = savedStrings
 	src = savedSrc
 	currentStructures = savedStructures
-	currentUnpackr = savedPackr
+	currentDecoder = savedPackr
 	dataView = dataView = new DataView(src.buffer, src.byteOffset, src.byteLength)
 	return value
 }

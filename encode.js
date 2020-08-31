@@ -1,11 +1,11 @@
 "use strict"
-let Unpackr = require('./unpack').Unpackr
+let Decoder = require('./unencode').Decoder
 let encoder
 try {
 	encoder = new TextEncoder()
 } catch (error) {}
 const RECORD_SYMBOL = Symbol('record-id')
-class Packr extends Unpackr {
+class Encoder extends Decoder {
 	constructor(options) {
 		super(options)
 		this.offset = 0
@@ -27,7 +27,7 @@ class Packr extends Unpackr {
 				return encoder.encodeInto(string, target.subarray(position)).written
 			} : false
 
-		let packr = this
+		let encoder = this
 		let maxSharedStructures = 32
 		let isSequential = options && options.sequential
 		if (isSequential) {
@@ -41,8 +41,8 @@ class Packr extends Unpackr {
 			throw new Error('Too many shared structures')
 		}
 
-		this.pack = function(value) {
-			position = packr.offset
+		this.encode = function(value) {
+			position = encoder.offset
 			safeEnd = target.length - 10
 			if (safeEnd - position < 0x800) {
 				// don't start too close to the end, 
@@ -52,7 +52,7 @@ class Packr extends Unpackr {
 				position = 0
 			}
 			start = position
-			sharedStructures = packr.structures
+			sharedStructures = encoder.structures
 			if (sharedStructures) {
 				let sharedStructuresLength = sharedStructures.length
 				if (sharedStructuresLength >  maxSharedStructures && !isSequential)
@@ -82,9 +82,9 @@ class Packr extends Unpackr {
 				hasSharedUpdate = false
 			structures = sharedStructures || []
 			try {
-				pack(value)
-				packr.offset = position // update the offset so next serialization doesn't write over our buffer, but can continue writing to same buffer sequentially
-				return target.subarray(start, position) // position can change if we call pack again in saveStructures, so we get the buffer now
+				encode(value)
+				encoder.offset = position // update the offset so next serialization doesn't write over our buffer, but can continue writing to same buffer sequentially
+				return target.subarray(start, position) // position can change if we call encode again in saveStructures, so we get the buffer now
 			} finally {
 				if (sharedStructures) {
 					if (serializationsSinceTransitionRebuild < 10)
@@ -102,22 +102,22 @@ class Packr extends Unpackr {
 						}
 						recordIdsToRemove = []
 					}
-					if (hasSharedUpdate && packr.saveStructures) {
-						if (packr.structures.length > maxSharedStructures) {
-							packr.structures = packr.structures.slice(0, maxSharedStructures)
+					if (hasSharedUpdate && encoder.saveStructures) {
+						if (encoder.structures.length > maxSharedStructures) {
+							encoder.structures = encoder.structures.slice(0, maxSharedStructures)
 						}
 
-						if (packr.saveStructures(packr.structures, lastSharedStructuresLength) === false) {
+						if (encoder.saveStructures(encoder.structures, lastSharedStructuresLength) === false) {
 							// get updated structures and try again if the update failed
-							packr.structures = packr.getStructures() || []
-							return packr.pack(value)
+							encoder.structures = encoder.getStructures() || []
+							return encoder.encode(value)
 						}
-						lastSharedStructuresLength = packr.structures.length
+						lastSharedStructuresLength = encoder.structures.length
 					}
 				}
 			}
 		}
-		const pack = (value) => {
+		const encode = (value) => {
 			if (position > safeEnd)
 				target = makeRoom(position)
 
@@ -170,26 +170,26 @@ class Packr extends Unpackr {
 					length = encodeUtf8(value, position + headerSize, maxBytes)
 				}
 
-				if (length < 0x20) {
-					target[position++] = 0xa0 | length
+				if (length < 0x18) {
+					target[position++] = 0x60 | length
 				} else if (length < 0x100) {
 					if (headerSize < 2) {
 						target.copyWithin(position + 2, position + 1, position + 1 + length)
 					}
-					target[position++] = 0xd9
+					target[position++] = 0x78
 					target[position++] = length
 				} else if (length < 0x10000) {
 					if (headerSize < 3) {
 						target.copyWithin(position + 3, position + 2, position + 2 + length)
 					}
-					target[position++] = 0xda
+					target[position++] = 0x79
 					target[position++] = length >> 8
 					target[position++] = length & 0xff
 				} else {
 					if (headerSize < 5) {
 						target.copyWithin(position + 5, position + 3, position + 3 + length)
 					}
-					target[position++] = 0xdb
+					target[position++] = 0x7a
 					targetView.setUint32(position, length)
 					position += 4
 				}
@@ -198,40 +198,40 @@ class Packr extends Unpackr {
 				if (value >> 0 == value) {// integer, 32-bit or less
 					if (value >= 0) {
 						// positive uint
-						if (value < 0x40) {
+						if (value < 0x18) {
 							target[position++] = value
 						} else if (value < 0x100) {
-							target[position++] = 0xcc
+							target[position++] = 0x18
 							target[position++] = value
 						} else if (value < 0x10000) {
-							target[position++] = 0xcd
+							target[position++] = 0x19
 							target[position++] = value >> 8
 							target[position++] = value & 0xff
 						} else {
-							target[position++] = 0xce
+							target[position++] = 0x1a
 							targetView.setUint32(position, value)
 							position += 4
 						}
 					} else {
 						// negative int
-						if (value >= -0x20) {
-							target[position++] = 0x100 + value
-						} else if (value >= -0x80) {
-							target[position++] = 0xd0
+						if (value >= -0x18) {
+							target[position++] = 0x38 + value
+						} else if (value >= -0x100) {
+							target[position++] = 0x38
 							target[position++] = value + 0x100
-						} else if (value >= -0x8000) {
-							target[position++] = 0xd1
-							targetView.setInt16(position, value)
+						} else if (value >= -0x10000) {
+							target[position++] = 0x39
+							targetView.setUint16(position, -value)
 							position += 2
 						} else {
-							target[position++] = 0xd2
-							targetView.setInt32(position, value)
+							target[position++] = 0x3a
+							targetView.setUint32(position, -value)
 							position += 4
 						}
 					}
 				} else {
 					// very difficult to tell if float is sufficient, just use double for now
-					target[position++] = 0xcb
+					target[position++] = 0xfb
 					targetView.setFloat64(position, value)
 					/*if (!target[position[4] && !target[position[5] && !target[position[6] && !target[position[7] && !(target[0] & 0x78) < ) {
 						// something like this can be represented as a float
@@ -240,43 +240,49 @@ class Packr extends Unpackr {
 				}
 			} else if (type === 'object') {
 				if (!value)
-					target[position++] = 0xc0
+					target[position++] = 0xf6
 				else {
 					let constructor = value.constructor
 					if (constructor === Object) {
 						writeObject(value, true)
 					} else if (constructor === Array) {
 						length = value.length
-						if (length < 0x10) {
-							target[position++] = 0x90 | length
+						if (length < 0x18) {
+							target[position++] = 0x80 | length
+						} else if (length < 0x100) {
+							target[position++] = 0x98
+							target[position++] = length
 						} else if (length < 0x10000) {
-							target[position++] = 0xdc
+							target[position++] = 0x99
 							target[position++] = length >> 8
 							target[position++] = length & 0xff
 						} else {
-							target[position++] = 0xdd
+							target[position++] = 0x9a
 							targetView.setUint32(position, length)
 							position += 4
 						}
 						for (let i = 0; i < length; i++) {
-							pack(value[i])
+							encode(value[i])
 						}
 					} else if (constructor === Map) {
 						length = value.size
-						if (length < 0x10) {
-							target[position++] = 0x80 | length
+						if (length < 0x18) {
+							target[position++] = 0xa0 | length
+						} else if (length < 0x100) {
+							target[position++] = 0xb8
+							target[position++] = length
 						} else if (length < 0x10000) {
-							target[position++] = 0xde
+							target[position++] = 0xb9
 							target[position++] = length >> 8
 							target[position++] = length & 0xff
 						} else {
-							target[position++] = 0xdf
+							target[position++] = 0xba
 							targetView.setUint32(position, length)
 							position += 4
 						}
 						for (let [ key, entryValue ] of value) {
-							pack(key)
-							pack(entryValue)
+							encode(key)
+							encode(entryValue)
 						}
 					} else if (constructor === Date) {
 						// using the 32 timestamp for now, TODO: implement support for 64-bit and 128-bit
@@ -288,14 +294,14 @@ class Packr extends Unpackr {
 					} else if (constructor === Buffer) {
 						length = value.length
 						if (length < 0x100) {
-							target[position++] = 0xc4
+							target[position++] = 0x58
 							target[position++] = length
 						} else if (length < 0x10000) {
-							target[position++] = 0xc5
+							target[position++] = 0x59
 							target[position++] = length >> 8
 							target[position++] = length & 0xff
 						} else {
-							target[position++] = 0xc6
+							target[position++] = 0x5a
 							targetView.setUint32(position, length)
 							position += 4
 						}
@@ -311,19 +317,17 @@ class Packr extends Unpackr {
 					}
 				}
 			} else if (type === 'boolean') {
-				target[position++] = value ? 0xc3 : 0xc2
+				target[position++] = value ? 0xf5 : 0xf4
 			} else if (type === 'bigint') {
-				target[position++] = 0xd3
-				if (value < 9223372036854776000 && value > -9223372036854776000)
+				target[position++] = 0xfb
+				/*if (value < 9223372036854776000 && value > -9223372036854776000) 
 					targetView.setBigInt64(position, value)
-				else
+				else*/
 					targetView.setFloat64(position, value)
 				position += 8
 			} else if (type === 'undefined') {
 				//target[position++] = 0xc1 // this is the "never-used" byte
-				target[position++] = 0xd4 // a number of implementations use fixext1 with type 0, data 0 to denote undefined, so we follow suite
-				target[position++] = 0
-				target[position++] = 0
+				target[position++] = 0xf7
 			} else {
 				throw new Error('Unknown type ' + type)
 			}
@@ -336,8 +340,8 @@ class Packr extends Unpackr {
 			let size = 0
 			for (let key in object) {
 				if (safePrototype || object.hasOwnProperty(key)) {
-					pack(key)
-					pack(object[key])
+					encode(key)
+					encode(object[key])
 					size++
 				}
 			}
@@ -373,7 +377,7 @@ class Packr extends Unpackr {
 						objectOffset
 					}
 					transition = nextTransition
-					pack(object[key])
+					encode(object[key])
 				}
 			}
 			let id = transition.id
@@ -423,12 +427,12 @@ class Packr extends Unpackr {
 					if (recordIdsToRemove.length >= 0x40 - maxSharedStructures)
 						recordIdsToRemove.shift()[RECORD_SYMBOL] = 0 // we are cycling back through, and have to remove old ones
 					recordIdsToRemove.push(transition)
-					pack(keys)
+					encode(keys)
 				}
 			}
 			// now write the values
 			for (let i =0, l = keys.length; i < l; i++)
-				pack(object[keys[i]])
+				encode(object[keys[i]])
 		}
 		const makeRoom = (end) => {
 			let newSize = ((Math.max((end - start) << 2, target.length - 1) >> 12) + 1) << 12
@@ -450,7 +454,7 @@ class Packr extends Unpackr {
 		this.offset = 0
 	}
 }
-exports.Packr = Packr
+exports.Encoder = Encoder
 
 let ByteArray = typeof window == 'undefined' ? Buffer.allocUnsafeSlow : Uint8Array
 function copyBinary(source, target, targetOffset, offset, endOffset) {

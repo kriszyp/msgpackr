@@ -1,36 +1,36 @@
 "use strict"
 var Transform = require('stream').Transform
-var Packr = require('./pack').Packr
-const { read, getPosition, Unpackr } = require('./unpack')
+var Encoder = require('./encode').Encoder
+const { read, getPosition, Decoder } = require('./decode')
 var DEFAULT_OPTIONS = {objectMode: true}
 
-class PackrStream extends Transform {
+class EncoderStream extends Transform {
 	constructor(options) {
 		if (!options)
 			options = {}
 		super(options)
 		options.sequential = true
-		this.packr = new Packr(options)
+		this.encoder = new Encoder(options)
 	}
 	write(value) {
-		this.push(this.packr.pack(value))
+		this.push(this.encoder.encode(value))
 	}
 
 	end(value) {
 		if (value != null)
-			this.push(this.packr.pack(value))
+			this.push(this.encoder.encode(value))
 		this.push(null)
 	}
 }
 
-class UnpackrStream extends Transform {
+class DecoderStream extends Transform {
 	constructor(options) {
 		if (!options)
 			options = {}
 		options.objectMode = true
 		super(options)
 		options.structures = []
-		this.unpackr = new Unpackr(options)
+		this.decoder = new Decoder(options)
 	}
 	_transform(chunk, encoding, callback) {
 		if (this.incompleteBuffer) {
@@ -40,7 +40,7 @@ class UnpackrStream extends Transform {
 		let lastStart = 0
 		let size = chunk.length
 		try {
-			this.push(this.unpackr.unpack(chunk))
+			this.push(this.decoder.decode(chunk))
 			lastStart = getPosition()
 			while (lastStart < size) {
 				let value = read()
@@ -57,5 +57,5 @@ class UnpackrStream extends Transform {
 	}
 }
 
-exports.PackrStream = PackrStream
-exports.UnpackrStream = UnpackrStream
+exports.EncoderStream = EncoderStream
+exports.DecoderStream = DecoderStream

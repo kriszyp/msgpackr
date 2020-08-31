@@ -9,13 +9,13 @@ Install with:
 ```
 npm i cbor-x
 ```
-And `import` or `require` it for basic standard serialization/encoding (`encode`) and deserialization/decoding (`unencode`) functions:
+And `import` or `require` it for basic standard serialization/encoding (`encode`) and deserialization/decoding (`decode`) functions:
 ```
-import { unencode, encode } from 'cbor-x';
+import { decode, encode } from 'cbor-x';
 let serializedAsBuffer = encode(value);
-let data = unencode(serializedAsBuffer);
+let data = decode(serializedAsBuffer);
 ```
-This `encode` function will generate standard CBOR without any extensions that should be compatible with any standard CBOR parser/decoder. It will serialize JavaScript objects as CBOR `map`s by default. The `unencode` function will deserialize CBOR `map`s as an `Object` with the properties from the map.
+This `encode` function will generate standard CBOR without any extensions that should be compatible with any standard CBOR parser/decoder. It will serialize JavaScript objects as CBOR `map`s by default. The `decode` function will deserialize CBOR `map`s as an `Object` with the properties from the map.
 
 ## Node Usage
 The cbor-x encodeage runs on any modern JS platform, but is optimized for NodeJS usage (and will use a node addon for performance boost as an optional dependency).
@@ -47,7 +47,7 @@ receivingStream.on('data', (data) => {
 ## Browser Usage
 Cbor-x works as standalone JavaScript as well, and runs on modern browsers. It includes a bundled script for ease of direct loading. For module-based development, it is recommended that you directly import the module of interest, to minimize dependencies that get pulled into your application:
 ```
-import { unencode } from 'cbor-x/unencode' // if you only need to unencode
+import { decode } from 'cbor-x/decode' // if you only need to decode
 ```
 (It is worth noting that while cbor-x works well in browsers, the CBOR format itself is usually not an ideal format for web use. If you want compact data, brotli or gzip are most effective in compressing, and CBOR's character frequency tends to defeat Huffman encoding used by these standard compression algorithms, resulting in less compact data than compressed JSON. The modern browser architecture is heavily optimized for parsing JSON from HTTP traffic, and it is difficult to achieve the same level of overall efficiency and ease with CBOR.)
 
@@ -62,7 +62,7 @@ encoder.encode(myBigData);
 
 Another way to further leverage the benefits of the cbor-x record structures is to use streams that naturally allow for data to reuse based on previous record structures. The stream classes have the record structure extension enabled by default and provide excellent out-of-the-box performance.
 
-When creating a new `Encoder`, `EncoderStream`, or `DecoderStream` instance, we can enable or disable the record structure extension with the `objectsAsMaps` property. When this is `true`, the record structure extension will be disabled, and all objects will revert to being serialized using MessageMap `map`s, and all `map`s will be deserialized to JS `Object`s as properties (like the standalone `encode` and `unencode` functions).
+When creating a new `Encoder`, `EncoderStream`, or `DecoderStream` instance, we can enable or disable the record structure extension with the `objectsAsMaps` property. When this is `true`, the record structure extension will be disabled, and all objects will revert to being serialized using MessageMap `map`s, and all `map`s will be deserialized to JS `Object`s as properties (like the standalone `encode` and `decode` functions).
 
 ### Shared Record Structures
 Another useful way of using cbor-x, and the record extension, is for storing data in a databases, files, or other storage systems. If a number of objects with common data structures are being stored, a shared structure can be used to greatly improve data storage and deserialization efficiency. We just need to provide a way to store the generated shared structure so it is available to deserialize stored data in the future:
@@ -72,7 +72,7 @@ import { Encoder } from 'cbor-x';
 let encoder = Encoder({
 	getStructures() {
 		// storing our data in file (but we could also store in a db or key-value store)
-		return unencode(readFileSync('my-shared-structures.mp')) || [];
+		return decode(readFileSync('my-shared-structures.mp')) || [];
 	},
 	saveStructures(structures) {
 		writeFileSync('my-shared-structures.mp', encode(structures))
@@ -84,26 +84,26 @@ Cbor-x will automatically add and saves structures as it encounters any new obje
 
 ## Options
 The following options properties can be provided to the Encoder or Decoder constructor:
-* `objectsAsMaps` - Turning this on disables the record extension and stores JavaScript objects as CBOR maps, and unencodes maps as JavaScript `Object`s.
+* `objectsAsMaps` - Turning this on disables the record extension and stores JavaScript objects as CBOR maps, and decodes maps as JavaScript `Object`s.
 * `structures` - Provides the array of structures that is to be used for record extension, if you want the structures saved and used again.
 
 ## Performance
-Cbor-x is fast. Really fast. Here is comparison with the next fastest JS projects using the benchmark tool from `msgencode-lite` (and the sample data is from some clinical research data we use that has a good mix of different value types and structures). It also includes comparison to V8 native JSON functionality, and JavaScript Avro (`avsc`, a very optimized Avro implementation):
+Cbor-x is fast. Really fast. Here is comparison with the next fastest JS projects using the benchmark tool from `msgpack-lite` (and the sample data is from some clinical research data we use that has a good mix of different value types and structures). It also includes comparison to V8 native JSON functionality, and JavaScript Avro (`avsc`, a very optimized Avro implementation):
 
 operation                                                  |   op   |   ms  |  op/s
 ---------------------------------------------------------- | ------: | ----: | -----:
 buf = Buffer(JSON.stringify(obj));                         |   75900 |  5003 |  15170
 obj = JSON.parse(buf);                                     |   90800 |  5002 |  18152
 require("cbor-x").encode(obj);                             |  158400 |  5000 |  31680
-require("cbor-x").unencode(buf);                           |   99200 |  5003 |  19828
+require("cbor-x").decode(buf);                           |   99200 |  5003 |  19828
 cbor-x w/ shared structures: encoder.encode(obj);            |  183400 |  5002 |  36665
-cbor-x w/ shared structures: encoder.unencode(buf);          |  415000 |  5000 |  83000
-buf = require("msgencode-lite").encode(obj);                 |   30600 |  5005 |   6113
-obj = require("msgencode-lite").decode(buf);                 |   15900 |  5030 |   3161
-buf = require("@msgencode/msgencode").encode(obj);             |  101200 |  5001 |  20235
-obj = require("@msgencode/msgencode").decode(buf);             |   71200 |  5004 |  14228
-buf = require("msgencode5")().encode(obj);                   |    8100 |  5041 |   1606
-obj = require("msgencode5")().decode(buf);                   |   14000 |  5014 |   2792
+cbor-x w/ shared structures: encoder.decode(buf);          |  415000 |  5000 |  83000
+buf = require("msgpack-lite").encode(obj);                 |   30600 |  5005 |   6113
+obj = require("msgpack-lite").decode(buf);                 |   15900 |  5030 |   3161
+buf = require("@msgpack/msgpack").encode(obj);             |  101200 |  5001 |  20235
+obj = require("@msgpack/msgpack").decode(buf);             |   71200 |  5004 |  14228
+buf = require("msgpack5")().encode(obj);                   |    8100 |  5041 |   1606
+obj = require("msgpack5")().decode(buf);                   |   14000 |  5014 |   2792
 buf = require("noteencode").encode(obj);                     |   65300 |  5006 |  13044
 obj = require("noteencode").decode(buf);                     |   32300 |  5001 |   6458
 require("avsc")...make schema/type...type.toBuffer(obj);   |   86900 |  5002 |  17373
@@ -112,20 +112,20 @@ require("avsc")...make schema/type...type.fromBuffer(obj); |  106100 |  5000 |  
 All benchmarks were performed on Node 14.8.0 (Windows i7-4770 3.4Ghz).
 (`avsc` is schema-based and more comparable in style to cbor-x with shared structures).
 
-Here is a benchmark of streaming data (again borrowed from `msgencode-lite`'s benchmarking), where cbor-x is able to take advantage of the structured record extension and really demonstrate its performance capabilities:
+Here is a benchmark of streaming data (again borrowed from `msgpack-lite`'s benchmarking), where cbor-x is able to take advantage of the structured record extension and really demonstrate its performance capabilities:
 
 operation (1000000 x 2)                          |   op    |  ms   |  op/s
 ------------------------------------------------ | ------: | ----: | -----:
 new EncoderStream().write(obj);                    | 1000000 |   372 | 2688172
 new DecoderStream().write(buf);                  | 1000000 |   247 | 4048582
-stream.write(msgencode.encode(obj));               | 1000000 |  2898 | 345065
-stream.write(msgencode.decode(buf));               | 1000000 |  1969 | 507872
+stream.write(msgpack.encode(obj));               | 1000000 |  2898 | 345065
+stream.write(msgpack.decode(buf));               | 1000000 |  1969 | 507872
 stream.write(noteencode.encode(obj));              | 1000000 |   901 | 1109877
 stream.write(noteencode.decode(buf));              | 1000000 |  1012 | 988142
-msgencode.Encoder().on("data",ondata).encode(obj); | 1000000 |  1763 | 567214
-msgencode.createDecodeStream().write(buf);         | 1000000 |  2222 | 450045
-msgencode.createEncodeStream().write(obj);         | 1000000 |  1577 | 634115
-msgencode.Decoder().on("data",ondata).decode(buf); | 1000000 |  2246 | 445235
+msgpack.Encoder().on("data",ondata).encode(obj); | 1000000 |  1763 | 567214
+msgpack.createDecodeStream().write(buf);         | 1000000 |  2222 | 450045
+msgpack.createEncodeStream().write(obj);         | 1000000 |  1577 | 634115
+msgpack.Decoder().on("data",ondata).decode(buf); | 1000000 |  2246 | 445235
 
 See the benchmark.md for more benchmarks and information about benchmarking.
 
@@ -133,7 +133,7 @@ See the benchmark.md for more benchmarks and information about benchmarking.
 Cbor-x is already fast, but here are some tips for making it faster.
 
 #### Buffer Reuse
-Cbor-x is designed to work well with reusable buffers. Allocating new buffers can be relatively expensive, so if you have Node addons, it can be much faster to reuse buffers and use memcpy to copy data into existing buffers. Then cbor-x `unencode` can be executed on the same buffer, with new data.
+Cbor-x is designed to work well with reusable buffers. Allocating new buffers can be relatively expensive, so if you have Node addons, it can be much faster to reuse buffers and use memcpy to copy data into existing buffers. Then cbor-x `decode` can be executed on the same buffer, with new data.
 
 #### Arena Allocation (`resetMemory()`)
 During the serialization process, data is written to buffers. Allocating new buffers is a relatively expensive process, and the `resetMemory` method can help allow reuse of buffers that will further improve performance. The `resetMemory` method can be called when previously created buffer(s) are no longer needed. For example, if we serialized an object, and wrote it to a database, we could indicate that we are done:
@@ -169,4 +169,4 @@ MIT
 
 ### Credits
 
-Various projects have been inspirations for this, and code has been borrowed from https://github.com/msgencode/msgencode-javascript and https://github.com/mtth/avsc.
+Various projects have been inspirations for this, and code has been borrowed from https://github.com/msgpack/msgpack-javascript and https://github.com/mtth/avsc.
