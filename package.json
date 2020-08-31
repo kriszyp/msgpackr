@@ -1,15 +1,15 @@
 {
-  "name": "msgpackr",
+  "name": "cbor-x",
   "author": "Kris Zyp",
-  "version": "0.2.3",
-  "description": "Fast MessagePack implementation with extension for record structures",
+  "version": "0.1.0",
+  "description": "Extremely fast CBOR encoder/decoder with extension for record structures",
   "license": "MIT",
   "keywords": [
-    "msgpack"
+    "CBOR"
   ],
   "repository": {
     "type": "git",
-    "url": "http://github.com/kriszyp/msgpackr"
+    "url": "http://github.com/kriszyp/cbor-x"
   },
   "scripts": {
     "benchmark": "node ./tests/benchmark.js",
