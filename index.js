@@ -1,14 +1,20 @@
 exports.Packr = require('./pack').Packr
+exports.Encoder = exports.Packr
 let unpackModule = require('./unpack')
 let extractor = tryRequire('msgpackr-extract')
 if (extractor)
 	unpackModule.setExtractor(extractor.extractStrings)
 exports.Unpackr = unpackModule.Unpackr
+exports.Decoder = exports.Unpackr
 exports.PackrStream = require('./stream').PackrStream
 exports.UnpackrStream = require('./stream').UnpackrStream
+exports.EncoderStream = exports.PackrStream
+exports.DecoderStream = exports.UnpackrStream
 let packr = new exports.Packr({ objectsAsMaps: true })
 exports.unpack = packr.unpack
 exports.pack = packr.pack
+exports.decode = packr.unpack
+exports.encode = packr.pack
 
 function tryRequire(moduleId) {
 	try {
