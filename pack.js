@@ -329,7 +329,27 @@ class Packr extends Unpackr {
 			}
 		}
 
-		const writeObject = this.objectsAsMaps ? (object, safePrototype) => {
+		const writeObject = this.useRecords === false ? this.variableMapSize ? (object) => {
+			let keys = Object.keys(object)
+			let length = keys.length
+			if (length < 0x10) {
+				target[position++] = 0x80 | length
+			} else if (length < 0x10000) {
+				target[position++] = 0xde
+				target[position++] = length >> 8
+				target[position++] = length & 0xff
+			} else {
+				target[position++] = 0xdf
+				targetView.setUint32(position, length)
+				position += 4
+			}
+			let key
+			for (let i = 0; i < length; i++) {
+				pack(key = keys[i])
+				pack(object[key])
+			}
+		} :
+		(object, safePrototype) => {
 			target[position++] = 0xde // always use map 16, so we can preallocate and set the length afterwards
 			let objectOffset = position - start
 			position += 2
@@ -344,6 +364,7 @@ class Packr extends Unpackr {
 			target[objectOffset++ + start] = size >> 8
 			target[objectOffset + start] = size & 0xff
 		} :
+
 	/*	sharedStructures ?  // For highly stable structures, using for-in can a little bit faster
 		(object, safePrototype) => {
 			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null))

@@ -30,7 +30,7 @@ try {
 
 if (typeof XMLHttpRequest === 'undefined') {
 	var fs = require('fs')
-	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/example5.json'))
+	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/example.json'))
 } else {
 	var xhr = new XMLHttpRequest()
 	xhr.open('GET', 'samples/outcomes.json', false)
@@ -94,7 +94,7 @@ suite('msgpackr basic tests', function(){
 	test('pack/unpack sample data', function(){
 		var data = sampleData
 		let structures = []
-		let packr = new Packr({ structures, objectsAsMaps: false })
+		let packr = new Packr({ structures, useRecords: true })
 		var serialized = packr.pack(data)
 		var deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized, data)
@@ -230,7 +230,7 @@ suite.skip('msgpackr performance tests', function(){
 		var data = sampleData
 		this.timeout(10000)
 		let structures = []
-		let packr = new Packr({ structures, objectsAsMaps: false })
+		let packr = new Packr({ structures, useRecords: true })
 		var serialized = packr.pack(data)
 		console.log('msgpackr size', serialized.length)
 		for (var i = 0; i < ITERATIONS; i++) {
@@ -241,7 +241,7 @@ suite.skip('msgpackr performance tests', function(){
 		var data = sampleData
 		this.timeout(10000)
 		let structures = []
-		let packr = new Packr({ structures, objectsAsMaps: false })
+		let packr = new Packr({ structures, useRecords: true })
 
 		for (var i = 0; i < ITERATIONS; i++) {
 			//serialized = pack(data, { shared: sharedStructure })

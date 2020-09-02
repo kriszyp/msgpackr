@@ -65,7 +65,7 @@ packr.pack(myBigData);
 
 Another way to further leverage the benefits of the msgpackr record structures is to use streams that naturally allow for data to reuse based on previous record structures. The stream classes have the record structure extension enabled by default and provide excellent out-of-the-box performance.
 
-When creating a new `Packr`, `PackrStream`, or `UnpackrStream` instance, we can enable or disable the record structure extension with the `objectsAsMaps` property. When this is `true`, the record structure extension will be disabled, and all objects will revert to being serialized using MessageMap `map`s, and all `map`s will be deserialized to JS `Object`s as properties (like the standalone `pack` and `unpack` functions).
+When creating a new `Packr`, `PackrStream`, or `UnpackrStream` instance, we can enable or disable the record structure extension with the `useRecords` property. When this is `false`, the record structure extension will be disabled (standard/compatibility mode), and all objects will revert to being serialized using MessageMap `map`s, and all `map`s will be deserialized to JS `Object`s as properties (like the standalone `pack` and `unpack` functions).
 
 ### Shared Record Structures
 Another useful way of using msgpackr, and the record extension, is for storing data in a databases, files, or other storage systems. If a number of objects with common data structures are being stored, a shared structure can be used to greatly improve data storage and deserialization efficiency. We just need to provide a way to store the generated shared structure so it is available to deserialize stored data in the future:
@@ -87,8 +87,10 @@ Msgpackr will automatically add and saves structures as it encounters any new ob
 
 ## Options
 The following options properties can be provided to the Packr or Unpackr constructor:
-* `objectsAsMaps` - Turning this on disables the record extension and stores JavaScript objects as MessagePack maps, and unpacks maps as JavaScript `Object`s.
+* `useRecords` - Setting this to `false` disables the record extension and stores JavaScript objects as MessagePack maps, and unpacks maps as JavaScript `Object`s, which ensures compatibilty with other decoders.
 * `structures` - Provides the array of structures that is to be used for record extension, if you want the structures saved and used again.
+* `mapsAsObjects` - If `true`, this will decode MessagePack maps and JS `Object`s with the map entries decoded to object properties. If `false`, maps are decoded as JavaScript `Map`s. This is disabled by default if `useRecords` is enabled (which allows `Map`s to be preserved), and is enabled by default if `useRecords` is disabled.
+* `variableMapSize` - This will use varying map size definition (fixmap, map16, map32) based on the number of keys when encoding data, which yields slightly more compact encodings (for small objects), but is typically 5-10% slower during encoding.
 
 ## Performance
 Msgpackr is fast. Really fast. Here is comparison with the next fastest JS projects using the benchmark tool from `msgpack-lite` (and the sample data is from some clinical research data we use that has a good mix of different value types and structures). It also includes comparison to V8 native JSON functionality, and JavaScript Avro (`avsc`, a very optimized Avro implementation):

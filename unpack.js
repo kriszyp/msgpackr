@@ -17,7 +17,10 @@ let srcStringStart = 0
 let srcStringEnd = 0
 let currentExtensions = []
 let dataView
-let defaultOptions = { objectsAsMaps: true }
+let defaultOptions = {
+	useRecords: false,
+	mapsAsObjects: true
+}
 // the registration of the record definition extension (as "r")
 const recordDefinition = currentExtensions[0x72] = (id) => {
 	let structure = currentStructures[id & 0x3f] = read()
@@ -34,6 +37,8 @@ currentExtensions[0xd6] = (data) => {
 // currentExtensions[0x52] = () =>
 class Unpackr {
 	constructor(options) {
+		if (options && options.useRecords === false && options.mapsAsObjects === undefined)
+			options.mapsAsObjects = true
 		Object.assign(this, options)
 	}
 	unpack(source, end) {
@@ -106,7 +111,7 @@ function read() {
 		} else if (token < 0x90) {
 			// map
 			token -= 0x80
-			if (currentUnpackr.objectsAsMaps) {
+			if (currentUnpackr.mapsAsObjects) {
 				let object = {}
 				for (let i = 0; i < token; i++) {
 					object[read()] = read()
@@ -415,7 +420,7 @@ function readArray(length) {
 }
 
 function readMap(length) {
-	if (currentUnpackr.objectsAsMaps) {
+	if (currentUnpackr.mapsAsObjects) {
 		let object = {}
 		for (let i = 0; i < length; i++) {
 			object[read()] = read()
