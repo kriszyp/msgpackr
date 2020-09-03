@@ -28,7 +28,7 @@ const recordDefinition = currentExtensions[0x72] = (id) => {
 	return structure.read()
 }
 currentExtensions[0] = (data) => {} // notepack defines extension 0 to mean undefined, so use that as the default here
-currentExtensions[0xd6] = (data) => {
+currentExtensions[0xff] = (data) => {
 	// 32-bit date extension
 	return new Date(((data[0] << 24) + (data[1] << 16) + (data[2] << 8) + data[3]) * 1000)
 
@@ -231,19 +231,15 @@ function read() {
 				}
 			case 0xd5:
 				// fixext 2
-				value = src[position++]
 				return readExt(2)
 			case 0xd6:
 				// fixext 4
-				value = src[position++]
 				return readExt(4)
 			case 0xd7:
 				// fixext 8
-				value = src[position++]
 				return readExt(8)
 			case 0xd8:
 				// fixext 16
-				value = src[position++]
 				return readExt(16)
 			case 0xd9:
 			// str 8

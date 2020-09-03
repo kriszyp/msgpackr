@@ -129,14 +129,14 @@ suite('msgpackr basic tests', function(){
 
 		var data = {
 			map: map,
-			//date: new Date(1532219539819)
+			date: new Date(1532219539000)
 		}
 		let packr = new Packr()
 		var serialized = packr.pack(data)
 		var deserialized = packr.unpack(serialized)
 		assert.equal(deserialized.map.get(4), 'four')
 		assert.equal(deserialized.map.get('three'), 3)
-		//assert.equal(deserialized.date.getTime(), 1532219539819)
+		assert.equal(deserialized.date.getTime(), 1532219539000)
 	})
 
 	test('numbers', function(){
