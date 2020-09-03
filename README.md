@@ -168,6 +168,9 @@ Which should generate an object that would correspond to JSON:
 ## Additional value types
 msgpackr supports `undefined` (using fixext1 + type: 0 + data: 0 to match other JS implementations), `NaN`, `Infinity`, and `-Infinity` (using standard IEEE 754 representations with doubles/floats).
 
+### Dates
+Currently, msgpackr saves all JavaScript `Date`s using the standard MessagePack date extension (type -1) in 32-bit mode. This means that milliseconds are dropped.
+
 ## License
 
 MIT
