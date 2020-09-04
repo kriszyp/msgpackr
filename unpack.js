@@ -21,20 +21,6 @@ let defaultOptions = {
 	useRecords: false,
 	mapsAsObjects: true
 }
-// the registration of the record definition extension (as "r")
-const recordDefinition = currentExtensions[0x72] = (id) => {
-	let structure = currentStructures[id & 0x3f] = read()
-	structure.read = createStructureReader(structure)
-	return structure.read()
-}
-currentExtensions[0] = (data) => {} // notepack defines extension 0 to mean undefined, so use that as the default here
-currentExtensions[0xff] = (data) => {
-	// 32-bit date extension
-	return new Date(((data[0] << 24) + (data[1] << 16) + (data[2] << 8) + data[3]) * 1000)
-
-} // notepack defines extension 0 to mean undefined, so use that as the default here
-// registration of bulk record definition?
-// currentExtensions[0x52] = () =>
 class Unpackr {
 	constructor(options) {
 		if (options && options.useRecords === false && options.mapsAsObjects === undefined)
@@ -596,6 +582,30 @@ function readExt(length) {
 	else
 		throw new Error('Unknown extension type ' + type)
 }
+// the registration of the record definition extension (as "r")
+const recordDefinition = currentExtensions[0x72] = (id) => {
+	let structure = currentStructures[id & 0x3f] = read()
+	structure.read = createStructureReader(structure)
+	return structure.read()
+}
+currentExtensions[0] = (data) => {} // notepack defines extension 0 to mean undefined, so use that as the default here
+currentExtensions[0xff] = (data) => {
+	// 32-bit date extension
+	if (data.length == 4)
+		return new Date((data[0] * 0x1000000 + (data[1] << 16) + (data[2] << 8) + data[3]) * 1000)
+	else if (data.length == 8)
+		return new Date(
+			((data[0] << 22) + (data[1] << 14) + (data[2] << 6) + (data[3] >> 2)) / 1000000 +
+			((data[3] & 0x3) * 0x100000000 + data[4] * 0x1000000 + (data[5] << 16) + (data[6] << 8) + data[7]) * 1000)
+	else if (data.length == 12)// TODO: Implement support for negative
+		return new Date(
+			((data[0] << 24) + (data[1] << 16) + (data[2] << 8) + data[3]) / 1000000 +
+			(((data[4] & 0x80) ? -0x1000000000000 : 0) + data[6] * 0x10000000000 + data[7] * 0x100000000 + data[8] * 0x1000000 + (data[9] << 16) + (data[10] << 8) + data[11]) * 1000)
+	else
+		throw new Error('Invalid timestamp length')
+} // notepack defines extension 0 to mean undefined, so use that as the default here
+// registration of bulk record definition?
+// currentExtensions[0x52] = () =>
 
 function saveState(callback) {
 	let savedSrcEnd = srcEnd

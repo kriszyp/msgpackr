@@ -91,6 +91,7 @@ The following options properties can be provided to the Packr or Unpackr constru
 * `structures` - Provides the array of structures that is to be used for record extension, if you want the structures saved and used again.
 * `mapsAsObjects` - If `true`, this will decode MessagePack maps and JS `Object`s with the map entries decoded to object properties. If `false`, maps are decoded as JavaScript `Map`s. This is disabled by default if `useRecords` is enabled (which allows `Map`s to be preserved), and is enabled by default if `useRecords` is disabled.
 * `variableMapSize` - This will use varying map size definition (fixmap, map16, map32) based on the number of keys when encoding data, which yields slightly more compact encodings (for small objects), but is typically 5-10% slower during encoding.
+* `useTimestamp32` - Encode JS `Date`s in 32-bit format when possible. This causes the milliseconds to be dropped, but is a much more efficient encoding of dates.
 
 ## Performance
 Msgpackr is fast. Really fast. Here is comparison with the next fastest JS projects using the benchmark tool from `msgpack-lite` (and the sample data is from some clinical research data we use that has a good mix of different value types and structures). It also includes comparison to V8 native JSON functionality, and JavaScript Avro (`avsc`, a very optimized Avro implementation):
@@ -169,7 +170,7 @@ Which should generate an object that would correspond to JSON:
 msgpackr supports `undefined` (using fixext1 + type: 0 + data: 0 to match other JS implementations), `NaN`, `Infinity`, and `-Infinity` (using standard IEEE 754 representations with doubles/floats).
 
 ### Dates
-Currently, msgpackr saves all JavaScript `Date`s using the standard MessagePack date extension (type -1) in 32-bit mode. This means that milliseconds are dropped.
+msgpackr saves all JavaScript `Date`s using the standard MessagePack date extension (type -1), using 32-bit if useTimestamp32 options is specified or 64-bit or 96-bit depending on the date.
 
 ## License
 

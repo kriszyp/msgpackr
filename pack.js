@@ -279,12 +279,29 @@ class Packr extends Unpackr {
 							pack(entryValue)
 						}
 					} else if (constructor === Date) {
-						// using the 32 timestamp for now, TODO: implement support for 64-bit and 128-bit
 						length = value.getTime() / 1000
-						target[position++] = 0xd6
-						target[position++] = 0xff
-						targetView.setUint32(position, length)
-						position += 4
+						if (this.useTimestamp32 && length > 0 && length < 0x100000000) {
+							// Timestamp 32
+							target[position++] = 0xd6
+							target[position++] = 0xff
+							targetView.setUint32(position, length)
+							position += 4
+						} else if (length > 0 && length < 0x400000000) {
+							// Timestamp 64
+							target[position++] = 0xd7
+							target[position++] = 0xff
+							targetView.setUint32(position, value.getMilliseconds() * 4000000 + ((length / 1000 / 0x100000000) >> 0))
+							targetView.setUint32(position + 4, length)
+							position += 8
+						} else {
+							// Timestamp 96
+							target[position++] = 0xc7
+							target[position++] = 12
+							target[position++] = 0xff
+							targetView.setUint32(position, value.getMilliseconds() * 1000000)
+							targetView.setBigInt64(position + 4, BigInt(Math.floor(length)))
+							position += 12
+						}
 					} else if (constructor === Buffer) {
 						length = value.length
 						if (length < 0x100) {

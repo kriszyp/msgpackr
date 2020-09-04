@@ -129,13 +129,37 @@ suite('msgpackr basic tests', function(){
 
 		var data = {
 			map: map,
-			date: new Date(1532219539000)
+			date: new Date(1532219539733),
+			farFutureDate: new Date(3532219539133),
+			ancient: new Date(-3532219539133),
 		}
 		let packr = new Packr()
 		var serialized = packr.pack(data)
 		var deserialized = packr.unpack(serialized)
 		assert.equal(deserialized.map.get(4), 'four')
 		assert.equal(deserialized.map.get('three'), 3)
+		assert.equal(deserialized.date.getTime(), 1532219539733)
+		assert.equal(deserialized.farFutureDate.getTime(), 3532219539133)
+		assert.equal(deserialized.ancient.getTime(), -3532219539133)
+	})
+	test('map/date with options', function(){
+		var map = new Map()
+		map.set(4, 'four')
+		map.set('three', 3)
+
+
+		var data = {
+			map: map,
+			date: new Date(1532219539000),
+		}
+		let packr = new Packr({
+			mapsAsObjects: true,
+			useTimestamp32: true,
+		})
+		var serialized = packr.pack(data)
+		var deserialized = packr.unpack(serialized)
+		assert.equal(deserialized.map[4], 'four')
+		assert.equal(deserialized.map.three, 3)
 		assert.equal(deserialized.date.getTime(), 1532219539000)
 	})
 
