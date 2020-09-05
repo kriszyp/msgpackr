@@ -59,7 +59,7 @@ There is a critical difference between maps (or dictionaries) that hold an arbit
 ```
 import { Packr } from 'msgpackr';
 let packr = Packr();
-packr.pack(myBigData);
+packr.pack(bigDataWithLotsOfObjects);
 
 ```
 
@@ -90,7 +90,7 @@ The following options properties can be provided to the Packr or Unpackr constru
 * `useRecords` - Setting this to `false` disables the record extension and stores JavaScript objects as MessagePack maps, and unpacks maps as JavaScript `Object`s, which ensures compatibilty with other decoders.
 * `structures` - Provides the array of structures that is to be used for record extension, if you want the structures saved and used again.
 * `mapsAsObjects` - If `true`, this will decode MessagePack maps and JS `Object`s with the map entries decoded to object properties. If `false`, maps are decoded as JavaScript `Map`s. This is disabled by default if `useRecords` is enabled (which allows `Map`s to be preserved), and is enabled by default if `useRecords` is disabled.
-* `variableMapSize` - This will use varying map size definition (fixmap, map16, map32) based on the number of keys when encoding data, which yields slightly more compact encodings (for small objects), but is typically 5-10% slower during encoding.
+* `variableMapSize` - This will use varying map size definition (fixmap, map16, map32) based on the number of keys when encoding objects, which yields slightly more compact encodings (for small objects), but is typically 5-10% slower during encoding. This is only relevant when record extension is disabled.
 * `useTimestamp32` - Encode JS `Date`s in 32-bit format when possible. This causes the milliseconds to be dropped, but is a much more efficient encoding of dates.
 
 ## Performance

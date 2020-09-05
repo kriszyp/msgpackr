@@ -74,5 +74,5 @@ node ./benchmarks/decode
 This was run by adding the msgpackr to the benchmarks for notepack.
 
 All benchmarks were performed on Node 14.8.0 (Windows i7-4770 3.4Ghz). They can be run with:
-npm install --no-save msgpack msgpack-js @msgpack/msgpack msgpack-lite msgpack-js-v5 msgpack5 msgpack-unpack notepack avsc
+npm install --no-save msgpack msgpack-js @msgpack/msgpack msgpack-lite notepack avsc
 node tests/benchmark
