@@ -60,6 +60,9 @@ class Unpackr {
 		src = null
 		return value
 	}
+	decode(source, end) {
+		return this.unpack(source, end)
+	}
 }
 let currentStructures
 exports.Unpackr = Unpackr
@@ -211,7 +214,7 @@ function read() {
 					return recordDefinition(src[position++])
 				} else {
 					if (currentExtensions[value])
-						return currentExtensions[value](src[position++])
+						return currentExtensions[value]([src[position++]])
 					else
 						throw new Error('Unknown extension ' + value)
 				}
@@ -583,10 +586,13 @@ function readExt(length) {
 		throw new Error('Unknown extension type ' + type)
 }
 // the registration of the record definition extension (as "r")
-const recordDefinition = currentExtensions[0x72] = (id) => {
+const recordDefinition = (id) => {
 	let structure = currentStructures[id & 0x3f] = read()
 	structure.read = createStructureReader(structure)
 	return structure.read()
+}
+currentExtensions[0x72] = (data) => {
+	return recordDefinition(data[0])
 }
 currentExtensions[0] = (data) => {} // notepack defines extension 0 to mean undefined, so use that as the default here
 currentExtensions[0xff] = (data) => {
@@ -632,4 +638,8 @@ function saveState(callback) {
 	currentUnpackr = savedPackr
 	dataView = dataView = new DataView(src.buffer, src.byteOffset, src.byteLength)
 	return value
+}
+
+exports.addExtension = function(extension) {
+	currentExtensions[extension.type] = extension.unpack
 }

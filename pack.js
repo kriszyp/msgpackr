@@ -1,10 +1,12 @@
 "use strict"
-let Unpackr = require('./unpack').Unpackr
+let unpackModule = require('./unpack')
+let Unpackr = unpackModule.Unpackr
 let encoder
 try {
 	encoder = new TextEncoder()
 } catch (error) {}
 const RECORD_SYMBOL = Symbol('record-id')
+const extensions = new Map()
 class Packr extends Unpackr {
 	constructor(options) {
 		super(options)
@@ -324,7 +326,16 @@ class Packr extends Unpackr {
 							copyBinary(value, target, position, 0, value.length)
 						position += length
 					} else {	
-						writeObject(value, false)
+						let extension = extensions.get(constructor)
+						if (extension) {
+							let result = extension.pack.call(this, value, target, position)
+							if (typeof result == 'number')
+								position += result
+							else {
+								position = writeExtensionData(result, target, position, extension.type)
+							}
+						} else
+							writeObject(value, false)
 					}
 				}
 			} else if (type === 'boolean') {
@@ -483,6 +494,9 @@ class Packr extends Unpackr {
 			return target = newBuffer
 		}
 	}
+	encode(value) {
+		return this.pack(value)
+	}
 	resetMemory() {
 		// this means we are finished using our local buffer and we can write over it safely
 		this.offset = 0
@@ -495,4 +509,80 @@ function copyBinary(source, target, targetOffset, offset, endOffset) {
 	while (offset < endOffset) {
 		target[targetOffset++] = source[offset++]
 	}
+}
+
+extensions.set(Date, function(value, target, position) {
+	let seconds = value.getTime() / 1000
+	if (this.useTimestamp32 && seconds > 0 && seconds < 0x100000000) {
+		// Timestamp 32
+		target[position++] = 0xd6
+		target[position++] = 0xff
+		targetView.setUint32(position, seconds)
+		return 6
+	} else if (seconds > 0 && seconds < 0x400000000) {
+		// Timestamp 64
+		target[position++] = 0xd7
+		target[position++] = 0xff
+		targetView.setUint32(position, value.getMilliseconds() * 4000000 + ((seconds / 1000 / 0x100000000) >> 0))
+		targetView.setUint32(position + 4, seconds)
+		return 10
+	} else {
+		// Timestamp 96
+		target[position++] = 0xc7
+		target[position++] = 12
+		target[position++] = 0xff
+		targetView.setUint32(position, value.getMilliseconds() * 1000000)
+		targetView.setBigInt64(position + 4, BigInt(Math.floor(seconds)))
+		return 15
+	}
+})
+
+function writeExtensionData(result, target, position, type) {
+	let length = result.length
+	switch (length) {
+		case 1:
+			target[position++] = 0xd4
+			break
+		case 2:
+			target[position++] = 0xd5
+			break
+		case 4:
+			target[position++] = 0xd6
+			break
+		case 8:
+			target[position++] = 0xd7
+			break
+		case 16:
+			target[position++] = 0xd8
+			break
+		default:
+			if (length < 0x100) {
+				target[position++] = 0xc7
+				target[position++] = length
+			} else if (length < 0x10000) {
+				target[position++] = 0xc8
+				target[position++] = length << 8
+				target[position++] = length & 0xff
+			} else {
+				target[position++] = 0xc9
+				target[position++] = length << 24
+				target[position++] = (length << 16) & 0xff
+				target[position++] = (length << 8) & 0xff
+				target[position++] = length & 0xff
+			}
+	}
+	target[position++] = type
+	if (result.copy)
+		result.copy(target, position)
+	else
+		copyBinary(result, target, position, 0, length)
+	position += length
+	return position
+}
+
+exports.addExtension = function(extension) {
+	if (extension.Class) {
+		extensions.set(extension.Class, extension)
+	}
+	unpackModule.addExtension(extension)
 }

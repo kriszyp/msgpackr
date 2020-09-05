@@ -135,6 +135,29 @@ msgpack.Decoder().on("data",ondata).decode(buf); | 1000000 |  2246 | 445235
 
 See the benchmark.md for more benchmarks and information about benchmarking.
 
+## Custom Extensions
+You can add your own custom extensions using by using the addExtension function:
+```
+import { addExtension } from 'msgpackr'
+
+class MyCustomClass {...}
+
+addExtension({
+	Class: MyCustomClass,
+	type: 11, // register our own extension code (a type code from 0-127)
+	pack(instance) {
+		// define how your custom class should be encoded
+		return Buffer.from(instance.someString)
+	}
+	unpack(buffer) {
+		// define how your custom class should be decoded
+		let instance = new MyCustomClass()
+		instance.someString = buffer.toString()
+		return instance
+	}
+})
+```
+
 ### Additional Performance Optimizations
 Msgpackr is already fast, but here are some tips for making it faster:
 

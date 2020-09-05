@@ -1,4 +1,5 @@
 exports.Packr = require('./pack').Packr
+exports.addExtension = require('./pack').addExtension
 exports.Encoder = exports.Packr
 let unpackModule = require('./unpack')
 let extractor = tryRequire('msgpackr-extract')

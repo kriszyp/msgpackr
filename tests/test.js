@@ -16,7 +16,7 @@ var PackrStream = msgpackr.PackrStream
 var UnpackrStream = msgpackr.UnpackrStream
 var unpack = msgpackr.unpack
 var pack = msgpackr.pack
-
+var addExtension = msgpackr.addExtension
 
 var zlib = tryRequire('zlib')
 var deflateSync = zlib.deflateSync
@@ -100,7 +100,7 @@ suite('msgpackr basic tests', function(){
 		assert.deepEqual(deserialized, data)
 	})
 
-	test.skip('extended class', function(){
+	test('extended class', function(){
 		function Extended() {
 
 		}
@@ -112,11 +112,21 @@ suite('msgpackr basic tests', function(){
 		var data = {
 			extendedInstance: instance
 		}
-		// TODO: create two of these
-		var options = new Options()
-		options.addExtension(Extended, 'Extended')
-		var serialized = pack(data, options)
-		var deserialized = unpack(serialized, options)
+		let packr = new Packr()
+		addExtension({
+			Class: Extended,
+			type: 11,
+			unpack: function(buffer) {
+				let e = new Extended()
+				e.value = buffer[0]
+				return e
+			},
+			pack: function(instance) {
+				return Buffer.from([instance.value, 0, 0])
+			}
+		})
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
 		assert.equal(deserialized.extendedInstance.getDouble(), 8)
 	})
 
