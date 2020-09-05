@@ -167,7 +167,7 @@ suite('msgpackr basic tests', function(){
 
 		var data = {
 			map: map,
-			date: new Date(1532219539000),
+			date: new Date(1532219539011),
 		}
 		let packr = new Packr({
 			mapsAsObjects: true,

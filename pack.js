@@ -280,30 +280,6 @@ class Packr extends Unpackr {
 							pack(key)
 							pack(entryValue)
 						}
-					} else if (constructor === Date) {
-						length = value.getTime() / 1000
-						if (this.useTimestamp32 && length > 0 && length < 0x100000000) {
-							// Timestamp 32
-							target[position++] = 0xd6
-							target[position++] = 0xff
-							targetView.setUint32(position, length)
-							position += 4
-						} else if (length > 0 && length < 0x400000000) {
-							// Timestamp 64
-							target[position++] = 0xd7
-							target[position++] = 0xff
-							targetView.setUint32(position, value.getMilliseconds() * 4000000 + ((length / 1000 / 0x100000000) >> 0))
-							targetView.setUint32(position + 4, length)
-							position += 8
-						} else {
-							// Timestamp 96
-							target[position++] = 0xc7
-							target[position++] = 12
-							target[position++] = 0xff
-							targetView.setUint32(position, value.getMilliseconds() * 1000000)
-							targetView.setBigInt64(position + 4, BigInt(Math.floor(length)))
-							position += 12
-						}
 					} else if (constructor === Buffer) {
 						length = value.length
 						if (length < 0x100) {
@@ -328,7 +304,9 @@ class Packr extends Unpackr {
 					} else {	
 						let extension = extensions.get(constructor)
 						if (extension) {
-							let result = extension.pack.call(this, value, target, position)
+							if (!extension.pack)
+								throw new Error('Extension has no pack function')
+							let result = extension.pack.call(this, value, position, target, targetView)
 							if (typeof result == 'number')
 								position += result
 							else {
@@ -511,29 +489,31 @@ function copyBinary(source, target, targetOffset, offset, endOffset) {
 	}
 }
 
-extensions.set(Date, function(value, target, position) {
-	let seconds = value.getTime() / 1000
-	if (this.useTimestamp32 && seconds > 0 && seconds < 0x100000000) {
-		// Timestamp 32
-		target[position++] = 0xd6
-		target[position++] = 0xff
-		targetView.setUint32(position, seconds)
-		return 6
-	} else if (seconds > 0 && seconds < 0x400000000) {
-		// Timestamp 64
-		target[position++] = 0xd7
-		target[position++] = 0xff
-		targetView.setUint32(position, value.getMilliseconds() * 4000000 + ((seconds / 1000 / 0x100000000) >> 0))
-		targetView.setUint32(position + 4, seconds)
-		return 10
-	} else {
-		// Timestamp 96
-		target[position++] = 0xc7
-		target[position++] = 12
-		target[position++] = 0xff
-		targetView.setUint32(position, value.getMilliseconds() * 1000000)
-		targetView.setBigInt64(position + 4, BigInt(Math.floor(seconds)))
-		return 15
+extensions.set(Date, {
+	pack(value, position, target, targetView) {
+		let seconds = value.getTime() / 1000
+		if (this.useTimestamp32 && seconds > 0 && seconds < 0x100000000) {
+			// Timestamp 32
+			target[position++] = 0xd6
+			target[position++] = 0xff
+			targetView.setUint32(position, seconds)
+			return 6
+		} else if (seconds > 0 && seconds < 0x400000000) {
+			// Timestamp 64
+			target[position++] = 0xd7
+			target[position++] = 0xff
+			targetView.setUint32(position, value.getMilliseconds() * 4000000 + ((seconds / 1000 / 0x100000000) >> 0))
+			targetView.setUint32(position + 4, seconds)
+			return 10
+		} else {
+			// Timestamp 96
+			target[position++] = 0xc7
+			target[position++] = 12
+			target[position++] = 0xff
+			targetView.setUint32(position, value.getMilliseconds() * 1000000)
+			targetView.setBigInt64(position + 4, BigInt(Math.floor(seconds)))
+			return 15
+		}
 	}
 })
 
