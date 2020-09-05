@@ -27,7 +27,14 @@ class Unpackr {
 			options.mapsAsObjects = true
 		Object.assign(this, options)
 	}
-	unpack(source, end) {
+	unpack(source, end, continueReading) {
+		if (src) {
+			// re-entrant execution, save the state and restore it after we do this unpack
+			return saveState(() => {
+				src = null
+				return this.unpack(source, end, continueReading)
+			})
+		}
 		srcEnd = end > -1 ? end : source.length
 		position = 0
 		stringPosition = 0
@@ -39,26 +46,29 @@ class Unpackr {
 		// technique for getting data from a database where it can be copied into an existing buffer instead of creating
 		// new ones
 		dataView = source.dataView || (new DataView(source.buffer, source.byteOffset, source.byteLength))
-		let value
 		if (this) {
 			currentUnpackr = this
 			if (this.structures) {
 				currentStructures = this.structures
-				value = read()
-				if (position >= srcEnd) {
-					// finished reading this source, cleanup references
-					currentStructures = null
-					src = null
+				try {
+					return read()
+				} finally {
+					if (position >= srcEnd || !continueReading) {
+						// finished reading this source, cleanup references
+						currentStructures = null
+						src = null
+					}
 				}
-				return value
 			} else if (!currentStructures || currentStructures.length > 0) {
 				currentStructures = []
 			}
 		} else
 			currentUnpackr = defaultOptions
-		value = read()
-		src = null
-		return value
+		try {
+			return read()
+		} finally {
+			src = null
+		}
 	}
 	decode(source, end) {
 		return this.unpack(source, end)
@@ -84,8 +94,7 @@ function read() {
 						structure.read = createStructureReader(structure)
 					return structure.read()
 				} else if (currentUnpackr.getStructures) {
-					// we have to preserve our state anytime we provide a means for external code to re-execute unpack
-					let updatedStructures = saveState(() => currentUnpackr.getStructures()) || []
+					let updatedStructures = currentUnpackr.getStructures()
 					currentStructures.splice.apply(currentStructures, [0, updatedStructures.length].concat(updatedStructures))
 					structure = currentStructures[token & 0x3f]
 					if (structure) {
@@ -638,6 +647,9 @@ function saveState(callback) {
 	currentUnpackr = savedPackr
 	dataView = dataView = new DataView(src.buffer, src.byteOffset, src.byteLength)
 	return value
+}
+exports.clearSource = function() {
+	src = null
 }
 
 exports.addExtension = function(extension) {

@@ -37,19 +37,20 @@ class UnpackrStream extends Transform {
 			chunk = Buffer.concat([this.incompleteBuffer, chunk])
 			this.incompleteBuffer = null
 		}
-		let lastStart = 0
+		let position = 0
 		let size = chunk.length
 		try {
-			this.push(this.unpackr.unpack(chunk))
-			lastStart = getPosition()
-			while (lastStart < size) {
+			this.push(this.unpackr.unpack(chunk, size, true))
+			position = getPosition()
+			while (position < size) {
 				let value = read()
 				this.push(value)
-				lastStart = getPosition()
+				position = getPosition()
 			}
 		} catch(error) {
+			clearSource()
 			if (error.incomplete)
-				this.incompleteBuffer = chunk.slice(lastStart)
+				this.incompleteBuffer = chunk.slice(position)
 			else
 				throw error
 		}

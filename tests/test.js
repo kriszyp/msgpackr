@@ -109,8 +109,12 @@ suite('msgpackr basic tests', function(){
 		}
 		var instance = new Extended()
 		instance.value = 4
+		instance.string = 'decode this: ᾜ'
 		var data = {
-			extendedInstance: instance
+			prop1: 'has multi-byte: ᾜ',
+			extendedInstance: instance,
+			prop2: 'more string',
+			num: 3,
 		}
 		let packr = new Packr()
 		addExtension({
@@ -118,15 +122,18 @@ suite('msgpackr basic tests', function(){
 			type: 11,
 			unpack: function(buffer) {
 				let e = new Extended()
-				e.value = buffer[0]
+				let data = packr.unpack(buffer)
+				e.value = data[0]
+				e.string = data[1]
 				return e
 			},
 			pack: function(instance) {
-				return Buffer.from([instance.value, 0, 0])
+				return packr.pack([instance.value, instance.string])
 			}
 		})
 		var serialized = pack(data)
 		var deserialized = unpack(serialized)
+		assert.deepEqual(data, deserialized)
 		assert.equal(deserialized.extendedInstance.getDouble(), 8)
 	})
 

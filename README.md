@@ -44,15 +44,15 @@ receivingStream.on('data', (data) => {
 ```
  The `PackrStream` and `UnpackrStream` instances  will have also the record structure extension enabled by default (see below).
 
-### Alternate Terminology
-If you prefer to use encoder/decode terminology, msgpackr exports aliases, so `decode` is equivalent to `unpack`, `encode` is `pack`, `Encoder` is `Packr`, `Decoder` is `Unpackr`, and `EncoderStream` and `DecoderStream` can be used as well.
-
 ## Browser Usage
 Msgpackr works as standalone JavaScript as well, and runs on modern browsers. It includes a bundled script for ease of direct loading. For module-based development, it is recommended that you directly import the module of interest, to minimize dependencies that get pulled into your application:
 ```
 import { unpack } from 'msgpackr/unpack' // if you only need to unpack
 ```
 (It is worth noting that while msgpackr works well in modern browsers, the MessagePack format itself is usually not an ideal format for web use. If you want compact data, brotli or gzip are most effective in compressing, and MessagePack's character frequency tends to defeat Huffman encoding used by these standard compression algorithms, resulting in less compact data than compressed JSON. The modern browser architecture is heavily optimized for parsing JSON from HTTP traffic, and it is difficult to achieve the same level of overall efficiency and ease with MessagePack.)
+
+### Alternate Terminology
+If you prefer to use encoder/decode terminology, msgpackr exports aliases, so `decode` is equivalent to `unpack`, `encode` is `pack`, `Encoder` is `Packr`, `Decoder` is `Unpackr`, and `EncoderStream` and `DecoderStream` can be used as well.
 
 ## Record / Object Structures
 There is a critical difference between maps (or dictionaries) that hold an arbitrary set of keys and values (JavaScript `Map` is designed for these), and records or object structures that have a well-defined set of fields. Typical JS objects/records may have many instances re(use) the same structure. By using the record extension, this distinction is preserved in MessagePack and the encoding can reuse structures and not only provides better type preservation, but yield much more compact encodings and increase decoding performance by 2-3x. Msgpackr automatically generates record definitions that are reused and referenced by objects with the same structure. There are a number of ways to use this to our advantage. For large object structures with repeating nested objects with similar structures, simply serializing with the record extension can yield significant benefits. To use the record structures extension, we create a new `Packr` instance. By default a new `Packr` instance will have the record extension enabled:
@@ -78,7 +78,7 @@ let packr = Packr({
 		return unpack(readFileSync('my-shared-structures.mp')) || [];
 	},
 	saveStructures(structures) {
-		writeFileSync('my-shared-structures.mp', pack(structures))
+		writeFileSync('my-shared-structures.mp', pack(structures));
 	},
 	structures: []
 });
@@ -136,26 +136,27 @@ msgpack.Decoder().on("data",ondata).decode(buf); | 1000000 |  2246 | 445235
 See the benchmark.md for more benchmarks and information about benchmarking.
 
 ## Custom Extensions
-You can add your own custom extensions using by using the addExtension function:
+You can add your own custom extensions, which can be used to encode specific classes in certain ways. This is done by using the `addExtension` function, and specifying the class, extension type code (a number from 0-127, but 72 is reserved for records), and your pack and unpack functions (or just the one you need). You can use msgpackr encoding and decoding within your extensions, but if you do so, you must create a separate Packr instance, otherwise you could do override data in the same encoding buffer:
 ```
-import { addExtension } from 'msgpackr'
+import { addExtension, Packr } from 'msgpackr';
 
 class MyCustomClass {...}
 
+let extPackr = new Packr();
 addExtension({
 	Class: MyCustomClass,
 	type: 11, // register our own extension code (a type code from 0-127)
 	pack(instance) {
 		// define how your custom class should be encoded
-		return Buffer.from(instance.someString)
+		return extPackr.pack(instance.myData); // return a buffer
 	}
 	unpack(buffer) {
 		// define how your custom class should be decoded
-		let instance = new MyCustomClass()
-		instance.someString = buffer.toString()
-		return instance
+		let instance = new MyCustomClass();
+		instance.myData = extPackr.unpack(buffer);
+		return instance; // decoded value from buffer
 	}
-})
+});
 ```
 
 ### Additional Performance Optimizations
@@ -170,7 +171,7 @@ During the serialization process, data is written to buffers. Again, allocating 
 let buffer = packr.pack(data);
 writeToStorageSync(buffer);
 // finished with buffer, we can reset the memory on our packr now:
-packr.resetMemory()
+packr.resetMemory();
 // future serialization can now reuse memory for better performance
 ```
 The use of `resetMemory` is never required, buffers will still be handled and cleaned up through GC if not used, it just provides a small performance boost.
