@@ -20,7 +20,7 @@ class Packr extends Unpackr {
 		let sharedStructures
 		let hasSharedUpdate
 		let structures
-		let types
+		let referenceMap
 		let lastSharedStructuresLength = 0
 		let encodeUtf8 = target.utf8Write ? function(string, position, maxBytes) {
 			return target.utf8Write(string, position, maxBytes)
@@ -54,6 +54,7 @@ class Packr extends Unpackr {
 				position = 0
 			}
 			start = position
+			referenceMap = packr.structuredClone ? new Map() : null
 			sharedStructures = packr.structures
 			if (sharedStructures) {
 				let sharedStructuresLength = sharedStructures.length
@@ -86,6 +87,12 @@ class Packr extends Unpackr {
 			try {
 				pack(value)
 				packr.offset = position // update the offset so next serialization doesn't write over our buffer, but can continue writing to same buffer sequentially
+				if (referenceMap && referenceMap.idsToInsert) {
+					makeRoom(position += referenceMap.idsToInsert.length * 6)
+					let serialized = insertIds(target.subarray(start, position), referenceMap.idsToInsert)
+					referenceMap = null
+					return serialized
+				}
 				return target.subarray(start, position) // position can change if we call pack again in saveStructures, so we get the buffer now
 			} finally {
 				if (sharedStructures) {
@@ -244,6 +251,21 @@ class Packr extends Unpackr {
 				if (!value)
 					target[position++] = 0xc0
 				else {
+					if (referenceMap) {
+						let referee = referenceMap.get(value)
+						if (referee) {
+							if (!referee.id) {
+								let idsToInsert = referenceMap.idsToInsert || (referenceMap.idsToInsert = [])
+								referee.id = idsToInsert.push(referee)
+							}
+							target[position++] = 0xd6 // fixext 4
+							target[position++] = 0x70 // "p" for pointer
+							targetView.setUint32(position, referee.id)
+							position += 4
+							return
+						} else 
+							referenceMap.set(value, { offset: position - start })
+					}
 					let constructor = value.constructor
 					if (constructor === Object) {
 						writeObject(value, true)
@@ -306,10 +328,13 @@ class Packr extends Unpackr {
 						if (extension) {
 							if (!extension.pack)
 								throw new Error('Extension has no pack function')
-							let result = extension.pack.call(this, value, position, target, targetView)
-							if (typeof result == 'number')
-								position += result
-							else {
+							let result = extension.pack.call(this, value, {
+								pack, position, target, targetView,
+								movePosition(move) {
+									position += move
+								}
+							})
+							if (result) {
 								position = writeExtensionData(result, target, position, extension.type)
 							}
 						} else
@@ -490,30 +515,54 @@ function copyBinary(source, target, targetOffset, offset, endOffset) {
 }
 
 extensions.set(Date, {
-	pack(value, position, target, targetView) {
-		let seconds = value.getTime() / 1000
+	pack(date, { position, target, targetView, movePosition }) {
+		let seconds = date.getTime() / 1000
 		if (this.useTimestamp32 && seconds > 0 && seconds < 0x100000000) {
 			// Timestamp 32
 			target[position++] = 0xd6
 			target[position++] = 0xff
 			targetView.setUint32(position, seconds)
-			return 6
+			movePosition(6)
 		} else if (seconds > 0 && seconds < 0x400000000) {
 			// Timestamp 64
 			target[position++] = 0xd7
 			target[position++] = 0xff
-			targetView.setUint32(position, value.getMilliseconds() * 4000000 + ((seconds / 1000 / 0x100000000) >> 0))
+			targetView.setUint32(position, date.getMilliseconds() * 4000000 + ((seconds / 1000 / 0x100000000) >> 0))
 			targetView.setUint32(position + 4, seconds)
-			return 10
+			movePosition(10)
 		} else {
 			// Timestamp 96
 			target[position++] = 0xc7
 			target[position++] = 12
 			target[position++] = 0xff
-			targetView.setUint32(position, value.getMilliseconds() * 1000000)
+			targetView.setUint32(position, date.getMilliseconds() * 1000000)
 			targetView.setBigInt64(position + 4, BigInt(Math.floor(seconds)))
-			return 15
+			movePosition(15)
 		}
+	}
+}).set(Set, {
+	pack(set, { pack, position, target, movePosition }) {
+		let array = Array.from(set)
+		if (this.structuredClone) {
+			target[position++] = 0xd4
+			target[position++] = 0x74
+			target[position++] = 0x53
+			movePosition(3)
+		}
+		pack(array)
+	}
+}).set(Error, {
+	pack(error, { pack, position, target, movePosition }) {
+		if (this.structuredClone) {
+			target[position++] = 0xd4
+			target[position++] = 0x74
+			target[position++] = 0x45
+			movePosition(3)
+		}
+		pack({
+			name: error.name,
+			message: error.message
+		})
 	}
 })
 
@@ -558,6 +607,28 @@ function writeExtensionData(result, target, position, type) {
 		copyBinary(result, target, position, 0, length)
 	position += length
 	return position
+}
+
+function insertIds(serialized, idsToInsert) {
+	// insert the ids that need to be referenced for structured clones
+	let nextId
+	let distanceToMove = idsToInsert.length * 6
+	let lastEnd = serialized.length - distanceToMove
+	while (nextId = idsToInsert.pop()) {
+		let offset = nextId.offset
+		let id = nextId.id
+		serialized.copyWithin(offset + distanceToMove, offset, lastEnd)
+		distanceToMove -= 6
+		let position = offset + distanceToMove
+		serialized[position++] = 0xd6
+		serialized[position++] = 0x69 // 'i'
+		serialized[position++] = id << 24
+		serialized[position++] = (id << 16) & 0xff
+		serialized[position++] = (id << 8) & 0xff
+		serialized[position++] = id & 0xff
+		lastEnd = offset
+	}
+	return serialized
 }
 
 exports.addExtension = function(extension) {

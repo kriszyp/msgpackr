@@ -1,6 +1,6 @@
 # msgpackr
 
-The msgpackr package is an extremely fast MessagePack NodeJS/JavaScript implementation. Currently, it is significantly faster than any other known implementations, faster than Avro (for JS), and generally faster than native V8 JSON.stringify/parse. It also includes an optional record extension (the `r` in msgpackr), for defining record structures that makes MessagePack even faster and more compact, often over twice as fast as even native JSON functions and several times faster than other JS implementations. See the performance section for more details.
+The msgpackr package is an extremely fast MessagePack NodeJS/JavaScript implementation. Currently, it is significantly faster than any other known implementations, faster than Avro (for JS), and generally faster than native V8 JSON.stringify/parse. It also includes an optional record extension (the `r` in msgpackr), for defining record structures that makes MessagePack even faster and more compact, often over twice as fast as even native JSON functions and several times faster than other JS implementations. See the performance section for more details. Structured cloning (with support for cyclical references) is also optional supported through extensions.
 
 ## Basic Usage
 
@@ -51,6 +51,9 @@ import { unpack } from 'msgpackr/unpack' // if you only need to unpack
 ```
 (It is worth noting that while msgpackr works well in modern browsers, the MessagePack format itself is usually not an ideal format for web use. If you want compact data, brotli or gzip are most effective in compressing, and MessagePack's character frequency tends to defeat Huffman encoding used by these standard compression algorithms, resulting in less compact data than compressed JSON. The modern browser architecture is heavily optimized for parsing JSON from HTTP traffic, and it is difficult to achieve the same level of overall efficiency and ease with MessagePack.)
 
+## Structured Cloning
+You can also use msgpackr for structured cloning, (as far as it makes sense on the platform). By enabling the `structuredClone` option, you can include references to other objects or cyclic references, and object identity will be preserved. Structured cloning also enables preserving certain typed objects like `Error`s and `Set`s. This option is disabled by default because it uses extensions and reference checking degrades performance (by about 25-30%).
+
 ### Alternate Terminology
 If you prefer to use encoder/decode terminology, msgpackr exports aliases, so `decode` is equivalent to `unpack`, `encode` is `pack`, `Encoder` is `Packr`, `Decoder` is `Unpackr`, and `EncoderStream` and `DecoderStream` can be used as well.
 
@@ -89,9 +92,10 @@ Msgpackr will automatically add and saves structures as it encounters any new ob
 The following options properties can be provided to the Packr or Unpackr constructor:
 * `useRecords` - Setting this to `false` disables the record extension and stores JavaScript objects as MessagePack maps, and unpacks maps as JavaScript `Object`s, which ensures compatibilty with other decoders.
 * `structures` - Provides the array of structures that is to be used for record extension, if you want the structures saved and used again.
+* `structuredClone` - This enables the structured cloning extensions that will encode object/cyclic references and additional built-in types/classes.
 * `mapsAsObjects` - If `true`, this will decode MessagePack maps and JS `Object`s with the map entries decoded to object properties. If `false`, maps are decoded as JavaScript `Map`s. This is disabled by default if `useRecords` is enabled (which allows `Map`s to be preserved), and is enabled by default if `useRecords` is disabled.
-* `variableMapSize` - This will use varying map size definition (fixmap, map16, map32) based on the number of keys when encoding objects, which yields slightly more compact encodings (for small objects), but is typically 5-10% slower during encoding. This is only relevant when record extension is disabled.
 * `useTimestamp32` - Encode JS `Date`s in 32-bit format when possible. This causes the milliseconds to be dropped, but is a much more efficient encoding of dates.
+* `variableMapSize` - This will use varying map size definition (fixmap, map16, map32) based on the number of keys when encoding objects, which yields slightly more compact encodings (for small objects), but is typically 5-10% slower during encoding. This is only relevant when record extension is disabled.
 
 ## Performance
 Msgpackr is fast. Really fast. Here is comparison with the next fastest JS projects using the benchmark tool from `msgpack-lite` (and the sample data is from some clinical research data we use that has a good mix of different value types and structures). It also includes comparison to V8 native JSON functionality, and JavaScript Avro (`avsc`, a very optimized Avro implementation):
@@ -136,7 +140,7 @@ msgpack.Decoder().on("data",ondata).decode(buf); | 1000000 |  2246 | 445235
 See the benchmark.md for more benchmarks and information about benchmarking.
 
 ## Custom Extensions
-You can add your own custom extensions, which can be used to encode specific classes in certain ways. This is done by using the `addExtension` function, and specifying the class, extension type code (a number from 0-127, but 72 is reserved for records), and your pack and unpack functions (or just the one you need). You can use msgpackr encoding and decoding within your extensions, but if you do so, you must create a separate Packr instance, otherwise you could do override data in the same encoding buffer:
+You can add your own custom extensions, which can be used to encode specific classes in certain ways. This is done by using the `addExtension` function, and specifying the class, extension type code (should be a number from 1-64, reserving negatives for MessagePack, 65-127 for msgpackr), and your pack and unpack functions (or just the one you need). You can use msgpackr encoding and decoding within your extensions, but if you do so, you must create a separate Packr instance, otherwise you could do override data in the same encoding buffer:
 ```
 import { addExtension, Packr } from 'msgpackr';
 

@@ -15,6 +15,7 @@ let currentUnpackr = {}
 let srcString
 let srcStringStart = 0
 let srcStringEnd = 0
+let referenceMap
 let currentExtensions = []
 let dataView
 let defaultOptions = {
@@ -57,6 +58,8 @@ class Unpackr {
 						// finished reading this source, cleanup references
 						currentStructures = null
 						src = null
+						if (referenceMap)
+							referenceMap = null
 					}
 				}
 			} else if (!currentStructures || currentStructures.length > 0) {
@@ -68,6 +71,8 @@ class Unpackr {
 			return read()
 		} finally {
 			src = null
+			if (referenceMap)
+				referenceMap = null
 		}
 	}
 	decode(source, end) {
@@ -600,10 +605,44 @@ const recordDefinition = (id) => {
 	structure.read = createStructureReader(structure)
 	return structure.read()
 }
-currentExtensions[0x72] = (data) => {
-	return recordDefinition(data[0])
-}
 currentExtensions[0] = (data) => {} // notepack defines extension 0 to mean undefined, so use that as the default here
+
+currentExtensions[0x69] = (data) => {
+	// id extension (for structured clones)
+	let id = dataView.getUint32(position - 4)
+	if (!referenceMap)
+		referenceMap = new Map()
+	let token = src[position]
+	let target = {}
+	// TODO: handle Arrays, Map, Set, and other types that can cycle; this is complicated, because you potentially need to read
+	// ahead past references to record structure definitions
+	let refEntry = { target } // a placeholder object
+	referenceMap.set(id, refEntry)
+	let targetProperties = read() // read the next value as the target object to id
+	if (refEntry.used) // there is a cycle, so we have to assign properties to original target
+		return Object.assign(target, targetProperties)
+	refEntry.target = targetProperties // the placeholder wasn't used, replace with the deserialized one
+	return targetProperties // no cycle, can just use the returned read object
+}
+currentExtensions[0x70] = (data) => {
+	// pointer extension (for structured clones)
+	let id = dataView.getUint32(position - 4)
+	let refEntry = referenceMap.get(id)
+	refEntry.used = true
+	return refEntry.target
+}
+
+currentExtensions[0x74] = (type) => {
+	switch(type[0]) {
+		case 0x45:
+			return Object.assign(new Error(), read())
+		case 0x53:
+			return new Set(read())
+		default:
+			throw new Error('Unknown internal type ' + type)
+	}
+}
+
 currentExtensions[0xff] = (data) => {
 	// 32-bit date extension
 	if (data.length == 4)

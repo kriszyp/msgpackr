@@ -1,4 +1,4 @@
-//var inspector = require('inspector')
+var inspector = require('inspector')
 //inspector.open(9330, null, true)
 
 function tryRequire(module) {
@@ -136,7 +136,55 @@ suite('msgpackr basic tests', function(){
 		assert.deepEqual(data, deserialized)
 		assert.equal(deserialized.extendedInstance.getDouble(), 8)
 	})
+	test.skip('text decoder', function() {
+			let td = new TextDecoder('ISO-8859-15')
+			let b = Buffer.alloc(3)
+			let total = 0
+			for (var i = 0; i < 256; i++) {
+				b[0] = i
+				b[1] = 0
+				b[2] = 0
+				let s = td.decode(b)
+				if (!require('msgpackr-extract').isOneByte(s)) {
+					console.log(i.toString(16), s.length)
+					total++
+				}
+			}
+	})
 
+	test('structured cloning: self reference', function() {
+		let object = {
+			test: 'string',
+			children: [
+				{ name: 'child' }
+			]
+		}
+		object.self = object
+		object.children[1] = object
+		object.children[2] = object.children[0]
+		let packr = new Packr({
+			structuredClone: true,
+		})
+		var serialized = packr.pack(object)
+		var deserialized = packr.unpack(serialized)
+		assert.equal(deserialized.self, deserialized)
+		assert.equal(deserialized.children[0].name, 'child')
+		assert.equal(deserialized.children[1], deserialized)
+		assert.equal(deserialized.children[0], deserialized.children[2])
+	})
+
+	test('structured cloning: types', function() {
+		let object = {
+			error: new Error('test'),
+			set: new Set(['a', 'b'])
+		}
+		let packr = new Packr({
+			structuredClone: true,
+		})
+		var serialized = packr.pack(object)
+		var deserialized = packr.unpack(serialized)
+		assert.deepEqual(Array.from(deserialized.set), Array.from(object.set))
+	})
 
 	test('map/date', function(){
 		var map = new Map()
