@@ -162,6 +162,7 @@ suite('msgpackr basic tests', function(){
 		object.self = object
 		object.children[1] = object
 		object.children[2] = object.children[0]
+		object.childrenAgain = object.children
 		let packr = new Packr({
 			structuredClone: true,
 		})
@@ -171,6 +172,7 @@ suite('msgpackr basic tests', function(){
 		assert.equal(deserialized.children[0].name, 'child')
 		assert.equal(deserialized.children[1], deserialized)
 		assert.equal(deserialized.children[0], deserialized.children[2])
+		assert.equal(deserialized.children, deserialized.childrenAgain)
 	})
 
 	test('structured cloning: types', function() {

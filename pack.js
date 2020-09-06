@@ -564,6 +564,19 @@ extensions.set(Date, {
 			message: error.message
 		})
 	}
+}).set(RegExp, {
+	pack(regex, { pack, position, target, movePosition }) {
+		if (this.structuredClone) {
+			target[position++] = 0xd4
+			target[position++] = 0x74
+			target[position++] = 0x52
+			movePosition(3)
+		}
+		pack({
+			source: regex.source,
+			flags: regex.flags
+		})
+	}
 })
 
 function writeExtensionData(result, target, position, type) {
@@ -614,6 +627,7 @@ function insertIds(serialized, idsToInsert) {
 	let nextId
 	let distanceToMove = idsToInsert.length * 6
 	let lastEnd = serialized.length - distanceToMove
+	idsToInsert.sort((a, b) => a.offset > b.offset ? 1 : -1)
 	while (nextId = idsToInsert.pop()) {
 		let offset = nextId.offset
 		let id = nextId.id

@@ -613,9 +613,14 @@ currentExtensions[0x69] = (data) => {
 	if (!referenceMap)
 		referenceMap = new Map()
 	let token = src[position]
-	let target = {}
-	// TODO: handle Arrays, Map, Set, and other types that can cycle; this is complicated, because you potentially need to read
+	let target
+	// TODO: handle Maps, Sets, and other types that can cycle; this is complicated, because you potentially need to read
 	// ahead past references to record structure definitions
+	if (token >= 0x90 && token < 0xa0 || token == 0xdc || token == 0xdd)
+		target = []
+	else
+		target = {}
+
 	let refEntry = { target } // a placeholder object
 	referenceMap.set(id, refEntry)
 	let targetProperties = read() // read the next value as the target object to id
@@ -638,6 +643,9 @@ currentExtensions[0x74] = (type) => {
 			return Object.assign(new Error(), read())
 		case 0x53:
 			return new Set(read())
+		case 0x53:
+			let regex = read()
+			return new RegExp(regex.source, regex.flags)
 		default:
 			throw new Error('Unknown internal type ' + type)
 	}
@@ -669,6 +677,7 @@ function saveState(callback) {
 	let savedSrcStringEnd = srcStringEnd
 	let savedSrcString = srcString
 	let savedStrings = strings
+	let savedReferenceMap = referenceMap
 	// TODO: We may need to revisit this if we do more external calls to user code (since it could be slow)
 	let savedSrc = Buffer.from(src.slice(0, srcEnd)) // we copy the data in case it changes while external data is processed
 	let savedStructures = currentStructures
@@ -681,6 +690,7 @@ function saveState(callback) {
 	srcStringEnd = savedSrcStringEnd
 	srcString = savedSrcString
 	strings = savedStrings
+	referenceMap = savedReferenceMap
 	src = savedSrc
 	currentStructures = savedStructures
 	currentUnpackr = savedPackr
