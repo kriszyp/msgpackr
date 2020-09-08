@@ -52,7 +52,7 @@ import { unpack } from 'msgpackr/unpack' // if you only need to unpack
 (It is worth noting that while msgpackr works well in modern browsers, the MessagePack format itself is usually not an ideal format for web use. If you want compact data, brotli or gzip are most effective in compressing, and MessagePack's character frequency tends to defeat Huffman encoding used by these standard compression algorithms, resulting in less compact data than compressed JSON. The modern browser architecture is heavily optimized for parsing JSON from HTTP traffic, and it is difficult to achieve the same level of overall efficiency and ease with MessagePack.)
 
 ## Structured Cloning
-You can also use msgpackr for structured cloning, (as far as it makes sense on the platform). By enabling the `structuredClone` option, you can include references to other objects or cyclic references, and object identity will be preserved. Structured cloning also enables preserving certain typed objects like `Error`s and `Set`s. This option is disabled by default because it uses extensions and reference checking degrades performance (by about 25-30%).
+You can also use msgpackr for [structured cloning](https://html.spec.whatwg.org/multipage/structured-data.html), (as far as it makes sense on the platform). By enabling the `structuredClone` option, you can include references to other objects or cyclic references, and object identity will be preserved. Structured cloning also enables preserving certain typed objects like `Error`s and `Set`s. This option is disabled by default because it uses extensions and reference checking degrades performance (by about 25-30%).
 
 ### Alternate Terminology
 If you prefer to use encoder/decode terminology, msgpackr exports aliases, so `decode` is equivalent to `unpack`, `encode` is `pack`, `Encoder` is `Packr`, `Decoder` is `Unpackr`, and `EncoderStream` and `DecoderStream` can be used as well.
@@ -90,12 +90,23 @@ Msgpackr will automatically add and saves structures as it encounters any new ob
 
 ## Options
 The following options properties can be provided to the Packr or Unpackr constructor:
+
 * `useRecords` - Setting this to `false` disables the record extension and stores JavaScript objects as MessagePack maps, and unpacks maps as JavaScript `Object`s, which ensures compatibilty with other decoders.
 * `structures` - Provides the array of structures that is to be used for record extension, if you want the structures saved and used again.
 * `structuredClone` - This enables the structured cloning extensions that will encode object/cyclic references and additional built-in types/classes.
 * `mapsAsObjects` - If `true`, this will decode MessagePack maps and JS `Object`s with the map entries decoded to object properties. If `false`, maps are decoded as JavaScript `Map`s. This is disabled by default if `useRecords` is enabled (which allows `Map`s to be preserved), and is enabled by default if `useRecords` is disabled.
-* `useTimestamp32` - Encode JS `Date`s in 32-bit format when possible. This causes the milliseconds to be dropped, but is a much more efficient encoding of dates.
+* `useFloat32` - This will enable msgpackr to encode non-integer numbers as float32. See next section for possible values.
+* `useTimestamp32` - Encode JS `Date`s in 32-bit format when possible by dropping the milliseconds. This is a more efficient encoding of dates. You can also cause dates to use 32-bit format by manually setting the milliseconds to zero (`data.setMilliseconds(0)`).
 * `variableMapSize` - This will use varying map size definition (fixmap, map16, map32) based on the number of keys when encoding objects, which yields slightly more compact encodings (for small objects), but is typically 5-10% slower during encoding. This is only relevant when record extension is disabled.
+
+### 32-bit Float options
+The `useFloat32` property has several possible values:
+
+* `true` - Always will encode non-integers as 32-bit float.
+* `'decimal-round'` - Always will encode non-integers as 32-bit float, and when decoding 32-bit float, round to 6 or 7 significant decimal digits.
+* `'decimal-fit'` - Only encode non-integers as 32-bit float if they have 7 or less significant digits (in base 10), as a 32-bit float. And this will also enable the `unpack` to round 32-bit float numbers to seven significant digits without loss. 
+
+Using the decimal options for encoding and decoding provides lossless storage of common decimal representations like 7.99, in more efficient 32-bit format (rather than 64-bit).
 
 ## Performance
 Msgpackr is fast. Really fast. Here is comparison with the next fastest JS projects using the benchmark tool from `msgpack-lite` (and the sample data is from some clinical research data we use that has a good mix of different value types and structures). It also includes comparison to V8 native JSON functionality, and JavaScript Avro (`avsc`, a very optimized Avro implementation):
@@ -112,8 +123,6 @@ buf = require("msgpack-lite").encode(obj);                 |   30600 |  5005 |  
 obj = require("msgpack-lite").decode(buf);                 |   15900 |  5030 |   3161
 buf = require("@msgpack/msgpack").encode(obj);             |  101200 |  5001 |  20235
 obj = require("@msgpack/msgpack").decode(buf);             |   71200 |  5004 |  14228
-buf = require("msgpack5")().encode(obj);                   |    8100 |  5041 |   1606
-obj = require("msgpack5")().decode(buf);                   |   14000 |  5014 |   2792
 buf = require("notepack").encode(obj);                     |   65300 |  5006 |  13044
 obj = require("notepack").decode(buf);                     |   32300 |  5001 |   6458
 require("avsc")...make schema/type...type.toBuffer(obj);   |   86900 |  5002 |  17373
@@ -140,7 +149,7 @@ msgpack.Decoder().on("data",ondata).decode(buf); | 1000000 |  2246 | 445235
 See the benchmark.md for more benchmarks and information about benchmarking.
 
 ## Custom Extensions
-You can add your own custom extensions, which can be used to encode specific classes in certain ways. This is done by using the `addExtension` function, and specifying the class, extension type code (should be a number from 1-64, reserving negatives for MessagePack, 65-127 for msgpackr), and your pack and unpack functions (or just the one you need). You can use msgpackr encoding and decoding within your extensions, but if you do so, you must create a separate Packr instance, otherwise you could do override data in the same encoding buffer:
+You can add your own custom extensions, which can be used to encode specific classes in certain ways. This is done by using the `addExtension` function, and specifying the class, extension type code (should be a number from 1-100, reserving negatives for MessagePack, 101-127 for msgpackr), and your pack and unpack functions (or just the one you need). You can use msgpackr encoding and decoding within your extensions, but if you do so, you must create a separate Packr instance, otherwise you could do override data in the same encoding buffer:
 ```
 import { addExtension, Packr } from 'msgpackr';
 
@@ -198,7 +207,7 @@ Which should generate an object that would correspond to JSON:
 msgpackr supports `undefined` (using fixext1 + type: 0 + data: 0 to match other JS implementations), `NaN`, `Infinity`, and `-Infinity` (using standard IEEE 754 representations with doubles/floats).
 
 ### Dates
-msgpackr saves all JavaScript `Date`s using the standard MessagePack date extension (type -1), using 32-bit if useTimestamp32 options is specified or 64-bit or 96-bit depending on the date.
+msgpackr saves all JavaScript `Date`s using the standard MessagePack date extension (type -1), using 32-bit if useTimestamp32 options is specified or using the smallest of 32-bit, 64-bit or 96-bit needed to store the date without data loss.
 
 ## License
 

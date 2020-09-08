@@ -1,12 +1,14 @@
 "use strict"
 let unpackModule = require('./unpack')
 let Unpackr = unpackModule.Unpackr
+let decimalFloat32 = unpackModule.decimalFloat32
+const typedArrays = unpackModule.typedArrays
 let encoder
 try {
 	encoder = new TextEncoder()
 } catch (error) {}
+let extensions, extensionClasses
 const RECORD_SYMBOL = Symbol('record-id')
-const extensions = new Map()
 class Packr extends Unpackr {
 	constructor(options) {
 		super(options)
@@ -48,7 +50,7 @@ class Packr extends Unpackr {
 			safeEnd = target.length - 10
 			if (safeEnd - position < 0x800) {
 				// don't start too close to the end, 
-				target = new ByteArray(target.length)
+				target = new ByteArrayAllocate(target.length)
 				targetView = new DataView(target.buffer, 0, target.length)
 				safeEnd = target.length - 10
 				position = 0
@@ -88,7 +90,10 @@ class Packr extends Unpackr {
 				pack(value)
 				packr.offset = position // update the offset so next serialization doesn't write over our buffer, but can continue writing to same buffer sequentially
 				if (referenceMap && referenceMap.idsToInsert) {
-					makeRoom(position += referenceMap.idsToInsert.length * 6)
+					position += referenceMap.idsToInsert.length * 6
+					if (position > safeEnd)
+						makeRoom(position)
+					packr.offset = position
 					let serialized = insertIds(target.subarray(start, position), referenceMap.idsToInsert)
 					referenceMap = null
 					return serialized
@@ -239,7 +244,16 @@ class Packr extends Unpackr {
 						}
 					}
 				} else {
-					// very difficult to tell if float is sufficient, just use double for now
+					let useFloat32 = this.useFloat32
+					if (useFloat32) {
+						target[position++] = 0xca
+						targetView.setFloat32(position, value)
+						if (useFloat32 != 'decimal-fit' || decimalFloat32(value, target[position], target[position + 1]) == value) {
+							position += 4
+							return
+						} else
+							position-- // move back into position for writing a double
+					}
 					target[position++] = 0xcb
 					targetView.setFloat64(position, value)
 					/*if (!target[position[4] && !target[position[5] && !target[position[6] && !target[position[7] && !(target[0] & 0x78) < ) {
@@ -302,43 +316,27 @@ class Packr extends Unpackr {
 							pack(key)
 							pack(entryValue)
 						}
-					} else if (constructor === Buffer) {
-						length = value.length
-						if (length < 0x100) {
-							target[position++] = 0xc4
-							target[position++] = length
-						} else if (length < 0x10000) {
-							target[position++] = 0xc5
-							target[position++] = length >> 8
-							target[position++] = length & 0xff
-						} else {
-							target[position++] = 0xc6
-							targetView.setUint32(position, length)
-							position += 4
-						}
-						if (position + length > safeEnd)
-							makeRoom(position + length)
-						if (value.copy)
-							value.copy(target, position)
-						else
-							copyBinary(value, target, position, 0, value.length)
-						position += length
 					} else {	
-						let extension = extensions.get(constructor)
-						if (extension) {
-							if (!extension.pack)
-								throw new Error('Extension has no pack function')
-							let result = extension.pack.call(this, value, {
-								pack, position, target, targetView,
-								movePosition(move) {
-									position += move
+						for (let i = 0, l = extensions.length; i < l; i++) {
+							let extensionClass = extensionClasses[i]
+							if (value instanceof extensionClass) {
+								let extension = extensions[i]
+								let result = extension.pack.call(this, value, (size) => {
+									position += size
+									if (position > safeEnd)
+										makeRoom(position)
+									return {
+										target, targetView, position: position - size
+									}
+								}, pack)
+								if (result) {
+									position = writeExtensionData(result, target, position, extension.type)
 								}
-							})
-							if (result) {
-								position = writeExtensionData(result, target, position, extension.type)
+								return
 							}
-						} else
-							writeObject(value, false)
+						}
+						// no extension found, write as object
+						writeObject(value, false)
 					}
 				}
 			} else if (type === 'boolean') {
@@ -484,7 +482,7 @@ class Packr extends Unpackr {
 		}
 		const makeRoom = (end) => {
 			let newSize = ((Math.max((end - start) << 2, target.length - 1) >> 12) + 1) << 12
-			let newBuffer = new ByteArray(newSize)
+			let newBuffer = new ByteArrayAllocate(newSize)
 			targetView = new DataView(newBuffer.buffer, 0, newSize)
 			target.copy(newBuffer, 0, start, end)
 			if (target.copy)
@@ -507,77 +505,141 @@ class Packr extends Unpackr {
 }
 exports.Packr = Packr
 
-let ByteArray = typeof window == 'undefined' ? Buffer.allocUnsafeSlow : Uint8Array
+const isNode = typeof window == 'undefined'
+const ByteArrayAllocate = isNode ? Buffer.allocUnsafeSlow : Uint8Array
+const ByteArray = isNode ? Buffer : Uint8Array
 function copyBinary(source, target, targetOffset, offset, endOffset) {
 	while (offset < endOffset) {
 		target[targetOffset++] = source[offset++]
 	}
 }
 
-extensions.set(Date, {
-	pack(date, { position, target, targetView, movePosition }) {
+extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/ ]
+extensions = [{
+	pack(date, allocateForWrite) {
 		let seconds = date.getTime() / 1000
-		if (this.useTimestamp32 && seconds > 0 && seconds < 0x100000000) {
+		if ((this.useTimestamp32 || date.getMilliseconds() === 0) && seconds >= 0 && seconds < 0x100000000) {
 			// Timestamp 32
+			let { target, targetView, position} = allocateForWrite(6)
 			target[position++] = 0xd6
 			target[position++] = 0xff
 			targetView.setUint32(position, seconds)
-			movePosition(6)
 		} else if (seconds > 0 && seconds < 0x400000000) {
 			// Timestamp 64
+			let { target, targetView, position} = allocateForWrite(10)
 			target[position++] = 0xd7
 			target[position++] = 0xff
 			targetView.setUint32(position, date.getMilliseconds() * 4000000 + ((seconds / 1000 / 0x100000000) >> 0))
 			targetView.setUint32(position + 4, seconds)
-			movePosition(10)
 		} else {
 			// Timestamp 96
+			let { target, targetView, position} = allocateForWrite(15)
 			target[position++] = 0xc7
 			target[position++] = 12
 			target[position++] = 0xff
 			targetView.setUint32(position, date.getMilliseconds() * 1000000)
 			targetView.setBigInt64(position + 4, BigInt(Math.floor(seconds)))
-			movePosition(15)
 		}
 	}
-}).set(Set, {
-	pack(set, { pack, position, target, movePosition }) {
+}, {
+	pack(set, allocateForWrite, pack) {
 		let array = Array.from(set)
 		if (this.structuredClone) {
+			let { target, position} = allocateForWrite(3)
 			target[position++] = 0xd4
-			target[position++] = 0x74
-			target[position++] = 0x53
-			movePosition(3)
+			target[position++] = 0x73
+			target[position++] = 0
 		}
 		pack(array)
 	}
-}).set(Error, {
-	pack(error, { pack, position, target, movePosition }) {
+}, {
+	pack(error, allocateForWrite, pack) {
 		if (this.structuredClone) {
+			let { target, position} = allocateForWrite(3)
 			target[position++] = 0xd4
-			target[position++] = 0x74
-			target[position++] = 0x45
-			movePosition(3)
+			target[position++] = 0x7f
+			target[position++] = 0
 		}
 		pack({
 			name: error.name,
 			message: error.message
 		})
 	}
-}).set(RegExp, {
-	pack(regex, { pack, position, target, movePosition }) {
+}, {
+	pack(regex, allocateForWrite, pack) {
 		if (this.structuredClone) {
+			let { target, position} = allocateForWrite(3)
 			target[position++] = 0xd4
-			target[position++] = 0x74
-			target[position++] = 0x52
-			movePosition(3)
+			target[position++] = 0x78
+			target[position++] = 0
 		}
 		pack({
 			source: regex.source,
 			flags: regex.flags
 		})
 	}
-})
+}, {
+	pack(arrayBuffer, allocateForWrite) {
+		if (this.structuredClone)
+			writeExtBuffer(arrayBuffer, 0x10, allocateForWrite)
+		else
+			writeBuffer(isNode ? Buffer.from(arrayBuffer) : new Uint8Array(arrayBuffer), allocateForWrite)
+	}
+}, {
+	pack(typedArray, allocateForWrite) {
+		let constructor = typedArray.constructor
+		if (constructor !== ByteArray && this.structuredClone)
+			writeExtBuffer(typedArray.buffer, typedArrays.indexOf(constructor.name), allocateForWrite)
+		else
+			writeBuffer(typedArray, allocateForWrite)
+	}
+}]
+
+function writeExtBuffer(buffer, type, allocateForWrite) {
+	let length = buffer.byteLength
+	let { target, position } = allocateForWrite(7 + length)
+	/*if (length < 0x100) {
+		target[position++] = 0xc7
+		target[position++] = length
+	} else if (length < 0x10000) {
+		target[position++] = 0xc8
+		target[position++] = length >> 8
+		target[position++] = length & 0xff
+	} else {*/
+		target[position++] = 0xc9
+		targetView.setUint32(position, length)
+		position += 4
+	//}
+	target[position++] = 0x74
+	target[position++] = type
+	if (isNode)
+		Buffer.from(buffer).copy(target, position)
+	else
+		copyBinary(new Uint8Array(buffer), target, position, 0, length)
+}
+function writeBuffer(buffer, allocateForWrite) {
+	let length = buffer.byteLength
+	var target, position
+	if (length < 0x100) {
+		var { target, position } = allocateForWrite(length + 2)
+		target[position++] = 0xc4
+		target[position++] = length
+	} else if (length < 0x10000) {
+		var { target, position } = allocateForWrite(length + 3)
+		target[position++] = 0xc5
+		target[position++] = length >> 8
+		target[position++] = length & 0xff
+	} else {
+		var { target, position, targetView } = allocateForWrite(length + 5)
+		target[position++] = 0xc6
+		targetView.setUint32(position, length)
+		position += 4
+	}
+	if (buffer.copy)
+		buffer.copy(target, position)
+	else
+		copyBinary(buffer, target, position, 0, length)
+}
 
 function writeExtensionData(result, target, position, type) {
 	let length = result.length
@@ -647,7 +709,10 @@ function insertIds(serialized, idsToInsert) {
 
 exports.addExtension = function(extension) {
 	if (extension.Class) {
-		extensions.set(extension.Class, extension)
+		if (!extension.pack)
+			throw new Error('Extension has no pack function')
+		extensionClasses.unshift(extension.Class)
+		extensions.unshift(extension)
 	}
 	unpackModule.addExtension(extension)
 }

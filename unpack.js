@@ -183,6 +183,11 @@ function read() {
 				return readExt(value)
 			case 0xca:
 				value = dataView.getFloat32(position)
+				if (currentUnpackr.useFloat32) {
+					let useFloat32 = currentUnpackr.useFloat32
+					if (useFloat32 === 'decimal-round' || useFloat32 === 'decimal-fit')
+						value = decimalFloat32(value, src[position], src[position + 1])
+				}
 				position += 4
 				return value
 			case 0xcb:
@@ -605,6 +610,7 @@ const recordDefinition = (id) => {
 	structure.read = createStructureReader(structure)
 	return structure.read()
 }
+let glbl = typeof window == 'object' ? window : global
 currentExtensions[0] = (data) => {} // notepack defines extension 0 to mean undefined, so use that as the default here
 
 currentExtensions[0x69] = (data) => {
@@ -637,18 +643,25 @@ currentExtensions[0x70] = (data) => {
 	return refEntry.target
 }
 
-currentExtensions[0x74] = (type) => {
-	switch(type[0]) {
-		case 0x45:
-			return Object.assign(new Error(), read())
-		case 0x53:
-			return new Set(read())
-		case 0x53:
-			let regex = read()
-			return new RegExp(regex.source, regex.flags)
-		default:
-			throw new Error('Unknown internal type ' + type)
-	}
+currentExtensions[0x73] = () => new Set(read())
+
+const typedArrays = ['Int8','Uint8	','Uint8Clamped','Int16','Uint16','Int32','Uint32','Float32','Float64','BigInt64','BigUint64'].map(type => type + 'Array')
+
+currentExtensions[0x74] = (data) => {
+	let typeCode = data[0]
+	let typedArrayName = typedArrays[typeCode]
+	if (!typedArrayName)
+		throw new Error('Could not find typed array for code ' + typeCode)
+	return new glbl[typedArrayName](data.buffer, data.byteOffset, data.length - 1)
+}
+currentExtensions[0x78] = () => {
+	let data = read()
+	new RegExp(data.source, data.flags)
+}
+
+currentExtensions[0x7f] = () => {
+	let data = read()
+	return (glbl[data.name] || Error)(data.message)
 }
 
 currentExtensions[0xff] = (data) => {
@@ -704,3 +717,16 @@ exports.clearSource = function() {
 exports.addExtension = function(extension) {
 	currentExtensions[extension.type] = extension.unpack
 }
+
+let mult10 = []
+for (let i = 0; i < 256; i++) {
+	mult10[i] = Math.pow(10, 44 - ((i * 0.30103) >> 0))
+}
+
+exports.decimalFloat32 = decimalFloat32
+function decimalFloat32(x, firstByte, secondByte) {
+	let multiplier = mult10[((firstByte & 0x7f) << 1) | (secondByte >> 7)]
+	//let multiplier = Math.pow(10, Math.floor(7 - Math.log10(x)))
+	return ((multiplier * x + 0.5) >> 0) / multiplier
+}
+exports.typedArrays = typedArrays

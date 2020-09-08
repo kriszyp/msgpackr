@@ -229,6 +229,20 @@ suite('msgpackr basic tests', function(){
 		assert.equal(deserialized.map.three, 3)
 		assert.equal(deserialized.date.getTime(), 1532219539000)
 	})
+	test('decimal float32', function() {
+		var data = {
+			a: 2.526,
+			b: 0.0035235,
+			c: 35250000000000000000,
+		}
+		let packr = new Packr({
+			useFloat32: 'decimal-fit'
+		})
+		var serialized = packr.pack(data)
+		assert.equal(serialized.length, 25)
+		var deserialized = packr.unpack(serialized)
+		assert.deepEqual(deserialized, data)
+	})
 
 	test('numbers', function(){
 		var data = {
