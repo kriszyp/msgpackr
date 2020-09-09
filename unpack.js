@@ -33,7 +33,7 @@ class Unpackr {
 			// re-entrant execution, save the state and restore it after we do this unpack
 			return saveState(() => {
 				src = null
-				return this.unpack(source, end, continueReading)
+				return currentUnpackr.unpack(source, end, continueReading)
 			})
 		}
 		srcEnd = end > -1 ? end : source.length
@@ -99,7 +99,11 @@ function read() {
 						structure.read = createStructureReader(structure)
 					return structure.read()
 				} else if (currentUnpackr.getStructures) {
-					let updatedStructures = currentUnpackr.getStructures()
+					let updatedStructures = saveState(() => {
+						// save the state in case getStructures modifies our buffer
+						src = null
+						return currentUnpackr.getStructures()
+					})
 					currentStructures.splice.apply(currentStructures, [0, updatedStructures.length].concat(updatedStructures))
 					structure = currentStructures[token & 0x3f]
 					if (structure) {
