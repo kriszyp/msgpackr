@@ -720,7 +720,7 @@ exports.addExtension = function(extension) {
 	currentExtensions[extension.type] = extension.unpack
 }
 
-let mult10 = new Array(256) // this is a table matching binary exponents to the multiplier to determine significant digit rounding
+let mult10 = new Array(147) // this is a table matching binary exponents to the multiplier to determine significant digit rounding
 for (let i = 0; i < 256; i++) {
 	mult10[i] = +('1e' + Math.floor(45.15 - i * 0.30103))
 }

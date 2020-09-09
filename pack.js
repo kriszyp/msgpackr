@@ -245,7 +245,7 @@ class Packr extends Unpackr {
 					}
 				} else {
 					let useFloat32
-					if ((useFloat32 = this.useFloat32) > 0) {
+					if ((useFloat32 = this.useFloat32) > 0 && value < 0x80000000 && value >= -0x80000000) {
 						target[position++] = 0xca
 						targetView.setFloat32(position, value)
 						let xShifted

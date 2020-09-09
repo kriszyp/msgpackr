@@ -233,10 +233,10 @@ suite('msgpackr basic tests', function(){
 	})
 	test('decimal float32', function() {
 		var data = {
-			a: 1.992e20,//2.526,
+			a: 2.526,
 			b: 0.0035235,
-			c: 35250000000000000000,
-			d: 3252200000,
+			c: 0.00000000000352501,
+			d: 3252.77,
 		}
 		let packr = new Packr({
 			useFloat32: DECIMAL_FIT
