@@ -16,6 +16,8 @@ var PackrStream = msgpackr.PackrStream
 var UnpackrStream = msgpackr.UnpackrStream
 var unpack = msgpackr.unpack
 var pack = msgpackr.pack
+var DECIMAL_FIT = msgpackr.DECIMAL_FIT
+
 var addExtension = msgpackr.addExtension
 
 var zlib = tryRequire('zlib')
@@ -231,15 +233,16 @@ suite('msgpackr basic tests', function(){
 	})
 	test('decimal float32', function() {
 		var data = {
-			a: 2.526,
+			a: 1.992e20,//2.526,
 			b: 0.0035235,
 			c: 35250000000000000000,
+			d: 3252200000,
 		}
 		let packr = new Packr({
-			useFloat32: 'decimal-fit'
+			useFloat32: DECIMAL_FIT
 		})
 		var serialized = packr.pack(data)
-		assert.equal(serialized.length, 25)
+		assert.equal(serialized.length, 32)
 		var deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized, data)
 	})

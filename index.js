@@ -16,6 +16,11 @@ exports.unpack = packr.unpack
 exports.pack = packr.pack
 exports.decode = packr.unpack
 exports.encode = packr.pack
+Object.assign(exports, {
+	ALWAYS:1,
+	DECIMAL_ROUND: 3,
+	DECIMAL_FIT: 4
+})
 
 function tryRequire(moduleId) {
 	try {

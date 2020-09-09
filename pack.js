@@ -1,7 +1,7 @@
 "use strict"
 let unpackModule = require('./unpack')
 let Unpackr = unpackModule.Unpackr
-let decimalFloat32 = unpackModule.decimalFloat32
+let mult10 = unpackModule.mult10
 const typedArrays = unpackModule.typedArrays
 let encoder
 try {
@@ -13,7 +13,7 @@ class Packr extends Unpackr {
 	constructor(options) {
 		super(options)
 		this.offset = 0
-		let target = new ByteArray(8192) // as you might expect, allocUnsafeSlow is the fastest and safest way to allocate memory
+		let target = new ByteArrayAllocate(8192) // as you might expect, allocUnsafeSlow is the fastest and safest way to allocate memory
 		let targetView = new DataView(target.buffer, 0, 8192)
 		let typeBuffer
 		let position = 0
@@ -244,11 +244,14 @@ class Packr extends Unpackr {
 						}
 					}
 				} else {
-					let useFloat32 = this.useFloat32
-					if (useFloat32) {
+					let useFloat32
+					if ((useFloat32 = this.useFloat32) > 0) {
 						target[position++] = 0xca
 						targetView.setFloat32(position, value)
-						if (useFloat32 != 'decimal-fit' || decimalFloat32(value, target[position], target[position + 1]) == value) {
+						let xShifted
+						if (useFloat32 < 4 ||
+							// this checks for  rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
+								((xShifted = value * mult10[((target[position] & 0x7f) << 1) | (target[position + 1] >> 7)]) >> 0) === xShifted) {
 							position += 4
 							return
 						} else
@@ -547,7 +550,7 @@ extensions = [{
 		if (this.structuredClone) {
 			let { target, position} = allocateForWrite(3)
 			target[position++] = 0xd4
-			target[position++] = 0x73
+			target[position++] = 0x73 // 's' for Set
 			target[position++] = 0
 		}
 		pack(array)
@@ -557,7 +560,7 @@ extensions = [{
 		if (this.structuredClone) {
 			let { target, position} = allocateForWrite(3)
 			target[position++] = 0xd4
-			target[position++] = 0x7f
+			target[position++] = 0x65 // 'e' for error
 			target[position++] = 0
 		}
 		pack({
@@ -570,7 +573,7 @@ extensions = [{
 		if (this.structuredClone) {
 			let { target, position} = allocateForWrite(3)
 			target[position++] = 0xd4
-			target[position++] = 0x78
+			target[position++] = 0x78 // 'x' for regeXp
 			target[position++] = 0
 		}
 		pack({
@@ -610,7 +613,7 @@ function writeExtBuffer(buffer, type, allocateForWrite) {
 		targetView.setUint32(position, length)
 		position += 4
 	//}
-	target[position++] = 0x74
+	target[position++] = 0x74 // "t" for typed array
 	target[position++] = type
 	if (isNode)
 		Buffer.from(buffer).copy(target, position)

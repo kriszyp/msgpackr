@@ -92,21 +92,24 @@ Msgpackr will automatically add and saves structures as it encounters any new ob
 The following options properties can be provided to the Packr or Unpackr constructor:
 
 * `useRecords` - Setting this to `false` disables the record extension and stores JavaScript objects as MessagePack maps, and unpacks maps as JavaScript `Object`s, which ensures compatibilty with other decoders.
-* `structures` - Provides the array of structures that is to be used for record extension, if you want the structures saved and used again.
+* `structures` - Provides the array of structures that is to be used for record extension, if you want the structures saved and used again. This array will be modified in place with new record structures that are serialized (if less than 32 structures are in the array).
 * `structuredClone` - This enables the structured cloning extensions that will encode object/cyclic references and additional built-in types/classes.
 * `mapsAsObjects` - If `true`, this will decode MessagePack maps and JS `Object`s with the map entries decoded to object properties. If `false`, maps are decoded as JavaScript `Map`s. This is disabled by default if `useRecords` is enabled (which allows `Map`s to be preserved), and is enabled by default if `useRecords` is disabled.
-* `useFloat32` - This will enable msgpackr to encode non-integer numbers as float32. See next section for possible values.
-* `useTimestamp32` - Encode JS `Date`s in 32-bit format when possible by dropping the milliseconds. This is a more efficient encoding of dates. You can also cause dates to use 32-bit format by manually setting the milliseconds to zero (`data.setMilliseconds(0)`).
+* `useFloat32` - This will enable msgpackr to encode non-integer numbers as `float32`. See next section for possible values.
+* `useTimestamp32` - Encode JS `Date`s in 32-bit format when possible by dropping the milliseconds. This is a more efficient encoding of dates. You can also cause dates to use 32-bit format by manually setting the milliseconds to zero (`date.setMilliseconds(0)`).
 * `variableMapSize` - This will use varying map size definition (fixmap, map16, map32) based on the number of keys when encoding objects, which yields slightly more compact encodings (for small objects), but is typically 5-10% slower during encoding. This is only relevant when record extension is disabled.
 
-### 32-bit Float options
-The `useFloat32` property has several possible values:
+### 32-bit Float Options
+By default all non-integer numbers are serialized as 64-bit float (double). This is fastest setting for both serialization and deserializing, and ensure full precision. However, often real-world data doesn't not need 64-bits of precision, and using 32-bit encoding can save a lot of space. There are several options that provide more efficient saving (with some performance impacts). Using the decimal options for encoding and decoding provides lossless storage of common decimal representations like 7.99, in more efficient 32-bit format (rather than 64-bit). The `useFloat32` property has several possible values, available from the module as constants:
+```
+import { ALWAYS, DECIMAL_ROUND, DECIMAL_FIT } from 'msgpackr'
+```
 
-* `true` - Always will encode non-integers as 32-bit float.
-* `'decimal-round'` - Always will encode non-integers as 32-bit float, and when decoding 32-bit float, round to 6 or 7 significant decimal digits.
-* `'decimal-fit'` - Only encode non-integers as 32-bit float if they have 7 or less significant digits (in base 10), as a 32-bit float. And this will also enable the `unpack` to round 32-bit float numbers to seven significant digits without loss. 
+* `ALWAYS` (1) - Always will encode non-integers as 32-bit float.
+* `DECIMAL_ROUND` (3) - Always will encode non-integers as 32-bit float, and when decoding 32-bit float, round to 7 significant decimal digits (or 6 or 8 digits for some ranges).
+* `DECIMAL_FIT` (4) - Only encode non-integers as 32-bit float if all significant digits can be unamiguously encoded as a 32-bit float. And this will also enable the `unpack` to round 32-bit float numbers to 7 significant digits (or 6 or 8 digits for some ranges) without loss.
 
-Using the decimal options for encoding and decoding provides lossless storage of common decimal representations like 7.99, in more efficient 32-bit format (rather than 64-bit).
+Note, that the performance is decreased with decimal rounding by about 20-25%, although if only 5% of your values are floating point, a that will only have about a 1% impact overall.
 
 ## Performance
 Msgpackr is fast. Really fast. Here is comparison with the next fastest JS projects using the benchmark tool from `msgpack-lite` (and the sample data is from some clinical research data we use that has a good mix of different value types and structures). It also includes comparison to V8 native JSON functionality, and JavaScript Avro (`avsc`, a very optimized Avro implementation):

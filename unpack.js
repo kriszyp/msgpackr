@@ -46,7 +46,7 @@ class Unpackr {
 		// this provides cached access to the data view for a buffer if it is getting reused, which is a recommend
 		// technique for getting data from a database where it can be copied into an existing buffer instead of creating
 		// new ones
-		dataView = source.dataView || (new DataView(source.buffer, source.byteOffset, source.byteLength))
+		dataView = source.dataView || (source.dataView = new DataView(source.buffer, source.byteOffset, source.byteLength))
 		if (this) {
 			currentUnpackr = this
 			if (this.structures) {
@@ -183,10 +183,11 @@ function read() {
 				return readExt(value)
 			case 0xca:
 				value = dataView.getFloat32(position)
-				if (currentUnpackr.useFloat32) {
-					let useFloat32 = currentUnpackr.useFloat32
-					if (useFloat32 === 'decimal-round' || useFloat32 === 'decimal-fit')
-						value = decimalFloat32(value, src[position], src[position + 1])
+				if (currentUnpackr.useFloat32 > 2) {
+					// this does rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
+					let multiplier = mult10[((src[position] & 0x7f) << 1) | (src[position + 1] >> 7)]
+					position += 4
+					return ((multiplier * value + (value > 0 ? 0.5 : -0.5)) >> 0) / multiplier
 				}
 				position += 4
 				return value
@@ -613,6 +614,11 @@ const recordDefinition = (id) => {
 let glbl = typeof window == 'object' ? window : global
 currentExtensions[0] = (data) => {} // notepack defines extension 0 to mean undefined, so use that as the default here
 
+currentExtensions[0x65] = () => {
+	let data = read()
+	return (glbl[data.name] || Error)(data.message)
+}
+
 currentExtensions[0x69] = (data) => {
 	// id extension (for structured clones)
 	let id = dataView.getUint32(position - 4)
@@ -635,6 +641,7 @@ currentExtensions[0x69] = (data) => {
 	refEntry.target = targetProperties // the placeholder wasn't used, replace with the deserialized one
 	return targetProperties // no cycle, can just use the returned read object
 }
+
 currentExtensions[0x70] = (data) => {
 	// pointer extension (for structured clones)
 	let id = dataView.getUint32(position - 4)
@@ -657,11 +664,6 @@ currentExtensions[0x74] = (data) => {
 currentExtensions[0x78] = () => {
 	let data = read()
 	new RegExp(data.source, data.flags)
-}
-
-currentExtensions[0x7f] = () => {
-	let data = read()
-	return (glbl[data.name] || Error)(data.message)
 }
 
 currentExtensions[0xff] = (data) => {
@@ -707,7 +709,7 @@ function saveState(callback) {
 	src = savedSrc
 	currentStructures = savedStructures
 	currentUnpackr = savedPackr
-	dataView = dataView = new DataView(src.buffer, src.byteOffset, src.byteLength)
+	dataView = new DataView(src.buffer, src.byteOffset, src.byteLength)
 	return value
 }
 exports.clearSource = function() {
@@ -718,15 +720,9 @@ exports.addExtension = function(extension) {
 	currentExtensions[extension.type] = extension.unpack
 }
 
-let mult10 = []
+let mult10 = new Array(256) // this is a table matching binary exponents to the multiplier to determine significant digit rounding
 for (let i = 0; i < 256; i++) {
-	mult10[i] = Math.pow(10, 44 - ((i * 0.30103) >> 0))
+	mult10[i] = +('1e' + Math.floor(45.15 - i * 0.30103))
 }
-
-exports.decimalFloat32 = decimalFloat32
-function decimalFloat32(x, firstByte, secondByte) {
-	let multiplier = mult10[((firstByte & 0x7f) << 1) | (secondByte >> 7)]
-	//let multiplier = Math.pow(10, Math.floor(7 - Math.log10(x)))
-	return ((multiplier * x + 0.5) >> 0) / multiplier
-}
+exports.mult10 = mult10
 exports.typedArrays = typedArrays
