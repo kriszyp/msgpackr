@@ -96,20 +96,20 @@ The following options properties can be provided to the Packr or Unpackr constru
 * `structuredClone` - This enables the structured cloning extensions that will encode object/cyclic references and additional built-in types/classes.
 * `mapsAsObjects` - If `true`, this will decode MessagePack maps and JS `Object`s with the map entries decoded to object properties. If `false`, maps are decoded as JavaScript `Map`s. This is disabled by default if `useRecords` is enabled (which allows `Map`s to be preserved), and is enabled by default if `useRecords` is disabled.
 * `useFloat32` - This will enable msgpackr to encode non-integer numbers as `float32`. See next section for possible values.
-* `useTimestamp32` - Encode JS `Date`s in 32-bit format when possible by dropping the milliseconds. This is a more efficient encoding of dates. You can also cause dates to use 32-bit format by manually setting the milliseconds to zero (`date.setMilliseconds(0)`).
 * `variableMapSize` - This will use varying map size definition (fixmap, map16, map32) based on the number of keys when encoding objects, which yields slightly more compact encodings (for small objects), but is typically 5-10% slower during encoding. This is only relevant when record extension is disabled.
+* `useTimestamp32` - Encode JS `Date`s in 32-bit format when possible by dropping the milliseconds. This is a more efficient encoding of dates. You can also cause dates to use 32-bit format by manually setting the milliseconds to zero (`date.setMilliseconds(0)`).
 
 ### 32-bit Float Options
-By default all non-integer numbers are serialized as 64-bit float (double). This is fastest setting for both serialization and deserializing, and ensure full precision. However, often real-world data doesn't not need 64-bits of precision, and using 32-bit encoding can save a lot of space. There are several options that provide more efficient saving (with some performance impacts). Using the decimal options for encoding and decoding provides lossless storage of common decimal representations like 7.99, in more efficient 32-bit format (rather than 64-bit). The `useFloat32` property has several possible values, available from the module as constants:
+By default all non-integer numbers are serialized as 64-bit float (double). This is fast, and ensures maximum precision. However, often real-world data doesn't not need 64-bits of precision, and using 32-bit encoding can be much more space efficient. There are several options that provide more efficient encodings (with some performance impacts). Using the decimal rounding options for encoding and decoding provides lossless storage of common decimal representations like 7.99, in more efficient 32-bit format (rather than 64-bit). The `useFloat32` property has several possible values, available from the module as constants:
 ```
 import { ALWAYS, DECIMAL_ROUND, DECIMAL_FIT } from 'msgpackr'
 ```
 
-* `ALWAYS` (1) - Always will encode non-integers as 32-bit float.
+* `ALWAYS` (1) - Always will encode non-integers (absolute less than 2147483648) as 32-bit float.
 * `DECIMAL_ROUND` (3) - Always will encode non-integers as 32-bit float, and when decoding 32-bit float, round to 7 significant decimal digits (or 6 or 8 digits for some ranges).
-* `DECIMAL_FIT` (4) - Only encode non-integers as 32-bit float if all significant digits can be unamiguously encoded as a 32-bit float. And this will also enable the `unpack` to round 32-bit float numbers to 7 significant digits (or 6 or 8 digits for some ranges) without loss.
+* `DECIMAL_FIT` (4) - Only encode non-integers as 32-bit float if all significant digits can be unamiguously encoded as a 32-bit float, and decode/unpack with decimal rounding (same as above). This will ensure round-trip encoding/decoding without loss in precision and use 32-bit when possible.
 
-Note, that the performance is decreased with decimal rounding by about 20-25%, although if only 5% of your values are floating point, a that will only have about a 1% impact overall.
+Note, that the performance is decreased with decimal rounding by about 20-25%, although if only 5% of your values are floating point, that will only have about a 1% impact overall.
 
 ## Performance
 Msgpackr is fast. Really fast. Here is comparison with the next fastest JS projects using the benchmark tool from `msgpack-lite` (and the sample data is from some clinical research data we use that has a good mix of different value types and structures). It also includes comparison to V8 native JSON functionality, and JavaScript Avro (`avsc`, a very optimized Avro implementation):
@@ -161,7 +161,7 @@ class MyCustomClass {...}
 let extPackr = new Packr();
 addExtension({
 	Class: MyCustomClass,
-	type: 11, // register our own extension code (a type code from 0-127)
+	type: 11, // register our own extension code (a type code from 1-100)
 	pack(instance) {
 		// define how your custom class should be encoded
 		return extPackr.pack(instance.myData); // return a buffer
@@ -210,7 +210,10 @@ Which should generate an object that would correspond to JSON:
 msgpackr supports `undefined` (using fixext1 + type: 0 + data: 0 to match other JS implementations), `NaN`, `Infinity`, and `-Infinity` (using standard IEEE 754 representations with doubles/floats).
 
 ### Dates
-msgpackr saves all JavaScript `Date`s using the standard MessagePack date extension (type -1), using 32-bit if useTimestamp32 options is specified or using the smallest of 32-bit, 64-bit or 96-bit needed to store the date without data loss.
+msgpackr saves all JavaScript `Date`s using the standard MessagePack date extension (type -1), using the smallest of 32-bit, 64-bit or 96-bit format needed to store the date without data loss (or using 32-bit if useTimestamp32 options is specified).
+
+### Structured Cloning
+With structured cloning enabled, msgpackr will also use extensions to store Set, Map, Error, RegExp, ArrayBufferView objects and preserve their types.
 
 ## License
 
