@@ -211,7 +211,10 @@ function read() {
 				position += 4
 				return value
 			case 0xcf:
-				value = dataView.getBigUInt64(position)
+				if (currentUnpackr.uint64AsNumber)
+					return src[position++] * 0x100000000000000 + src[position++] * 0x1000000000000 + src[position++] * 0x10000000000 + src[position++] * 0x100000000 +
+						src[position++] * 0x1000000 + (src[position++] << 16) + (src[position++] << 8) + src[position++]
+				value = dataView.getBigUint64(position)
 				position += 8
 				return value
 
