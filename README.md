@@ -49,10 +49,24 @@ Msgpackr works as standalone JavaScript as well, and runs on modern browsers. It
 ```
 import { unpack } from 'msgpackr/unpack' // if you only need to unpack
 ```
-(It is worth noting that while msgpackr works well in modern browsers, the MessagePack format itself is usually not an ideal format for web use. If you want compact data, brotli or gzip are most effective in compressing, and MessagePack's character frequency tends to defeat Huffman encoding used by these standard compression algorithms, resulting in less compact data than compressed JSON. The modern browser architecture is heavily optimized for parsing JSON from HTTP traffic, and it is difficult to achieve the same level of overall efficiency and ease with MessagePack.)
 
 ## Structured Cloning
-You can also use msgpackr for [structured cloning](https://html.spec.whatwg.org/multipage/structured-data.html), (as far as it makes sense on the platform). By enabling the `structuredClone` option, you can include references to other objects or cyclic references, and object identity will be preserved. Structured cloning also enables preserving certain typed objects like `Error`s and `Set`s. This option is disabled by default because it uses extensions and reference checking degrades performance (by about 25-30%).
+You can also use msgpackr for [structured cloning](https://html.spec.whatwg.org/multipage/structured-data.html). By enabling the `structuredClone` option, you can include references to other objects or cyclic references, and object identity will be preserved. Structured cloning also enables preserving certain typed objects like `Error`, `Set`, `RegExp` and TypedArray instances. For example:
+```
+let obj = {
+	set: new Set(['a', 'b']),
+	regular: /a\spattern/
+};
+obj.self = obj;
+let packr = new Packr({ structuredClone: true });
+let serialized = packr.pack(obj);
+let copy = packr.unpack(serialized);
+copy.self === copy // true
+copy.set.has('a') // true
+
+```
+
+This option is disabled by default because it uses extensions and reference checking degrades performance (by about 25-30%). (Note this implementation doesn't serialize every class/type specified in the HTML specification since not all of them make sense for storing across platforms.)
 
 ### Alternate Terminology
 If you prefer to use encoder/decode terminology, msgpackr exports aliases, so `decode` is equivalent to `unpack`, `encode` is `pack`, `Encoder` is `Packr`, `Decoder` is `Unpackr`, and `EncoderStream` and `DecoderStream` can be used as well.
@@ -100,7 +114,7 @@ The following options properties can be provided to the Packr or Unpackr constru
 * `useTimestamp32` - Encode JS `Date`s in 32-bit format when possible by dropping the milliseconds. This is a more efficient encoding of dates. You can also cause dates to use 32-bit format by manually setting the milliseconds to zero (`date.setMilliseconds(0)`).
 
 ### 32-bit Float Options
-By default all non-integer numbers are serialized as 64-bit float (double). This is fast, and ensures maximum precision. However, often real-world data doesn't not need 64-bits of precision, and using 32-bit encoding can be much more space efficient. There are several options that provide more efficient encodings (with some performance impacts). Using the decimal rounding options for encoding and decoding provides lossless storage of common decimal representations like 7.99, in more efficient 32-bit format (rather than 64-bit). The `useFloat32` property has several possible values, available from the module as constants:
+By default all non-integer numbers are serialized as 64-bit float (double). This is fast, and ensures maximum precision. However, often real-world data doesn't not need 64-bits of precision, and using 32-bit encoding can be much more space efficient. There are several options that provide more efficient encodings. Using the decimal rounding options for encoding and decoding provides lossless storage of common decimal representations like 7.99, in more efficient 32-bit format (rather than 64-bit). The `useFloat32` property has several possible options, available from the module as constants:
 ```
 import { ALWAYS, DECIMAL_ROUND, DECIMAL_FIT } from 'msgpackr'
 ```
@@ -218,6 +232,9 @@ With structured cloning enabled, msgpackr will also use extensions to store Set,
 ## License
 
 MIT
+
+### Browser Consideration
+It is worth noting that while msgpackr works well in modern browsers, the MessagePack format itself is often not an ideal format for web use. If you want compact data, brotli or gzip are most effective in compressing, and MessagePack's character frequency tends to defeat Huffman encoding used by these standard compression algorithms, resulting in less compact data than compressed JSON. The modern browser architecture is heavily optimized for parsing JSON from HTTP traffic, and it is difficult to achieve the same level of overall efficiency and ease with MessagePack.
 
 ### Credits
 
