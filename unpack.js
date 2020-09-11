@@ -33,7 +33,7 @@ class Unpackr {
 			// re-entrant execution, save the state and restore it after we do this unpack
 			return saveState(() => {
 				src = null
-				return currentUnpackr.unpack(source, end, continueReading)
+				return this ? this.unpack(source, end, continueReading) : Unpackr.prototype.unpack.call(defaultOptions, source, end, continueReading)
 			})
 		}
 		srcEnd = end > -1 ? end : source.length

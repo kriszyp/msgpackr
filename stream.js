@@ -1,7 +1,7 @@
 "use strict"
 var Transform = require('stream').Transform
 var Packr = require('./pack').Packr
-const { read, getPosition, Unpackr } = require('./unpack')
+const { read, getPosition, Unpackr, clearSource } = require('./unpack')
 var DEFAULT_OPTIONS = {objectMode: true}
 
 class PackrStream extends Transform {
@@ -48,11 +48,12 @@ class UnpackrStream extends Transform {
 				position = getPosition()
 			}
 		} catch(error) {
-			clearSource()
 			if (error.incomplete)
 				this.incompleteBuffer = chunk.slice(position)
 			else
 				throw error
+		} finally {
+			clearSource()
 		}
 		if (callback) callback()
 	}

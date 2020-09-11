@@ -149,7 +149,7 @@ msgpack.createDecodeStream().write(buf);         | 1000000 |  2222 | 450045
 msgpack.createEncodeStream().write(obj);         | 1000000 |  1577 | 634115
 msgpack.Decoder().on("data",ondata).decode(buf); | 1000000 |  2246 | 445235
 
-See the benchmark.md for more benchmarks and information about benchmarking.
+See the [benchmark.md](/kriszyp/msgpackr/blob/master/benchmark.md) for more benchmarks and information about benchmarking.
 
 ## Custom Extensions
 You can add your own custom extensions, which can be used to encode specific classes in certain ways. This is done by using the `addExtension` function, and specifying the class, extension type code (should be a number from 1-100, reserving negatives for MessagePack, 101-127 for msgpackr), and your pack and unpack functions (or just the one you need). You can use msgpackr encoding and decoding within your extensions, but if you do so, you must create a separate Packr instance, otherwise you could do override data in the same encoding buffer:
