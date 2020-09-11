@@ -1,4 +1,4 @@
-var inspector = require('inspector')
+//var inspector = require('inspector')
 //inspector.open(9330, null, true)
 
 function tryRequire(module) {
@@ -32,14 +32,14 @@ try {
 
 if (typeof XMLHttpRequest === 'undefined') {
 	var fs = require('fs')
-	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/example.json'))
+	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/example4.json'))
 } else {
 	var xhr = new XMLHttpRequest()
-	xhr.open('GET', 'samples/outcomes.json', false)
+	xhr.open('GET', 'example4.json', false)
 	xhr.send()
 	var sampleData = JSON.parse(xhr.responseText)
 }
-var ITERATIONS = 1000000
+var ITERATIONS = 10000
 
 suite('msgpackr basic tests', function(){
 	test('pack/unpack data', function(){
@@ -267,8 +267,8 @@ suite('msgpackr basic tests', function(){
 
 	test('buffers', function(){
 		var data = {
-			buffer1: Buffer.from([2,3,4]),
-			buffer2: Buffer.from(pack(sampleData))
+			buffer1: new Uint8Array([2,3,4]),
+			buffer2: new Uint8Array(pack(sampleData))
 		}
 		var serialized = pack(data)
 		var deserialized = unpack(serialized)
@@ -283,7 +283,7 @@ suite('msgpackr basic tests', function(){
 		    foo: true,
 		    bar: -2147483649,
 		    foobar: {
-		      foo: Buffer.from([1, 2, 3, 4, 5]),
+		      foo: new Uint8Array([1, 2, 3, 4, 5]),
 		      bar: 1.5,
 		      foobar: [true, false, 'abcdefghijkmonpqrstuvwxyz']
 		    }
@@ -303,42 +303,61 @@ suite('msgpackr basic tests', function(){
 		deserialized = unpack(serialized)
 		assert.deepEqual(deserialized, data)
 	})
-	test('serialize/parse stream', () => {
-		const serializeStream = new PackrStream({
+	if (PackrStream) {
+		test('serialize/parse stream', () => {
+			const serializeStream = new PackrStream({
+			})
+			const parseStream = new UnpackrStream()
+			serializeStream.pipe(parseStream)
+			const received = []
+			parseStream.on('data', data => {
+				received.push(data)
+			})
+			const messages = [{
+				name: 'first'
+			}, {
+				name: 'second'
+			}, {
+				name: 'third'
+			}, {
+				name: 'third',
+				extra: [1, 3, { foo: 'hi'}, 'bye']
+			}]
+			for (const message of messages)
+				serializeStream.write(message)
+			return new Promise((resolve, reject) => {
+				setTimeout(() => {
+					assert.deepEqual(received, messages)
+					resolve()
+				}, 10)
+			})
 		})
-		const parseStream = new UnpackrStream()
-		serializeStream.pipe(parseStream)
-		const received = []
-		parseStream.on('data', data => {
-			received.push(data)
-		})
-		const messages = [{
-			name: 'first'
-		}, {
-			name: 'second'
-		}, {
-			name: 'third'
-		}, {
-			name: 'third',
-			extra: [1, 3, { foo: 'hi'}, 'bye']
-		}]
-		for (const message of messages)
-			serializeStream.write(message)
-		return new Promise((resolve, reject) => {
-			setTimeout(() => {
-				assert.deepEqual(received, messages)
-				resolve()
-			}, 10)
-		})
-	})
+	}
 
 })
-suite.skip('msgpackr performance tests', function(){
-	test('performance', function() {
+suite('msgpackr performance tests', function(){
+	test('performance JSON.parse', function() {
 		var data = sampleData
 		this.timeout(10000)
 		let structures = []
-		let packr = new Packr({ structures, useRecords: true })
+		var serialized = JSON.stringify(data)
+		console.log('JSON size', serialized.length)
+		for (var i = 0; i < ITERATIONS; i++) {
+			var deserialized = JSON.parse(serialized)
+		}
+	})
+	test('performance JSON.stringify', function() {
+		var data = sampleData
+		this.timeout(10000)
+		for (var i = 0; i < ITERATIONS; i++) {
+			var serialized = JSON.stringify(data)
+		}
+	})
+	test('performance unpack', function() {
+		var data = sampleData
+		this.timeout(10000)
+		let structures = []
+		let packr = new Packr({ structures })
 		var serialized = packr.pack(data)
 		console.log('msgpackr size', serialized.length)
 		for (var i = 0; i < ITERATIONS; i++) {
@@ -349,7 +368,7 @@ suite.skip('msgpackr performance tests', function(){
 		var data = sampleData
 		this.timeout(10000)
 		let structures = []
-		let packr = new Packr({ structures, useRecords: true })
+		let packr = new Packr({ structures })
 
 		for (var i = 0; i < ITERATIONS; i++) {
 			//serialized = pack(data, { shared: sharedStructure })

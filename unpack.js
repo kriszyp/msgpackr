@@ -358,11 +358,16 @@ exports.setExtractor = (extractStrings) => {
 	}
 }
 function readStringJS(length) {
+	let result
+	if (length < 16) {
+		if (result = shortStringInJS(length))
+			return result
+	}
 	if (length > 64 && decoder)
 		return decoder.decode(src.subarray(position, position += length))
 	const end = position + length
 	const units = []
-	let result = ''
+	result = ''
 	while (position < end) {
 		const byte1 = src[position++]
 		if ((byte1 & 0x80) === 0) {
@@ -701,7 +706,7 @@ function saveState(callback) {
 	let savedStrings = strings
 	let savedReferenceMap = referenceMap
 	// TODO: We may need to revisit this if we do more external calls to user code (since it could be slow)
-	let savedSrc = Buffer.from(src.slice(0, srcEnd)) // we copy the data in case it changes while external data is processed
+	let savedSrc = new Uint8Array(src.slice(0, srcEnd)) // we copy the data in case it changes while external data is processed
 	let savedStructures = currentStructures
 	let savedPackr = currentUnpackr
 	let value = callback()
