@@ -600,7 +600,7 @@ extensions = [{
 
 function writeExtBuffer(buffer, type, allocateForWrite) {
 	let length = buffer.byteLength
-	let { target, position } = allocateForWrite(7 + length)
+	let { target, position, targetView } = allocateForWrite(7 + length)
 	/*if (length < 0x100) {
 		target[position++] = 0xc7
 		target[position++] = length
@@ -610,7 +610,7 @@ function writeExtBuffer(buffer, type, allocateForWrite) {
 		target[position++] = length & 0xff
 	} else {*/
 		target[position++] = 0xc9
-		targetView.setUint32(position, length)
+		targetView.setUint32(position, length + 1) // plus one for the type byte
 		position += 4
 	//}
 	target[position++] = 0x74 // "t" for typed array

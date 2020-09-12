@@ -180,7 +180,10 @@ suite('msgpackr basic tests', function(){
 	test('structured cloning: types', function() {
 		let object = {
 			error: new Error('test'),
-			set: new Set(['a', 'b'])
+			set: new Set(['a', 'b']),
+			regexp: /test/gi,
+			float32Array: new Float32Array([2.25,6]),
+			uint16Array: new Uint16Array([3,4])
 		}
 		let packr = new Packr({
 			structuredClone: true,
@@ -188,6 +191,14 @@ suite('msgpackr basic tests', function(){
 		var serialized = packr.pack(object)
 		var deserialized = packr.unpack(serialized)
 		assert.deepEqual(Array.from(deserialized.set), Array.from(object.set))
+		assert.equal(deserialized.error.message, object.error.message)
+		assert.equal(deserialized.regexp.test('TEST'), true)
+		assert.equal(deserialized.float32Array.constructor.name, 'Float32Array')
+		assert.equal(deserialized.float32Array[0], 2.25)
+		assert.equal(deserialized.float32Array[1], 6)
+		assert.equal(deserialized.uint16Array.constructor.name, 'Uint16Array')
+		assert.equal(deserialized.uint16Array[0], 3)
+		assert.equal(deserialized.uint16Array[1], 4)
 	})
 
 	test('map/date', function(){

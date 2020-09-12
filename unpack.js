@@ -607,12 +607,15 @@ function shortStringInJS(length) {
 }
 
 function readBin(length) {
-	return src.slice(position, position += length)
+	return currentUnpackr.copyBuffers ?
+		// specifically use the copying slice (not the node one)
+		Uint8Array.prototype.slice.call(src, position, position += length) :
+		src.slice(position, position += length)
 }
 function readExt(length) {
 	let type = src[position++]
 	if (currentExtensions[type]) {
-		return currentExtensions[type](src.slice(position, position += length))
+		return currentExtensions[type](src.subarray(position, position += length))
 	}
 	else
 		throw new Error('Unknown extension type ' + type)
@@ -671,11 +674,11 @@ currentExtensions[0x74] = (data) => {
 	let typedArrayName = typedArrays[typeCode]
 	if (!typedArrayName)
 		throw new Error('Could not find typed array for code ' + typeCode)
-	return new glbl[typedArrayName](data.buffer, data.byteOffset, data.length - 1)
+	return new glbl[typedArrayName](Uint8Array.prototype.slice.call(data, 1).buffer)
 }
 currentExtensions[0x78] = () => {
 	let data = read()
-	new RegExp(data.source, data.flags)
+	return new RegExp(data.source, data.flags)
 }
 
 currentExtensions[0xff] = (data) => {
