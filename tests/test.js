@@ -368,9 +368,11 @@ suite('msgpackr performance tests', function(){
 		var data = sampleData
 		this.timeout(10000)
 		let structures = []
+		var serialized = pack(data)
+		console.log('MessagePack size', serialized.length)
 		let packr = new Packr({ structures })
 		var serialized = packr.pack(data)
-		console.log('msgpackr size', serialized.length)
+		console.log('msgpackr w/ record ext size', serialized.length)
 		for (var i = 0; i < ITERATIONS; i++) {
 			var deserialized = packr.unpack(serialized)
 		}
