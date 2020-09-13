@@ -563,10 +563,7 @@ extensions = [{
 			target[position++] = 0x65 // 'e' for error
 			target[position++] = 0
 		}
-		pack({
-			name: error.name,
-			message: error.message
-		})
+		pack([ error.name, error.message ])
 	}
 }, {
 	pack(regex, allocateForWrite, pack) {
@@ -576,10 +573,7 @@ extensions = [{
 			target[position++] = 0x78 // 'x' for regeXp
 			target[position++] = 0
 		}
-		pack({
-			source: regex.source,
-			flags: regex.flags
-		})
+		pack([ regex.source, regex.flags ])
 	}
 }, {
 	pack(arrayBuffer, allocateForWrite) {
