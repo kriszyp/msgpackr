@@ -26,6 +26,7 @@ var inflateSync = zlib.inflateSync
 var deflateSync = zlib.brotliCompressSync
 var inflateSync = zlib.brotliDecompressSync
 var constants = zlib.constants
+import('./test.mjs')
 try {
 //	var { decode, encode } = require('msgpack-lite')
 } catch (error) {}

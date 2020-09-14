@@ -20,7 +20,12 @@
     "benchmark": "node ./tests/benchmark.js",
     "test": "./node_modules/.bin/mocha tests/test*.js -u tdd"
   },
+  "type": "commonjs",
   "main": "./index.js",
+  "exports": {
+    "import": "./index.mjs",
+    "require": "./index.js"
+  },
   "optionalDependencies": {
     "msgpackr-extract": "^0.3.2"
   },
