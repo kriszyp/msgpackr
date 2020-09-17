@@ -67,6 +67,8 @@ class Packr extends Unpackr {
 					sharedStructures.transitions = Object.create(null)
 					for (let i = 0; i < sharedStructuresLength; i++) {
 						let keys = sharedStructures[i]
+						if (!keys)
+							continue
 						let nextTransition, transition = sharedStructures.transitions
 						for (let i =0, l = keys.length; i < l; i++) {
 							let key = keys[i]
