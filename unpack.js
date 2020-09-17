@@ -3,7 +3,6 @@ let decoder
 try {
 	decoder = new TextDecoder()
 } catch(error) {}
-let extractStrings
 let src
 let srcEnd
 let position = 0

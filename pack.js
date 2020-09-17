@@ -209,43 +209,40 @@ class Packr extends Unpackr {
 				}
 				position += length
 			} else if (type === 'number') {
-				if (value >> 0 == value) {// integer, 32-bit or less
-					if (value >= 0) {
-						// positive uint
-						if (value < 0x40) {
-							target[position++] = value
-						} else if (value < 0x100) {
-							target[position++] = 0xcc
-							target[position++] = value
-						} else if (value < 0x10000) {
-							target[position++] = 0xcd
-							target[position++] = value >> 8
-							target[position++] = value & 0xff
-						} else {
-							target[position++] = 0xce
-							targetView.setUint32(position, value)
-							position += 4
-						}
+				if (value >>> 0 === value) {// positive integer, 32-bit or less
+					// positive uint
+					if (value < 0x40) {
+						target[position++] = value
+					} else if (value < 0x100) {
+						target[position++] = 0xcc
+						target[position++] = value
+					} else if (value < 0x10000) {
+						target[position++] = 0xcd
+						target[position++] = value >> 8
+						target[position++] = value & 0xff
 					} else {
-						// negative int
-						if (value >= -0x20) {
-							target[position++] = 0x100 + value
-						} else if (value >= -0x80) {
-							target[position++] = 0xd0
-							target[position++] = value + 0x100
-						} else if (value >= -0x8000) {
-							target[position++] = 0xd1
-							targetView.setInt16(position, value)
-							position += 2
-						} else {
-							target[position++] = 0xd2
-							targetView.setInt32(position, value)
-							position += 4
-						}
+						target[position++] = 0xce
+						targetView.setUint32(position, value)
+						position += 4
+					}
+				} else if (value >> 0 === value) { // negative integer
+					if (value >= -0x20) {
+						target[position++] = 0x100 + value
+					} else if (value >= -0x80) {
+						target[position++] = 0xd0
+						target[position++] = value + 0x100
+					} else if (value >= -0x8000) {
+						target[position++] = 0xd1
+						targetView.setInt16(position, value)
+						position += 2
+					} else {
+						target[position++] = 0xd2
+						targetView.setInt32(position, value)
+						position += 4
 					}
 				} else {
 					let useFloat32
-					if ((useFloat32 = this.useFloat32) > 0 && value < 0x80000000 && value >= -0x80000000) {
+					if ((useFloat32 = this.useFloat32) > 0 && value < 0x100000000 && value >= -0x80000000) {
 						target[position++] = 0xca
 						targetView.setFloat32(position, value)
 						let xShifted
