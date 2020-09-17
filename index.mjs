@@ -1,5 +1,6 @@
 import packModule from './pack.js'
 import unpackModule from './unpack.js'
+import { createRequire } from 'module'
 
 export const Packr = packModule.Packr
 export const addExtension = packModule.addExtension
@@ -26,7 +27,7 @@ export const DECIMAL_FIT = 4
 
 function tryRequire(moduleId) {
 	try {
-		let require =  module.createRequire()
+		let require = createRequire(import.meta.url)
 		return require(moduleId)
 	} catch (error) {
 		if (typeof window == 'undefined')
