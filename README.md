@@ -1,6 +1,8 @@
 # msgpackr
-[![license](https://img.shields.io/badge/license-MIT-brightgreen)](blob/master/LICENSE)
-[![npm version](https://img.shields.io/npm/v/axios.svg?style=flat-square)](https://www.npmjs.org/package/axios)
+[![license](https://img.shields.io/badge/license-MIT-brightgreen)](LICENSE)
+[![npm version](https://img.shields.io/npm/v/axios.svg?style=flat-square)](https://www.npmjs.org/package/msgpackr)
+[![encode](https://img.shields.io/badge/decode-1.5MB%2Fs-yellow)](benchmark.md)
+[![decode](https://img.shields.io/badge/decode-2MB%2Fs-yellow)](benchmark.md)
 
 The msgpackr package is an extremely fast MessagePack NodeJS/JavaScript implementation. Currently, it is significantly faster than any other known implementations, faster than Avro (for JS), and generally faster than native V8 JSON.stringify/parse. It also includes an optional record extension (the `r` in msgpackr), for defining record structures that makes MessagePack even faster and more compact, often over twice as fast as even native JSON functions, several times faster than other JS implementations, and 15-50% more compact. See the performance section for more details. Structured cloning (with support for cyclical references) is also optional supported through extensions.
 
@@ -166,7 +168,7 @@ msgpack.createDecodeStream().write(buf);         | 1000000 |  2222 | 450045
 msgpack.createEncodeStream().write(obj);         | 1000000 |  1577 | 634115
 msgpack.Decoder().on("data",ondata).decode(buf); | 1000000 |  2246 | 445235
 
-See the [benchmark.md](/kriszyp/msgpackr/blob/master/benchmark.md) for more benchmarks and information about benchmarking.
+See the [benchmark.md](benchmark.md) for more benchmarks and information about benchmarking.
 
 ## Custom Extensions
 You can add your own custom extensions, which can be used to encode specific types/classes in certain ways. This is done by using the `addExtension` function, and specifying the class, extension type code (should be a number from 1-100, reserving negatives for MessagePack, 101-127 for msgpackr), and your pack and unpack functions (or just the one you need). You can use msgpackr encoding and decoding within your extensions, but if you do so, you must create a separate Packr instance, otherwise you could override data in the same encoding buffer:
