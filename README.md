@@ -1,7 +1,7 @@
 # msgpackr
 [![license](https://img.shields.io/badge/license-MIT-brightgreen)](LICENSE)
-[![npm version](https://img.shields.io/npm/v/axios.svg?style=flat-square)](https://www.npmjs.org/package/msgpackr)
-[![encode](https://img.shields.io/badge/decode-1.5MB%2Fs-yellow)](benchmark.md)
+[![npm version](https://img.shields.io/npm/v/msgpackr.svg?style=flat-square)](https://www.npmjs.org/package/msgpackr)
+[![encode](https://img.shields.io/badge/encode-1.5MB%2Fs-yellow)](benchmark.md)
 [![decode](https://img.shields.io/badge/decode-2MB%2Fs-yellow)](benchmark.md)
 
 The msgpackr package is an extremely fast MessagePack NodeJS/JavaScript implementation. Currently, it is significantly faster than any other known implementations, faster than Avro (for JS), and generally faster than native V8 JSON.stringify/parse. It also includes an optional record extension (the `r` in msgpackr), for defining record structures that makes MessagePack even faster and more compact, often over twice as fast as even native JSON functions, several times faster than other JS implementations, and 15-50% more compact. See the performance section for more details. Structured cloning (with support for cyclical references) is also optional supported through extensions.
