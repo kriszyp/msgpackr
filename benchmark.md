@@ -40,8 +40,8 @@ These are the benchmarks from notepack package. The larger test data for these b
 
 node ./benchmarks/encode
 
-library          │ tiny              │ small           │ medium         │ large         
----------------- | ----------------: | --------------: | -------------: | -------------:
+library          |   tiny            |  small          | medium         | large
+---------------- | ----------------: | --------------: | ---------------| -------:
 notepack         │ 2,171,621 ops/sec │ 546,905 ops/sec │ 29,578 ops/sec │ 265 ops/sec   
 msgpack-js       │ 967,682 ops/sec   │ 184,455 ops/sec │ 20,556 ops/sec │ 259 ops/sec   
 msgpackr         │ 2,392,826 ops/sec │ 556,915 ops/sec │ 70,573 ops/sec │ 313 ops/sec   
@@ -51,8 +51,8 @@ msgpack-lite     │ 553,143 ops/sec   │ 132,318 ops/sec │ 11,816 ops/sec �
 
 node ./benchmarks/decode
 
-library          │ tiny              │ small           │ medium          │ large         
----------------- | ----------------- | --------------- | --------------- | --------------
+library          |   tiny            |  small          | medium          | large
+---------------- | ----------------: | --------------: | --------------- | -------:
 notepack         │ 2,220,904 ops/sec │ 560,630 ops/sec │ 28,177 ops/sec  │ 275 ops/sec   
 msgpack-js       │ 965,719 ops/sec   │ 222,047 ops/sec │ 21,431 ops/sec  │ 257 ops/sec   
 msgpackr         │ 2,320,046 ops/sec │ 589,167 ops/sec │ 70,299 ops/sec  │ 329 ops/sec   
