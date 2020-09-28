@@ -25,6 +25,9 @@ class Unpackr {
 	constructor(options) {
 		if (options && options.useRecords === false && options.mapsAsObjects === undefined)
 			options.mapsAsObjects = true
+		if (options.getStructures && !options.structures) {
+			(options.structures = []).uninitialized = true // this is what we use to denote an uninitialized structures
+		}
 		Object.assign(this, options)
 	}
 	unpack(source, end, continueReading) {
@@ -103,7 +106,10 @@ function read() {
 						src = null
 						return currentUnpackr.getStructures()
 					})
-					currentStructures.splice.apply(currentStructures, [0, updatedStructures.length].concat(updatedStructures))
+					if (currentStructures === true)
+						currentUnpackr.structures = currentStructures = updatedStructures
+					else
+						currentStructures.splice.apply(currentStructures, [0, updatedStructures.length].concat(updatedStructures))
 					structure = currentStructures[token & 0x3f]
 					if (structure) {
 						if (!structure.read)

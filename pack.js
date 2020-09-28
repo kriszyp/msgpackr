@@ -59,6 +59,8 @@ class Packr extends Unpackr {
 			referenceMap = packr.structuredClone ? new Map() : null
 			sharedStructures = packr.structures
 			if (sharedStructures) {
+				if (sharedStructures.uninitialized)
+					packr.structures = sharedStructures = packr.getStructures()
 				let sharedStructuresLength = sharedStructures.length
 				if (sharedStructuresLength >  maxSharedStructures && !isSequential)
 					sharedStructuresLength = maxSharedStructures
