@@ -262,7 +262,7 @@ class Packr extends Unpackr {
 					target[position++] = 0xcb
 					targetView.setFloat64(position, value)
 					/*if (!target[position[4] && !target[position[5] && !target[position[6] && !target[position[7] && !(target[0] & 0x78) < ) {
-						// something like this can be represented as a float
+						// something like this can be represented as a float with binary rounding
 					}*/
 					position += 8
 				}
@@ -489,7 +489,6 @@ class Packr extends Unpackr {
 			let newSize = ((Math.max((end - start) << 2, target.length - 1) >> 12) + 1) << 12
 			let newBuffer = new ByteArrayAllocate(newSize)
 			targetView = new DataView(newBuffer.buffer, 0, newSize)
-			target.copy(newBuffer, 0, start, end)
 			if (target.copy)
 				target.copy(newBuffer, 0, start, end)
 			else
@@ -510,9 +509,9 @@ class Packr extends Unpackr {
 }
 exports.Packr = Packr
 
-const isNode = typeof window == 'undefined'
-const ByteArrayAllocate = isNode ? Buffer.allocUnsafeSlow : Uint8Array
-const ByteArray = isNode ? Buffer : Uint8Array
+const hasNodeBuffer = typeof Buffer !== 'undefined'
+const ByteArrayAllocate = hasNodeBuffer ? Buffer.allocUnsafeSlow : Uint8Array
+const ByteArray = hasNodeBuffer ? Buffer : Uint8Array
 function copyBinary(source, target, targetOffset, offset, endOffset) {
 	while (offset < endOffset) {
 		target[targetOffset++] = source[offset++]
@@ -582,7 +581,7 @@ extensions = [{
 		if (this.structuredClone)
 			writeExtBuffer(arrayBuffer, 0x10, allocateForWrite)
 		else
-			writeBuffer(isNode ? Buffer.from(arrayBuffer) : new Uint8Array(arrayBuffer), allocateForWrite)
+			writeBuffer(hasNodeBuffer ? Buffer.from(arrayBuffer) : new Uint8Array(arrayBuffer), allocateForWrite)
 	}
 }, {
 	pack(typedArray, allocateForWrite) {
@@ -616,7 +615,7 @@ function writeExtBuffer(buffer, type, allocateForWrite) {
 	//}
 	target[position++] = 0x74 // "t" for typed array
 	target[position++] = type
-	if (isNode)
+	if (hasNodeBuffer)
 		Buffer.from(buffer).copy(target, position)
 	else
 		copyBinary(new Uint8Array(buffer), target, position, 0, length)
