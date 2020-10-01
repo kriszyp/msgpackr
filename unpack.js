@@ -21,12 +21,17 @@ let defaultOptions = {
 	useRecords: false,
 	mapsAsObjects: true
 }
+class C1Type {}
+const C1 = new C1Type()
+C1.name = 'MessagePack 0xC1'
+
 class Unpackr {
 	constructor(options) {
-		if (options && options.useRecords === false && options.mapsAsObjects === undefined)
-			options.mapsAsObjects = true
-		if (options.getStructures && !options.structures) {
-			(options.structures = []).uninitialized = true // this is what we use to denote an uninitialized structures
+		if (options) {
+			if (options.useRecords === false && options.mapsAsObjects === undefined)
+				options.mapsAsObjects = true
+			if (options.getStructures && !options.structures)
+				(options.structures = []).uninitialized = true // this is what we use to denote an uninitialized structures
 		}
 		Object.assign(this, options)
 	}
@@ -161,7 +166,7 @@ function read() {
 		let value
 		switch (token) {
 			case 0xc0: return null
-			case 0xc1: return; // "never-used", just return undefined for now
+			case 0xc1: return C1; // "never-used", return special object to denote that
 			case 0xc2: return false
 			case 0xc3: return true
 			case 0xc4:
@@ -747,3 +752,5 @@ for (let i = 0; i < 256; i++) {
 }
 exports.mult10 = mult10
 exports.typedArrays = typedArrays
+exports.C1 = C1
+exports.C1Type = C1Type

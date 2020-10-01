@@ -10,6 +10,7 @@ if (extractor)
 	unpackModule.setExtractor(extractor.extractStrings)
 export const Unpackr = unpackModule.Unpackr
 export const Decoder = unpackModule.Unpackr
+export const C1 = unpackModule.C1
 import stream from './stream.js'
 export const PackrStream = stream.PackrStream
 export const UnpackrStream = stream.UnpackrStream

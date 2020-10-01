@@ -7,6 +7,7 @@ if (extractor)
 	unpackModule.setExtractor(extractor.extractStrings)
 exports.Unpackr = unpackModule.Unpackr
 exports.Decoder = exports.Unpackr
+exports.C1 = unpackModule.C1
 exports.PackrStream = require('./stream').PackrStream
 exports.UnpackrStream = require('./stream').UnpackrStream
 exports.EncoderStream = exports.PackrStream

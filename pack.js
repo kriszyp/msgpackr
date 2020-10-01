@@ -2,6 +2,7 @@
 let unpackModule = require('./unpack')
 let Unpackr = unpackModule.Unpackr
 let mult10 = unpackModule.mult10
+let C1Type = unpackModule.C1Type
 const typedArrays = unpackModule.typedArrays
 let encoder
 try {
@@ -518,7 +519,7 @@ function copyBinary(source, target, targetOffset, offset, endOffset) {
 	}
 }
 
-extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/ ]
+extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/, C1Type ]
 extensions = [{
 	pack(date, allocateForWrite) {
 		let seconds = date.getTime() / 1000
@@ -590,6 +591,11 @@ extensions = [{
 			writeExtBuffer(typedArray.buffer, typedArrays.indexOf(constructor.name), allocateForWrite)
 		else
 			writeBuffer(typedArray, allocateForWrite)
+	}
+}, {
+	pack(c1, allocateForWrite) { // specific 0xC1 object
+		let { target, position} = allocateForWrite(1)
+		target[position] = 0xc1
 	}
 }]
 
