@@ -27,7 +27,7 @@ class Packr extends Unpackr {
 		let lastSharedStructuresLength = 0
 		let encodeUtf8 = target.utf8Write ? function(string, position, maxBytes) {
 			return target.utf8Write(string, position, maxBytes)
-		} : encoder.encodeInto ?
+		} : (encoder && encoder.encodeInto) ?
 			function(string, position) {
 				return encoder.encodeInto(string, target.subarray(position)).written
 			} : false
