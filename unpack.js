@@ -74,6 +74,8 @@ class Unpackr {
 			}
 		} else
 			currentUnpackr = defaultOptions
+			if (!currentStructures || currentStructures.length > 0)
+				currentStructures = []
 		try {
 			return read()
 		} finally {
