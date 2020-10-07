@@ -1,6 +1,15 @@
 declare module 'msgpackr' {
 	interface Options {
-		useFloat32: number
+		useFloat32?: 0 | typeof ALWAYS | typeof DECIMAL_ROUND | typeof DECIMAL_FIT
+		useRecords?: boolean
+		structures?: {}[]
+		structuredClone?: boolean
+		mapsAsObjects?: boolean
+		variableMapSize?: boolean
+		copyBuffers?: boolean
+		useTimestamp32?: boolean
+		getStructures?(): {}[]
+		saveStructures?(structures: {}[]): boolean
 	}
 	export class Unpackr {
 		constructor(options?: Options)
