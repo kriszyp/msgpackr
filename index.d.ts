@@ -9,7 +9,7 @@ declare module 'msgpackr' {
 		copyBuffers?: boolean
 		useTimestamp32?: boolean
 		getStructures?(): {}[]
-		saveStructures?(structures: {}[]): boolean
+		saveStructures?(structures: {}[]): boolean | void
 	}
 	export class Unpackr {
 		constructor(options?: Options)
