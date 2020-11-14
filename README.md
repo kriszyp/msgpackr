@@ -143,22 +143,23 @@ Msgpackr is fast. Really fast. Here is comparison with the next fastest JS proje
 
 operation                                                  |   op   |   ms  |  op/s
 ---------------------------------------------------------- | ------: | ----: | -----:
-buf = Buffer(JSON.stringify(obj));                         |   75900 |  5003 |  15170
-obj = JSON.parse(buf);                                     |   90800 |  5002 |  18152
-require("msgpackr").pack(obj);                             |  158400 |  5000 |  31680
-require("msgpackr").unpack(buf);                           |   99200 |  5003 |  19828
-msgpackr w/ shared structures: packr.pack(obj);            |  183400 |  5002 |  36665
-msgpackr w/ shared structures: packr.unpack(buf);          |  415000 |  5000 |  83000
-buf = require("msgpack-lite").encode(obj);                 |   30600 |  5005 |   6113
-obj = require("msgpack-lite").decode(buf);                 |   15900 |  5030 |   3161
-buf = require("@msgpack/msgpack").encode(obj);             |  101200 |  5001 |  20235
-obj = require("@msgpack/msgpack").decode(buf);             |   71200 |  5004 |  14228
-buf = require("notepack").encode(obj);                     |   65300 |  5006 |  13044
-obj = require("notepack").decode(buf);                     |   32300 |  5001 |   6458
-require("avsc")...make schema/type...type.toBuffer(obj);   |   86900 |  5002 |  17373
-require("avsc")...make schema/type...type.fromBuffer(obj); |  106100 |  5000 |  21220
+buf = Buffer(JSON.stringify(obj));                         |   81600 |  5002 |  16313
+obj = JSON.parse(buf);                                     |   90700 |  5004 |  18125
+require("msgpackr").pack(obj);                             |  169700 |  5000 |  33940
+require("msgpackr").unpack(buf);                           |  109700 |  5003 |  21926
+msgpackr w/ shared structures: packr.pack(obj);            |  190400 |  5001 |  38072
+msgpackr w/ shared structures: packr.unpack(buf);          |  422900 |  5000 |  84580
+buf = require("msgpack-lite").encode(obj);                 |   31300 |  5005 |   6253
+obj = require("msgpack-lite").decode(buf);                 |   15700 |  5007 |   3135
+buf = require("@msgpack/msgpack").encode(obj);             |  103100 |  5003 |  20607
+obj = require("@msgpack/msgpack").decode(buf);             |   59100 |  5004 |  11810
+buf = require("notepack").encode(obj);                     |   65500 |  5007 |  13081
+obj = require("notepack").decode(buf);                     |   33400 |  5009 |   6667
+obj = require("msgpack-unpack").decode(buf);               |    6900 |  5036 |   1370
+require("avsc")...make schema/type...type.toBuffer(obj);   |   89300 |  5005 |  17842
+require("avsc")...make schema/type...type.fromBuffer(obj); |  108400 |  5001 |  21675
 
-All benchmarks were performed on Node 14.8.0 (Windows i7-4770 3.4Ghz).
+All benchmarks were performed on Node 15 / V8 8.6 (Windows i7-4770 3.4Ghz).
 (`avsc` is schema-based and more comparable in style to msgpackr with shared structures).
 
 Here is a benchmark of streaming data (again borrowed from `msgpack-lite`'s benchmarking), where msgpackr is able to take advantage of the structured record extension and really demonstrate its performance capabilities:
@@ -188,7 +189,7 @@ class MyCustomClass {...}
 let extPackr = new Packr();
 addExtension({
 	Class: MyCustomClass,
-	type: 11, // register our own extension code (a type code from 1-100)
+	type: 11, // register your own extension code (a type code from 1-100)
 	pack(instance) {
 		// define how your custom class should be encoded
 		return extPackr.pack(instance.myData); // return a buffer
