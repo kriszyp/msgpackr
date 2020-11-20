@@ -9,23 +9,26 @@ try {
 	encoder = new TextEncoder()
 } catch (error) {}
 let extensions, extensionClasses
+const hasNodeBuffer = typeof Buffer !== 'undefined'
+const ByteArrayAllocate = hasNodeBuffer ? Buffer.allocUnsafeSlow : Uint8Array
+const ByteArray = hasNodeBuffer ? Buffer : Uint8Array
+let target
+let targetView
+let position = 0
+let safeEnd
 const RECORD_SYMBOL = Symbol('record-id')
 class Packr extends Unpackr {
 	constructor(options) {
 		super(options)
 		this.offset = 0
-		let target = new ByteArrayAllocate(8192) // as you might expect, allocUnsafeSlow is the fastest and safest way to allocate memory
-		let targetView = new DataView(target.buffer, 0, 8192)
 		let typeBuffer
-		let position = 0
 		let start
-		let safeEnd
 		let sharedStructures
 		let hasSharedUpdate
 		let structures
 		let referenceMap
 		let lastSharedStructuresLength = 0
-		let encodeUtf8 = target.utf8Write ? function(string, position, maxBytes) {
+		let encodeUtf8 = ByteArray.prototype.utf8Write ? function(string, position, maxBytes) {
 			return target.utf8Write(string, position, maxBytes)
 		} : (encoder && encoder.encodeInto) ?
 			function(string, position) {
@@ -47,7 +50,11 @@ class Packr extends Unpackr {
 		}
 
 		this.pack = function(value) {
-			position = packr.offset
+			if (!target) {
+				target = new ByteArrayAllocate(8192)
+				targetView = new DataView(target.buffer, 0, 8192)
+				position = 0
+			}
 			safeEnd = target.length - 10
 			if (safeEnd - position < 0x800) {
 				// don't start too close to the end, 
@@ -108,7 +115,7 @@ class Packr extends Unpackr {
 				if (sharedStructures) {
 					if (serializationsSinceTransitionRebuild < 10)
 						serializationsSinceTransitionRebuild++
-					if (transitionsCount > 5000) {
+					if (transitionsCount > 10000) {
 						// force a rebuild occasionally after a lot of transitions so it can get cleaned up
 						sharedStructures.transitions = null
 						serializationsSinceTransitionRebuild = 0
@@ -326,14 +333,32 @@ class Packr extends Unpackr {
 							let extensionClass = extensionClasses[i]
 							if (value instanceof extensionClass) {
 								let extension = extensions[i]
-								let result = extension.pack.call(this, value, (size) => {
-									position += size
-									if (position > safeEnd)
-										makeRoom(position)
-									return {
-										target, targetView, position: position - size
+								let currentTarget = target
+								let currentTargetView = targetView
+								let currentPosition = position
+								target = null
+								let result
+								try {
+									result = extension.pack.call(this, value, (size) => {
+										// restore target and use it
+										target = currentTarget
+										currentTarget = null
+										position += size
+										if (position > safeEnd)
+											makeRoom(position)
+										return {
+											target, targetView, position: position - size
+										}
+									}, pack)
+								} finally {
+									// restore current target information (unless already restored)
+									if (currentTarget) {
+										target = currentTarget
+										targetView = currentTargetView
+										position = currentPosition
+										safeEnd = target.length - 10
 									}
-								}, pack)
+								}
 								if (result) {
 									position = writeExtensionData(result, target, position, extension.type)
 								}
@@ -441,13 +466,14 @@ class Packr extends Unpackr {
 		}*/
 		(object) => {
 			let keys = Object.keys(object)
-			let nextTransition, hasNewTransition, transition = structures.transitions || (structures.transitions = Object.create(null))
+			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null))
+			let newTransitions = 0
 			for (let i =0, l = keys.length; i < l; i++) {
 				let key = keys[i]
 				nextTransition = transition[key]
 				if (!nextTransition) {
 					nextTransition = transition[key] = Object.create(null)
-					hasNewTransition = true
+					newTransitions++
 				}
 				transition = nextTransition
 			}
@@ -472,8 +498,8 @@ class Packr extends Unpackr {
 					target[position++] = 0xd4 // fixext 1
 					target[position++] = 0x72 // "r" record defintion extension type
 					target[position++] = recordId
-					if (hasNewTransition)
-						transitionsCount += serializationsSinceTransitionRebuild
+					if (newTransitions)
+						transitionsCount += serializationsSinceTransitionRebuild * newTransitions
 					// record the removal of the id, we can maintain our shared structure
 					if (recordIdsToRemove.length >= 0x40 - maxSharedStructures)
 						recordIdsToRemove.shift()[RECORD_SYMBOL] = 0 // we are cycling back through, and have to remove old ones
@@ -509,9 +535,6 @@ class Packr extends Unpackr {
 }
 exports.Packr = Packr
 
-const hasNodeBuffer = typeof Buffer !== 'undefined'
-const ByteArrayAllocate = hasNodeBuffer ? Buffer.allocUnsafeSlow : Uint8Array
-const ByteArray = hasNodeBuffer ? Buffer : Uint8Array
 function copyBinary(source, target, targetOffset, offset, endOffset) {
 	while (offset < endOffset) {
 		target[targetOffset++] = source[offset++]
