@@ -1,15 +1,20 @@
 "use strict"
-let Decoder = require('./unencode').Decoder
+let decoderModule = require('./decode')
+let Decoder = decoderModule.Decoder
+let mult10 = decoderModule.mult10
+let C1Type = decoderModule.C1Type
+const typedArrays = decoderModule.typedArrays
 let encoder
 try {
 	encoder = new TextEncoder()
 } catch (error) {}
+let extensions, extensionClasses
 const RECORD_SYMBOL = Symbol('record-id')
 class Encoder extends Decoder {
 	constructor(options) {
 		super(options)
 		this.offset = 0
-		let target = new ByteArray(8192) // as you might expect, allocUnsafeSlow is the fastest and safest way to allocate memory
+		let target = new ByteArrayAllocate(8192) // as you might expect, allocUnsafeSlow is the fastest and safest way to allocate memory
 		let targetView = new DataView(target.buffer, 0, 8192)
 		let typeBuffer
 		let position = 0
@@ -18,11 +23,11 @@ class Encoder extends Decoder {
 		let sharedStructures
 		let hasSharedUpdate
 		let structures
-		let types
+		let referenceMap
 		let lastSharedStructuresLength = 0
 		let encodeUtf8 = target.utf8Write ? function(string, position, maxBytes) {
 			return target.utf8Write(string, position, maxBytes)
-		} : encoder.encodeInto ?
+		} : (encoder && encoder.encodeInto) ?
 			function(string, position) {
 				return encoder.encodeInto(string, target.subarray(position)).written
 			} : false
@@ -46,14 +51,17 @@ class Encoder extends Decoder {
 			safeEnd = target.length - 10
 			if (safeEnd - position < 0x800) {
 				// don't start too close to the end, 
-				target = new ByteArray(target.length)
+				target = new ByteArrayAllocate(target.length)
 				targetView = new DataView(target.buffer, 0, target.length)
 				safeEnd = target.length - 10
 				position = 0
 			}
 			start = position
+			referenceMap = encoder.structuredClone ? new Map() : null
 			sharedStructures = encoder.structures
 			if (sharedStructures) {
+				if (sharedStructures.uninitialized)
+					packr.structures = sharedStructures = packr.getStructures()
 				let sharedStructuresLength = sharedStructures.length
 				if (sharedStructuresLength >  maxSharedStructures && !isSequential)
 					sharedStructuresLength = maxSharedStructures
@@ -62,6 +70,8 @@ class Encoder extends Decoder {
 					sharedStructures.transitions = Object.create(null)
 					for (let i = 0; i < sharedStructuresLength; i++) {
 						let keys = sharedStructures[i]
+						if (!keys)
+							continue
 						let nextTransition, transition = sharedStructures.transitions
 						for (let i =0, l = keys.length; i < l; i++) {
 							let key = keys[i]
@@ -84,6 +94,15 @@ class Encoder extends Decoder {
 			try {
 				encode(value)
 				encoder.offset = position // update the offset so next serialization doesn't write over our buffer, but can continue writing to same buffer sequentially
+				if (referenceMap && referenceMap.idsToInsert) {
+					position += referenceMap.idsToInsert.length * 6
+					if (position > safeEnd)
+						makeRoom(position)
+					encoder.offset = position
+					let serialized = insertIds(target.subarray(start, position), referenceMap.idsToInsert)
+					referenceMap = null
+					return serialized
+				}
 				return target.subarray(start, position) // position can change if we call encode again in saveStructures, so we get the buffer now
 			} finally {
 				if (sharedStructures) {
@@ -195,46 +214,56 @@ class Encoder extends Decoder {
 				}
 				position += length
 			} else if (type === 'number') {
-				if (value >> 0 == value) {// integer, 32-bit or less
-					if (value >= 0) {
-						// positive uint
-						if (value < 0x18) {
-							target[position++] = value
-						} else if (value < 0x100) {
-							target[position++] = 0x18
-							target[position++] = value
-						} else if (value < 0x10000) {
-							target[position++] = 0x19
-							target[position++] = value >> 8
-							target[position++] = value & 0xff
-						} else {
-							target[position++] = 0x1a
-							targetView.setUint32(position, value)
-							position += 4
-						}
+
+				if (value >>> 0 === value) {// positive integer, 32-bit or less
+					// positive uint
+					if (value < 0x18) {
+						target[position++] = value
+					} else if (value < 0x100) {
+						target[position++] = 0x18
+						target[position++] = value
+					} else if (value < 0x10000) {
+						target[position++] = 0x19
+						target[position++] = value >> 8
+						target[position++] = value & 0xff
 					} else {
-						// negative int
-						if (value >= -0x18) {
-							target[position++] = 0x38 + value
-						} else if (value >= -0x100) {
-							target[position++] = 0x38
-							target[position++] = value + 0x100
-						} else if (value >= -0x10000) {
-							target[position++] = 0x39
-							targetView.setUint16(position, -value)
-							position += 2
-						} else {
-							target[position++] = 0x3a
-							targetView.setUint32(position, -value)
-							position += 4
-						}
+						target[position++] = 0x1a
+						targetView.setUint32(position, value)
+						position += 4
+					}
+				} else if (value >> 0 === value) { // negative integer
+					if (value >= -0x18) {
+						target[position++] = 0x38 + value
+					} else if (value >= -0x100) {
+						target[position++] = 0x38
+						target[position++] = value + 0x100
+					} else if (value >= -0x10000) {
+						target[position++] = 0x39
+						targetView.setUint16(position, -value)
+						position += 2
+					} else {
+						target[position++] = 0x3a
+						targetView.setUint32(position, -value)
+						position += 4
 					}
 				} else {
-					// very difficult to tell if float is sufficient, just use double for now
+					let useFloat32
+					if ((useFloat32 = this.useFloat32) > 0 && value < 0x100000000 && value >= -0x80000000) {
+						target[position++] = 0xfa
+						targetView.setFloat32(position, value)
+						let xShifted
+						if (useFloat32 < 4 ||
+							// this checks for  rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
+								((xShifted = value * mult10[((target[position] & 0x7f) << 1) | (target[position + 1] >> 7)]) >> 0) === xShifted) {
+							position += 4
+							return
+						} else
+							position-- // move back into position for writing a double
+					}
 					target[position++] = 0xfb
 					targetView.setFloat64(position, value)
 					/*if (!target[position[4] && !target[position[5] && !target[position[6] && !target[position[7] && !(target[0] & 0x78) < ) {
-						// something like this can be represented as a float
+						// something like this can be represented as a float with binary rounding
 					}*/
 					position += 8
 				}
@@ -242,6 +271,21 @@ class Encoder extends Decoder {
 				if (!value)
 					target[position++] = 0xf6
 				else {
+					if (referenceMap) {
+						let referee = referenceMap.get(value)
+						if (referee) {
+							if (!referee.id) {
+								let idsToInsert = referenceMap.idsToInsert || (referenceMap.idsToInsert = [])
+								referee.id = idsToInsert.push(referee)
+							}
+							target[position++] = 0xd6 // fixext 4
+							target[position++] = 0x70 // "p" for pointer
+							targetView.setUint32(position, referee.id)
+							position += 4
+							return
+						} else 
+							referenceMap.set(value, { offset: position - start })
+					}
 					let constructor = value.constructor
 					if (constructor === Object) {
 						writeObject(value, true)
@@ -284,35 +328,26 @@ class Encoder extends Decoder {
 							encode(key)
 							encode(entryValue)
 						}
-					} else if (constructor === Date) {
-						// using the 32 timestamp for now, TODO: implement support for 64-bit and 128-bit
-						length = value.getTime() / 1000
-						target[position++] = 0xd6
-						target[position++] = 0xff
-						targetView.setUint32(position, length)
-						position += 4
-					} else if (constructor === Buffer) {
-						length = value.length
-						if (length < 0x100) {
-							target[position++] = 0x58
-							target[position++] = length
-						} else if (length < 0x10000) {
-							target[position++] = 0x59
-							target[position++] = length >> 8
-							target[position++] = length & 0xff
-						} else {
-							target[position++] = 0x5a
-							targetView.setUint32(position, length)
-							position += 4
-						}
-						if (position + length > safeEnd)
-							makeRoom(position + length)
-						if (value.copy)
-							value.copy(target, position)
-						else
-							copyBinary(value, target, position, 0, value.length)
-						position += length
 					} else {	
+						for (let i = 0, l = extensions.length; i < l; i++) {
+							let extensionClass = extensionClasses[i]
+							if (value instanceof extensionClass) {
+								let extension = extensions[i]
+								let result = extension.pack.call(this, value, (size) => {
+									position += size
+									if (position > safeEnd)
+										makeRoom(position)
+									return {
+										target, targetView, position: position - size
+									}
+								}, pack)
+								if (result) {
+									position = writeExtensionData(result, target, position, extension.type)
+								}
+								return
+							}
+						}
+						// no extension found, write as object
 						writeObject(value, false)
 					}
 				}
@@ -333,7 +368,27 @@ class Encoder extends Decoder {
 			}
 		}
 
-		const writeObject = this.objectsAsMaps ? (object, safePrototype) => {
+		const writeObject = this.useRecords === false ? this.variableMapSize ? (object) => {
+			let keys = Object.keys(object)
+			let length = keys.length
+			if (length < 0x10) {
+				target[position++] = 0x80 | length
+			} else if (length < 0x10000) {
+				target[position++] = 0xde
+				target[position++] = length >> 8
+				target[position++] = length & 0xff
+			} else {
+				target[position++] = 0xdf
+				targetView.setUint32(position, length)
+				position += 4
+			}
+			let key
+			for (let i = 0; i < length; i++) {
+				pack(key = keys[i])
+				pack(object[key])
+			}
+		} :
+		(object, safePrototype) => {
 			target[position++] = 0xde // always use map 16, so we can preallocate and set the length afterwards
 			let objectOffset = position - start
 			position += 2
@@ -348,6 +403,7 @@ class Encoder extends Decoder {
 			target[objectOffset++ + start] = size >> 8
 			target[objectOffset + start] = size & 0xff
 		} :
+
 	/*	sharedStructures ?  // For highly stable structures, using for-in can a little bit faster
 		(object, safePrototype) => {
 			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null))
@@ -436,9 +492,8 @@ class Encoder extends Decoder {
 		}
 		const makeRoom = (end) => {
 			let newSize = ((Math.max((end - start) << 2, target.length - 1) >> 12) + 1) << 12
-			let newBuffer = new ByteArray(newSize)
+			let newBuffer = new ByteArrayAllocate(newSize)
 			targetView = new DataView(newBuffer.buffer, 0, newSize)
-			target.copy(newBuffer, 0, start, end)
 			if (target.copy)
 				target.copy(newBuffer, 0, start, end)
 			else
@@ -449,6 +504,9 @@ class Encoder extends Decoder {
 			return target = newBuffer
 		}
 	}
+	encode(value) {
+		return this.pack(value)
+	}
 	resetMemory() {
 		// this means we are finished using our local buffer and we can write over it safely
 		this.offset = 0
@@ -456,9 +514,213 @@ class Encoder extends Decoder {
 }
 exports.Encoder = Encoder
 
-let ByteArray = typeof window == 'undefined' ? Buffer.allocUnsafeSlow : Uint8Array
+const hasNodeBuffer = typeof Buffer !== 'undefined'
+const ByteArrayAllocate = hasNodeBuffer ? Buffer.allocUnsafeSlow : Uint8Array
+const ByteArray = hasNodeBuffer ? Buffer : Uint8Array
 function copyBinary(source, target, targetOffset, offset, endOffset) {
 	while (offset < endOffset) {
 		target[targetOffset++] = source[offset++]
 	}
+}
+
+extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/, C1Type ]
+extensions = [{
+	pack(date, allocateForWrite) {
+		let seconds = date.getTime() / 1000
+		if ((this.useTimestamp32 || date.getMilliseconds() === 0) && seconds >= 0 && seconds < 0x100000000) {
+			// Timestamp 32
+			let { target, targetView, position} = allocateForWrite(6)
+			target[position++] = 0xd6
+			target[position++] = 0xff
+			targetView.setUint32(position, seconds)
+		} else if (seconds > 0 && seconds < 0x400000000) {
+			// Timestamp 64
+			let { target, targetView, position} = allocateForWrite(10)
+			target[position++] = 0xd7
+			target[position++] = 0xff
+			targetView.setUint32(position, date.getMilliseconds() * 4000000 + ((seconds / 1000 / 0x100000000) >> 0))
+			targetView.setUint32(position + 4, seconds)
+		} else {
+			// Timestamp 96
+			let { target, targetView, position} = allocateForWrite(15)
+			target[position++] = 0xc7
+			target[position++] = 12
+			target[position++] = 0xff
+			targetView.setUint32(position, date.getMilliseconds() * 1000000)
+			targetView.setBigInt64(position + 4, BigInt(Math.floor(seconds)))
+		}
+	}
+}, {
+	pack(set, allocateForWrite, pack) {
+		let array = Array.from(set)
+		if (this.structuredClone) {
+			let { target, position} = allocateForWrite(3)
+			target[position++] = 0xd4
+			target[position++] = 0x73 // 's' for Set
+			target[position++] = 0
+		}
+		pack(array)
+	}
+}, {
+	pack(error, allocateForWrite, pack) {
+		if (this.structuredClone) {
+			let { target, position} = allocateForWrite(3)
+			target[position++] = 0xd4
+			target[position++] = 0x65 // 'e' for error
+			target[position++] = 0
+		}
+		pack([ error.name, error.message ])
+	}
+}, {
+	pack(regex, allocateForWrite, pack) {
+		if (this.structuredClone) {
+			let { target, position} = allocateForWrite(3)
+			target[position++] = 0xd4
+			target[position++] = 0x78 // 'x' for regeXp
+			target[position++] = 0
+		}
+		pack([ regex.source, regex.flags ])
+	}
+}, {
+	pack(arrayBuffer, allocateForWrite) {
+		if (this.structuredClone)
+			writeExtBuffer(arrayBuffer, 0x10, allocateForWrite)
+		else
+			writeBuffer(hasNodeBuffer ? Buffer.from(arrayBuffer) : new Uint8Array(arrayBuffer), allocateForWrite)
+	}
+}, {
+	pack(typedArray, allocateForWrite) {
+		let constructor = typedArray.constructor
+		if (constructor !== ByteArray && this.structuredClone)
+			writeExtBuffer(typedArray.buffer, typedArrays.indexOf(constructor.name), allocateForWrite)
+		else
+			writeBuffer(typedArray, allocateForWrite)
+	}
+}, {
+	pack(c1, allocateForWrite) { // specific 0xC1 object
+		let { target, position} = allocateForWrite(1)
+		target[position] = 0xc1
+	}
+}]
+
+function writeExtBuffer(buffer, type, allocateForWrite) {
+	let length = buffer.byteLength
+	let { target, position, targetView } = allocateForWrite(7 + length)
+	/*if (length < 0x100) {
+		target[position++] = 0xc7
+		target[position++] = length
+	} else if (length < 0x10000) {
+		target[position++] = 0xc8
+		target[position++] = length >> 8
+		target[position++] = length & 0xff
+	} else {*/
+		target[position++] = 0xc9
+		targetView.setUint32(position, length + 1) // plus one for the type byte
+		position += 4
+	//}
+	target[position++] = 0x74 // "t" for typed array
+	target[position++] = type
+	if (hasNodeBuffer)
+		Buffer.from(buffer).copy(target, position)
+	else
+		copyBinary(new Uint8Array(buffer), target, position, 0, length)
+}
+function writeBuffer(buffer, allocateForWrite) {
+	let length = buffer.byteLength
+	var target, position
+	if (length < 0x100) {
+		var { target, position } = allocateForWrite(length + 2)
+		target[position++] = 0x58
+		target[position++] = length
+	} else if (length < 0x10000) {
+		var { target, position } = allocateForWrite(length + 3)
+		target[position++] = 0x59
+		target[position++] = length >> 8
+		target[position++] = length & 0xff
+	} else {
+		var { target, position, targetView } = allocateForWrite(length + 5)
+		target[position++] = 0x5a
+		targetView.setUint32(position, length)
+		position += 4
+	}
+	if (buffer.copy)
+		buffer.copy(target, position)
+	else
+		copyBinary(buffer, target, position, 0, length)
+}
+
+function writeExtensionData(result, target, position, type) {
+	let length = result.length
+	switch (length) {
+		case 1:
+			target[position++] = 0xd4
+			break
+		case 2:
+			target[position++] = 0xd5
+			break
+		case 4:
+			target[position++] = 0xd6
+			break
+		case 8:
+			target[position++] = 0xd7
+			break
+		case 16:
+			target[position++] = 0xd8
+			break
+		default:
+			if (length < 0x100) {
+				target[position++] = 0xc7
+				target[position++] = length
+			} else if (length < 0x10000) {
+				target[position++] = 0xc8
+				target[position++] = length << 8
+				target[position++] = length & 0xff
+			} else {
+				target[position++] = 0xc9
+				target[position++] = length << 24
+				target[position++] = (length << 16) & 0xff
+				target[position++] = (length << 8) & 0xff
+				target[position++] = length & 0xff
+			}
+	}
+	target[position++] = type
+	if (result.copy)
+		result.copy(target, position)
+	else
+		copyBinary(result, target, position, 0, length)
+	position += length
+	return position
+}
+
+function insertIds(serialized, idsToInsert) {
+	// insert the ids that need to be referenced for structured clones
+	let nextId
+	let distanceToMove = idsToInsert.length * 6
+	let lastEnd = serialized.length - distanceToMove
+	idsToInsert.sort((a, b) => a.offset > b.offset ? 1 : -1)
+	while (nextId = idsToInsert.pop()) {
+		let offset = nextId.offset
+		let id = nextId.id
+		serialized.copyWithin(offset + distanceToMove, offset, lastEnd)
+		distanceToMove -= 6
+		let position = offset + distanceToMove
+		serialized[position++] = 0xd6
+		serialized[position++] = 0x69 // 'i'
+		serialized[position++] = id << 24
+		serialized[position++] = (id << 16) & 0xff
+		serialized[position++] = (id << 8) & 0xff
+		serialized[position++] = id & 0xff
+		lastEnd = offset
+	}
+	return serialized
+}
+
+exports.addExtension = function(extension) {
+	if (extension.Class) {
+		if (!extension.pack)
+			throw new Error('Extension has no pack function')
+		extensionClasses.unshift(extension.Class)
+		extensions.unshift(extension)
+	}
+	unpackModule.addExtension(extension)
 }

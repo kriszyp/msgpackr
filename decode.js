@@ -3,7 +3,6 @@ let decoder
 try {
 	decoder = new TextDecoder()
 } catch(error) {}
-let extractStrings
 let src
 let srcEnd
 let position = 0
@@ -15,28 +14,35 @@ let currentDecoder = {}
 let srcString
 let srcStringStart = 0
 let srcStringEnd = 0
+let referenceMap
 let currentExtensions = []
 let dataView
-let defaultOptions = { objectsAsMaps: true }
-// the registration of the record definition extension (as "r")
-const recordDefinition = currentExtensions[0x72] = (id) => {
-	let structure = currentStructures[id & 0x3f] = read()
-	structure.read = createStructureReader(structure)
-	return structure.read()
+let defaultOptions = {
+	useRecords: false,
+	mapsAsObjects: true
 }
-currentExtensions[0] = (data) => {} // notepack defines extension 0 to mean undefined, so use that as the default here
-currentExtensions[0xd6] = (data) => {
-	// 32-bit date extension
-	return new Date(((data[0] << 24) + (data[1] << 16) + (data[2] << 8) + data[3]) * 1000)
+class C1Type {}
+const C1 = new C1Type()
+C1.name = 'MessagePack 0xC1'
 
-} // notepack defines extension 0 to mean undefined, so use that as the default here
-// registration of bulk record definition?
-// currentExtensions[0x52] = () =>
 class Decoder {
 	constructor(options) {
+		if (options) {
+			if (options.useRecords === false && options.mapsAsObjects === undefined)
+				options.mapsAsObjects = true
+			if (options.getStructures && !options.structures)
+				(options.structures = []).uninitialized = true // this is what we use to denote an uninitialized structures
+		}
 		Object.assign(this, options)
 	}
-	decode(source, end) {
+	decode(source, end, continueReading) {
+		if (src) {
+			// re-entrant execution, save the state and restore it after we do this unpack
+			return saveState(() => {
+				src = null
+				return this ? this.decode(source, end, continueReading) : Decoder.prototype.decode.call(defaultOptions, source, end, continueReading)
+			})
+		}
 		srcEnd = end > -1 ? end : source.length
 		position = 0
 		stringPosition = 0
@@ -47,27 +53,37 @@ class Decoder {
 		// this provides cached access to the data view for a buffer if it is getting reused, which is a recommend
 		// technique for getting data from a database where it can be copied into an existing buffer instead of creating
 		// new ones
-		dataView = source.dataView || (new DataView(source.buffer, source.byteOffset, source.byteLength))
-		let value
+		dataView = source.dataView || (source.dataView = new DataView(source.buffer, source.byteOffset, source.byteLength))
 		if (this) {
 			currentDecoder = this
 			if (this.structures) {
 				currentStructures = this.structures
-				value = read()
-				if (position >= srcEnd) {
-					// finished reading this source, cleanup references
-					currentStructures = null
-					src = null
+				try {
+					return read()
+				} finally {
+					if (position >= srcEnd || !continueReading) {
+						// finished reading this source, cleanup references
+						currentStructures = null
+						src = null
+						if (referenceMap)
+							referenceMap = null
+					}
 				}
-				return value
 			} else if (!currentStructures || currentStructures.length > 0) {
 				currentStructures = []
 			}
-		} else
+		} else {
 			currentDecoder = defaultOptions
-		value = read()
-		src = null
-		return value
+			if (!currentStructures || currentStructures.length > 0)
+				currentStructures = []
+		}
+		try {
+			return read()
+		} finally {
+			src = null
+			if (referenceMap)
+				referenceMap = null
+		}
 	}
 }
 let currentStructures
@@ -90,9 +106,15 @@ function read() {
 						structure.read = createStructureReader(structure)
 					return structure.read()
 				} else if (currentDecoder.getStructures) {
-					// we have to preserve our state anytime we provide a means for external code to re-execute decode
-					let updatedStructures = saveState(() => currentDecoder.getStructures()) || []
-					currentStructures.splice.apply(currentStructures, [0, updatedStructures.length].concat(updatedStructures))
+					let updatedStructures = saveState(() => {
+						// save the state in case getStructures modifies our buffer
+						src = null
+						return currentDecoder.getStructures()
+					})
+					if (currentStructures === true)
+						currentDecoder.structures = currentStructures = updatedStructures
+					else
+						currentStructures.splice.apply(currentStructures, [0, updatedStructures.length].concat(updatedStructures))
 					structure = currentStructures[token & 0x3f]
 					if (structure) {
 						if (!structure.read)
@@ -106,7 +128,7 @@ function read() {
 		} else if (token < 0x90) {
 			// map
 			token -= 0x80
-			if (currentDecoder.objectsAsMaps) {
+			if (currentDecoder.mapsAsObjects) {
 				let object = {}
 				for (let i = 0; i < token; i++) {
 					object[read()] = read()
@@ -144,7 +166,7 @@ function read() {
 		let value
 		switch (token) {
 			case 0xc0: return null
-			case 0xc1: return; // "never-used", just return undefined for now
+			case 0xc1: return C1; // "never-used", return special object to denote that
 			case 0xc2: return false
 			case 0xc3: return true
 			case 0xc4:
@@ -175,6 +197,12 @@ function read() {
 				return readExt(value)
 			case 0xca:
 				value = dataView.getFloat32(position)
+				if (currentUnpackr.useFloat32 > 2) {
+					// this does rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
+					let multiplier = mult10[((src[position] & 0x7f) << 1) | (src[position + 1] >> 7)]
+					position += 4
+					return ((multiplier * value + (value > 0 ? 0.5 : -0.5)) >> 0) / multiplier
+				}
 				position += 4
 				return value
 			case 0xcb:
@@ -193,7 +221,10 @@ function read() {
 				position += 4
 				return value
 			case 0xcf:
-				value = dataView.getBigUInt64(position)
+				if (currentUnpackr.uint64AsNumber)
+					return src[position++] * 0x100000000000000 + src[position++] * 0x1000000000000 + src[position++] * 0x10000000000 + src[position++] * 0x100000000 +
+						src[position++] * 0x1000000 + (src[position++] << 16) + (src[position++] << 8) + src[position++]
+				value = dataView.getBigUint64(position)
 				position += 8
 				return value
 
@@ -220,25 +251,21 @@ function read() {
 					return recordDefinition(src[position++])
 				} else {
 					if (currentExtensions[value])
-						return currentExtensions[value](src[position++])
+						return currentExtensions[value]([src[position++]])
 					else
 						throw new Error('Unknown extension ' + value)
 				}
 			case 0xd5:
 				// fixext 2
-				value = src[position++]
 				return readExt(2)
 			case 0xd6:
 				// fixext 4
-				value = src[position++]
 				return readExt(4)
 			case 0xd7:
 				// fixext 8
-				value = src[position++]
 				return readExt(8)
 			case 0xd8:
 				// fixext 16
-				value = src[position++]
 				return readExt(16)
 			case 0xd9:
 			// str 8
@@ -341,11 +368,16 @@ exports.setExtractor = (extractStrings) => {
 	}
 }
 function readStringJS(length) {
+	let result
+	if (length < 16) {
+		if (result = shortStringInJS(length))
+			return result
+	}
 	if (length > 64 && decoder)
 		return decoder.decode(src.subarray(position, position += length))
 	const end = position + length
 	const units = []
-	let result = ''
+	result = ''
 	while (position < end) {
 		const byte1 = src[position++]
 		if ((byte1 & 0x80) === 0) {
@@ -415,7 +447,7 @@ function readArray(length) {
 }
 
 function readMap(length) {
-	if (currentDecoder.objectsAsMaps) {
+	if (currentDecoder.mapsAsObjects) {
 		let object = {}
 		for (let i = 0; i < length; i++) {
 			object[read()] = read()
@@ -585,16 +617,98 @@ function shortStringInJS(length) {
 }
 
 function readBin(length) {
-	return src.slice(position, position += length)
+	return currentUnpackr.copyBuffers ?
+		// specifically use the copying slice (not the node one)
+		Uint8Array.prototype.slice.call(src, position, position += length) :
+		src.subarray(position, position += length)
 }
 function readExt(length) {
 	let type = src[position++]
 	if (currentExtensions[type]) {
-		return currentExtensions[type](src.slice(position, position += length))
+		return currentExtensions[type](src.subarray(position, position += length))
 	}
 	else
 		throw new Error('Unknown extension type ' + type)
 }
+// the registration of the record definition extension (as "r")
+const recordDefinition = (id) => {
+	let structure = currentStructures[id & 0x3f] = read()
+	structure.read = createStructureReader(structure)
+	return structure.read()
+}
+let glbl = typeof window == 'object' ? window : global
+currentExtensions[0] = (data) => {} // notepack defines extension 0 to mean undefined, so use that as the default here
+
+currentExtensions[0x65] = () => {
+	let data = read()
+	return (glbl[data[0]] || Error)(data[1])
+}
+
+currentExtensions[0x69] = (data) => {
+	// id extension (for structured clones)
+	let id = dataView.getUint32(position - 4)
+	if (!referenceMap)
+		referenceMap = new Map()
+	let token = src[position]
+	let target
+	// TODO: handle Maps, Sets, and other types that can cycle; this is complicated, because you potentially need to read
+	// ahead past references to record structure definitions
+	if (token >= 0x90 && token < 0xa0 || token == 0xdc || token == 0xdd)
+		target = []
+	else
+		target = {}
+
+	let refEntry = { target } // a placeholder object
+	referenceMap.set(id, refEntry)
+	let targetProperties = read() // read the next value as the target object to id
+	if (refEntry.used) // there is a cycle, so we have to assign properties to original target
+		return Object.assign(target, targetProperties)
+	refEntry.target = targetProperties // the placeholder wasn't used, replace with the deserialized one
+	return targetProperties // no cycle, can just use the returned read object
+}
+
+currentExtensions[0x70] = (data) => {
+	// pointer extension (for structured clones)
+	let id = dataView.getUint32(position - 4)
+	let refEntry = referenceMap.get(id)
+	refEntry.used = true
+	return refEntry.target
+}
+
+currentExtensions[0x73] = () => new Set(read())
+
+const typedArrays = ['Int8','Uint8	','Uint8Clamped','Int16','Uint16','Int32','Uint32','Float32','Float64','BigInt64','BigUint64'].map(type => type + 'Array')
+
+currentExtensions[0x74] = (data) => {
+	let typeCode = data[0]
+	let typedArrayName = typedArrays[typeCode]
+	if (!typedArrayName)
+		throw new Error('Could not find typed array for code ' + typeCode)
+	// we have to always slice/copy here to get a new ArrayBuffer that is word/byte aligned
+	return new glbl[typedArrayName](Uint8Array.prototype.slice.call(data, 1).buffer)
+}
+currentExtensions[0x78] = () => {
+	let data = read()
+	return new RegExp(data[0], data[1])
+}
+
+currentExtensions[0xff] = (data) => {
+	// 32-bit date extension
+	if (data.length == 4)
+		return new Date((data[0] * 0x1000000 + (data[1] << 16) + (data[2] << 8) + data[3]) * 1000)
+	else if (data.length == 8)
+		return new Date(
+			((data[0] << 22) + (data[1] << 14) + (data[2] << 6) + (data[3] >> 2)) / 1000000 +
+			((data[3] & 0x3) * 0x100000000 + data[4] * 0x1000000 + (data[5] << 16) + (data[6] << 8) + data[7]) * 1000)
+	else if (data.length == 12)// TODO: Implement support for negative
+		return new Date(
+			((data[0] << 24) + (data[1] << 16) + (data[2] << 8) + data[3]) / 1000000 +
+			(((data[4] & 0x80) ? -0x1000000000000 : 0) + data[6] * 0x10000000000 + data[7] * 0x100000000 + data[8] * 0x1000000 + (data[9] << 16) + (data[10] << 8) + data[11]) * 1000)
+	else
+		throw new Error('Invalid timestamp length')
+} // notepack defines extension 0 to mean undefined, so use that as the default here
+// registration of bulk record definition?
+// currentExtensions[0x52] = () =>
 
 function saveState(callback) {
 	let savedSrcEnd = srcEnd
@@ -604,8 +718,9 @@ function saveState(callback) {
 	let savedSrcStringEnd = srcStringEnd
 	let savedSrcString = srcString
 	let savedStrings = strings
+	let savedReferenceMap = referenceMap
 	// TODO: We may need to revisit this if we do more external calls to user code (since it could be slow)
-	let savedSrc = Buffer.from(src.slice(0, srcEnd)) // we copy the data in case it changes while external data is processed
+	let savedSrc = new Uint8Array(src.slice(0, srcEnd)) // we copy the data in case it changes while external data is processed
 	let savedStructures = currentStructures
 	let savedPackr = currentDecoder
 	let value = callback()
@@ -616,9 +731,26 @@ function saveState(callback) {
 	srcStringEnd = savedSrcStringEnd
 	srcString = savedSrcString
 	strings = savedStrings
+	referenceMap = savedReferenceMap
 	src = savedSrc
 	currentStructures = savedStructures
-	currentDecoder = savedPackr
-	dataView = dataView = new DataView(src.buffer, src.byteOffset, src.byteLength)
+	currentDecoder = savedDecoder
+	dataView = new DataView(src.buffer, src.byteOffset, src.byteLength)
 	return value
 }
+exports.clearSource = function() {
+	src = null
+}
+
+exports.addExtension = function(extension) {
+	currentExtensions[extension.type] = extension.unpack
+}
+
+let mult10 = new Array(147) // this is a table matching binary exponents to the multiplier to determine significant digit rounding
+for (let i = 0; i < 256; i++) {
+	mult10[i] = +('1e' + Math.floor(45.15 - i * 0.30103))
+}
+exports.mult10 = mult10
+exports.typedArrays = typedArrays
+exports.C1 = C1
+exports.C1Type = C1Type

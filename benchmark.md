@@ -39,40 +39,29 @@ msgpack.Decoder().on("data",ondata).decode(buf); | 1000000 |  2246 | 445235
 These are the benchmarks from notepack package. The larger test data for these benchmarks is very heavily weighted with large binary/buffer data and objects with extreme numbers of keys (much more than I typically see with real-world data, but YMMV):
 
 node ./benchmarks/encode
-+------------------+-------------------+-----------------+----------------+---------------+
-|                  │ tiny              │ small           │ medium         │ large         |
-+------------------+-------------------+-----------------+----------------+---------------+
-| notepack         │ 2,171,621 ops/sec │ 546,905 ops/sec │ 29,578 ops/sec │ 265 ops/sec   |
-+------------------+-------------------+-----------------+----------------+---------------+
-| msgpack-js       │ 967,682 ops/sec   │ 184,455 ops/sec │ 20,556 ops/sec │ 259 ops/sec   |
-+------------------+-------------------+-----------------+----------------+---------------+
-| msgpackr         │ 2,392,826 ops/sec │ 556,915 ops/sec │ 70,573 ops/sec │ 313 ops/sec   |
-+------------------+-------------------+-----------------+----------------+---------------+
-| msgpack-lite     │ 553,143 ops/sec   │ 132,318 ops/sec │ 11,816 ops/sec │ 186 ops/sec   |
-+------------------+-------------------+-----------------+----------------+---------------+
-| @msgpack/msgpack │ 2,157,655 ops/sec │ 573,236 ops/sec │ 25,864 ops/sec │ 90.26 ops/sec |
-+------------------+-------------------+-----------------+----------------+---------------+
+
+library          |   tiny            |  small          | medium         | large
+---------------- | ----------------: | --------------: | ---------------| -------:
+notepack         | 2,171,621 ops/sec | 546,905 ops/sec | 29,578 ops/sec | 265 ops/sec   
+msgpack-js       | 967,682 ops/sec   | 184,455 ops/sec | 20,556 ops/sec | 259 ops/sec   
+msgpackr         | 2,392,826 ops/sec | 556,915 ops/sec | 70,573 ops/sec | 313 ops/sec   
+msgpack-lite     | 553,143 ops/sec   | 132,318 ops/sec | 11,816 ops/sec | 186 ops/sec   
+@msgpack/msgpack | 2,157,655 ops/sec | 573,236 ops/sec | 25,864 ops/sec | 90.26 ops/sec 
 
 
 node ./benchmarks/decode
-+------------------+-------------------+-----------------+-----------------+---------------+
-|                  │ tiny              │ small           │ medium          │ large         |
-+------------------+-------------------+-----------------+-----------------+---------------+
-| notepack         │ 2,220,904 ops/sec │ 560,630 ops/sec │ 28,177 ops/sec  │ 275 ops/sec   |
-+------------------+-------------------+-----------------+-----------------+---------------+
-| msgpack-js       │ 965,719 ops/sec   │ 222,047 ops/sec │ 21,431 ops/sec  │ 257 ops/sec   |
-+------------------+-------------------+-----------------+-----------------+---------------+
-| msgpackr         │ 2,320,046 ops/sec │ 589,167 ops/sec │ 70,299 ops/sec  │ 329 ops/sec   |
-+------------------+-------------------+-----------------+-----------------+---------------+
-| msgpackr records │ 3,750,547 ops/sec │ 912,419 ops/sec │ 136,853 ops/sec │ 733 ops/sec   |
-+------------------+-------------------+-----------------+-----------------+---------------+
-| msgpack-lite     │ 569,222 ops/sec   │ 129,008 ops/sec │ 12,424 ops/sec  │ 180 ops/sec   |
-+------------------+-------------------+-----------------+-----------------+---------------+
-| @msgpack/msgpack │ 2,089,697 ops/sec │ 557,507 ops/sec │ 20,256 ops/sec  │ 85.03 ops/sec |
-+------------------+-------------------+-----------------+-----------------+---------------+
+
+library          |   tiny            |  small          | medium          | large
+---------------- | ----------------: | --------------: | --------------- | -------:
+notepack         | 2,220,904 ops/sec | 560,630 ops/sec | 28,177 ops/sec  | 275 ops/sec   
+msgpack-js       | 965,719 ops/sec   | 222,047 ops/sec | 21,431 ops/sec  | 257 ops/sec   
+msgpackr         | 2,320,046 ops/sec | 589,167 ops/sec | 70,299 ops/sec  | 329 ops/sec   
+msgpackr records | 3,750,547 ops/sec | 912,419 ops/sec | 136,853 ops/sec | 733 ops/sec   
+msgpack-lite     | 569,222 ops/sec   | 129,008 ops/sec | 12,424 ops/sec  | 180 ops/sec   
+@msgpack/msgpack | 2,089,697 ops/sec | 557,507 ops/sec | 20,256 ops/sec  | 85.03 ops/sec 
 
 This was run by adding the msgpackr to the benchmarks for notepack.
 
 All benchmarks were performed on Node 14.8.0 (Windows i7-4770 3.4Ghz). They can be run with:
-npm install --no-save msgpack msgpack-js @msgpack/msgpack msgpack-lite msgpack-js-v5 msgpack5 msgpack-unpack notepack avsc
+npm install --no-save msgpack msgpack-js @msgpack/msgpack msgpack-lite notepack avsc
 node tests/benchmark

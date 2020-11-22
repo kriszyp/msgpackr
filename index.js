@@ -9,6 +9,12 @@ exports.DecoderStream = require('./stream').DecoderStream
 let encoder = new exports.encoder({ objectsAsMaps: true })
 exports.decode = encoder.decode
 exports.encode = encoder.encode
+exports.C1 = decodeModule.C1
+Object.assign(exports, {
+	ALWAYS:1,
+	DECIMAL_ROUND: 3,
+	DECIMAL_FIT: 4
+})
 
 function tryRequire(moduleId) {
 	try {

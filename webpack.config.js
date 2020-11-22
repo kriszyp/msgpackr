@@ -15,4 +15,5 @@ module.exports = {
         minimize: true
     },
     //mode: 'development'
+    mode: 'production'
 };

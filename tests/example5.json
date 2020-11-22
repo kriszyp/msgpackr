@@ -5,7 +5,7 @@
   "littleNum": 3,
   "biggerNum": 32254435,
   "decimal":1.332232,
-  "bigDecimal": 3.5522E102,
+  "bigDecimal": 3.5522E35,
   "negative": -54,
   "aNull": null,
   "more": "another string"

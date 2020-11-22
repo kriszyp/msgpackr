@@ -1,7 +1,7 @@
 "use strict"
 var Transform = require('stream').Transform
 var Encoder = require('./encode').Encoder
-const { read, getPosition, Decoder } = require('./decode')
+const { read, getPosition, Decoder, clearSource } = require('./decode')
 var DEFAULT_OPTIONS = {objectMode: true}
 
 class EncoderStream extends Transform {
@@ -37,21 +37,23 @@ class DecoderStream extends Transform {
 			chunk = Buffer.concat([this.incompleteBuffer, chunk])
 			this.incompleteBuffer = null
 		}
-		let lastStart = 0
+		let position = 0
 		let size = chunk.length
 		try {
-			this.push(this.decoder.decode(chunk))
-			lastStart = getPosition()
-			while (lastStart < size) {
+			this.push(this.decoder.decode(chunk, size, true))
+			position = getPosition()
+			while (position < size) {
 				let value = read()
 				this.push(value)
-				lastStart = getPosition()
+				position = getPosition()
 			}
 		} catch(error) {
 			if (error.incomplete)
-				this.incompleteBuffer = chunk.slice(lastStart)
+				this.incompleteBuffer = chunk.slice(position)
 			else
 				throw error
+		} finally {
+			clearSource()
 		}
 		if (callback) callback()
 	}

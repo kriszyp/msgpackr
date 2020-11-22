@@ -1,11 +1,15 @@
 {
   "name": "cbor-x",
   "author": "Kris Zyp",
-  "version": "0.1.0",
-  "description": "Extremely fast CBOR encoder/decoder with extension for record structures",
+  "version": "0.2.0",
+  "description": "Ultra-fast CBOR implementation with extensions for records and structured cloning",
   "license": "MIT",
+  "types": "./index.d.ts",
   "keywords": [
     "CBOR"
+    "performance",
+    "structured",
+    "clone"
   ],
   "repository": {
     "type": "git",
@@ -15,12 +19,17 @@
     "benchmark": "node ./tests/benchmark.js",
     "test": "./node_modules/.bin/mocha tests/test*.js -u tdd"
   },
+  "type": "commonjs",
+  "module": "./index.mjs",
   "main": "./index.js",
+  "exports": {
+    "import": "./index.mjs",
+    "require": "./index.js"
+  },
   "optionalDependencies": {
-    "msgpackr-extract": "^0.1.1"
+    "msgpackr-extract": "^0.3.4"
   },
   "devDependencies": {
-    "@types/node": "latest",
     "chai": "^4",
     "mocha": "^4",
     "webpack": "^4.44.1",
