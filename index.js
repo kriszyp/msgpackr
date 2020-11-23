@@ -1,12 +1,12 @@
-exports.encoder = require('./encode').encoder
+exports.Encoder = require('./encode').Encoder
 let decodeModule = require('./decode')
 let extractor = tryRequire('msgpackr-extract')
 if (extractor)
 	decodeModule.setExtractor(extractor.extractStrings)
-exports.decoder = decodeModule.decoder
+exports.Decoder = decodeModule.Decoder
 exports.EncoderStream = require('./stream').EncoderStream
 exports.DecoderStream = require('./stream').DecoderStream
-let encoder = new exports.encoder({ objectsAsMaps: true })
+let encoder = new exports.Encoder({ objectsAsMaps: true })
 exports.decode = encoder.decode
 exports.encode = encoder.encode
 exports.C1 = decodeModule.C1

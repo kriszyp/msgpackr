@@ -214,7 +214,6 @@ class Encoder extends Decoder {
 				}
 				position += length
 			} else if (type === 'number') {
-
 				if (value >>> 0 === value) {// positive integer, 32-bit or less
 					// positive uint
 					if (value < 0x18) {
@@ -371,14 +370,17 @@ class Encoder extends Decoder {
 		const writeObject = this.useRecords === false ? this.variableMapSize ? (object) => {
 			let keys = Object.keys(object)
 			let length = keys.length
-			if (length < 0x10) {
-				target[position++] = 0x80 | length
+			if (length < 0x18) {
+				target[position++] = 0xa0 | length
+			} else if (length < 0x100) {
+				target[position++] = 0xb8
+				target[position++] = length
 			} else if (length < 0x10000) {
-				target[position++] = 0xde
+				target[position++] = 0xb9
 				target[position++] = length >> 8
 				target[position++] = length & 0xff
 			} else {
-				target[position++] = 0xdf
+				target[position++] = 0xba
 				targetView.setUint32(position, length)
 				position += 4
 			}
@@ -389,7 +391,7 @@ class Encoder extends Decoder {
 			}
 		} :
 		(object, safePrototype) => {
-			target[position++] = 0xde // always use map 16, so we can preallocate and set the length afterwards
+			target[position++] = 0xb9 // always use map 16, so we can preallocate and set the length afterwards
 			let objectOffset = position - start
 			position += 2
 			let size = 0

@@ -95,12 +95,89 @@ exports.getPosition = () => {
 
 function read() {
 	let token = src[position++]
-	if (token < 0xa0) {
-		if (token < 0x80) {
-			if (token < 0x40)
-				return token
-			else {
-				let structure = currentStructures[token & 0x3f]
+	let majorType = token >> 5
+	token = token & 0x1f
+	if (token > 0x17) {
+		switch (token) {
+			case 0x18:
+				token = src[position++]
+				break
+			case 0x19:
+				token = dataView.getUint16(position)
+				position += 2
+				break
+			case 0x1a:
+				if (majorType == 7) {
+					let result = dataView.getFloat32(position)
+					if (currentDecoder.useFloat32 > 2) {
+						// this does rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
+						let multiplier = mult10[((src[position] & 0x7f) << 1) | (src[position + 1] >> 7)]
+						position += 4
+						return ((multiplier * value + (value > 0 ? 0.5 : -0.5)) >> 0) / multiplier
+					}
+					position += 4
+					return result
+				}
+				token = dataView.getUint32(position)
+				position += 4
+				break
+			case 0x1b:
+				if (majorType == 7) {
+					let result = dataView.getFloat64(position)
+					position += 8
+					return result
+				}
+				if (currentDecoder.uint64AsNumber)
+					return src[position++] * 0x100000000000000 + src[position++] * 0x1000000000000 + src[position++] * 0x10000000000 + src[position++] * 0x100000000 +
+						src[position++] * 0x1000000 + (src[position++] << 16) + (src[position++] << 8) + src[position++]
+				token = dataView.getBigUint64(position)
+				position += 8
+				break
+			default:
+				throw new Error('Unknown token ' + token)
+		}
+	}
+	switch (majorType) {
+		case 0: // positive int
+			return token
+		case 1: // negative int
+			return ~token
+		case 2: // buffer
+			return readBin(token)
+		case 3: // string
+			if (srcStringEnd >= position) {
+				return srcString.slice(position - srcStringStart, (position += token) - srcStringStart)
+			}
+			if (srcStringEnd == 0 && srcEnd < 120 && token < 16) {
+				// for small blocks, avoiding the overhead of the extract call is helpful
+				let string = /*length < 16 ? */shortStringInJS(token)// : longStringInJS(length)
+				if (string != null)
+					return string
+			}
+			return readFixedString(token)
+		case 4: // array
+			let array = new Array(token)
+			for (let i = 0; i < token; i++) {
+				array[i] = read()
+			}
+			return array
+		case 5: // map
+			if (currentDecoder.mapsAsObjects) {
+				let object = {}
+				for (let i = 0; i < token; i++) {
+					object[read()] = read()
+				}
+				return object
+			} else {
+				let map = new Map()
+				for (let i = 0; i < token; i++) {
+					map.set(read(), read())
+				}
+				return map
+			}
+		case 6: // extension
+			if (token >= 0x20) {
+				let structure = currentStructures[token - 0x20]
 				if (structure) {
 					if (!structure.read)
 						structure.read = createStructureReader(structure)
@@ -115,7 +192,7 @@ function read() {
 						currentDecoder.structures = currentStructures = updatedStructures
 					else
 						currentStructures.splice.apply(currentStructures, [0, updatedStructures.length].concat(updatedStructures))
-					structure = currentStructures[token & 0x3f]
+					structure = currentStructures[token - 0x20]
 					if (structure) {
 						if (!structure.read)
 							structure.read = createStructureReader(structure)
@@ -124,129 +201,8 @@ function read() {
 						return token
 				} else
 					return token
-			}
-		} else if (token < 0x90) {
-			// map
-			token -= 0x80
-			if (currentDecoder.mapsAsObjects) {
-				let object = {}
-				for (let i = 0; i < token; i++) {
-					object[read()] = read()
-				}
-				return object
 			} else {
-				let map = new Map()
-				for (let i = 0; i < token; i++) {
-					map.set(read(), read())
-				}
-				return map
-			}
-		} else {
-			token -= 0x90
-			let array = new Array(token)
-			for (let i = 0; i < token; i++) {
-				array[i] = read()
-			}
-			return array
-		}
-	} else if (token < 0xc0) {
-		// fixstr
-		let length = token - 0xa0
-		if (srcStringEnd >= position) {
-			return srcString.slice(position - srcStringStart, (position += length) - srcStringStart)
-		}
-		if (srcStringEnd == 0 && srcEnd < 120 && length < 16) {
-			// for small blocks, avoiding the overhead of the extract call is helpful
-			let string = /*length < 16 ? */shortStringInJS(length)// : longStringInJS(length)
-			if (string != null)
-				return string
-		}
-		return readFixedString(length)
-	} else {
-		let value
-		switch (token) {
-			case 0xc0: return null
-			case 0xc1: return C1; // "never-used", return special object to denote that
-			case 0xc2: return false
-			case 0xc3: return true
-			case 0xc4:
-				// bin 8
-				return readBin(src[position++])
-			case 0xc5:
-				// bin 16
-				value = dataView.getUint16(position)
-				position += 2
-				return readBin(value)
-			case 0xc6:
-				// bin 32
-				value = dataView.getUint32(position)
-				position += 4
-				return readBin(value)
-			case 0xc7:
-				// ext 8
-				return readExt(src[position++])
-			case 0xc8:
-				// ext 16
-				value = dataView.getUint16(position)
-				position += 2
-				return readExt(value)
-			case 0xc9:
-				// ext 32
-				value = dataView.getUint32(position)
-				position += 4
-				return readExt(value)
-			case 0xca:
-				value = dataView.getFloat32(position)
-				if (currentUnpackr.useFloat32 > 2) {
-					// this does rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
-					let multiplier = mult10[((src[position] & 0x7f) << 1) | (src[position + 1] >> 7)]
-					position += 4
-					return ((multiplier * value + (value > 0 ? 0.5 : -0.5)) >> 0) / multiplier
-				}
-				position += 4
-				return value
-			case 0xcb:
-				value = dataView.getFloat64(position)
-				position += 8
-				return value
-			// uint handlers
-			case 0xcc:
-				return src[position++]
-			case 0xcd:
-				value = dataView.getUint16(position)
-				position += 2
-				return value
-			case 0xce:
-				value = dataView.getUint32(position)
-				position += 4
-				return value
-			case 0xcf:
-				if (currentUnpackr.uint64AsNumber)
-					return src[position++] * 0x100000000000000 + src[position++] * 0x1000000000000 + src[position++] * 0x10000000000 + src[position++] * 0x100000000 +
-						src[position++] * 0x1000000 + (src[position++] << 16) + (src[position++] << 8) + src[position++]
-				value = dataView.getBigUint64(position)
-				position += 8
-				return value
-
-			// int handlers
-			case 0xd0:
-				return dataView.getInt8(position++)
-			case 0xd1:
-				value = dataView.getInt16(position)
-				position += 2
-				return value
-			case 0xd2:
-				value = dataView.getInt32(position)
-				position += 4
-				return value
-			case 0xd3:
-				value = dataView.getBigInt64(position)
-				position += 8
-				return value
-
-			case 0xd4:
-				// fixext 1
-				value = src[position++]
+				let value = src[position++]
 				if (value == 0x72) {
 					return recordDefinition(src[position++])
 				} else {
@@ -255,66 +211,27 @@ function read() {
 					else
 						throw new Error('Unknown extension ' + value)
 				}
-			case 0xd5:
-				// fixext 2
-				return readExt(2)
-			case 0xd6:
-				// fixext 4
-				return readExt(4)
-			case 0xd7:
-				// fixext 8
-				return readExt(8)
-			case 0xd8:
-				// fixext 16
-				return readExt(16)
-			case 0xd9:
-			// str 8
-				value = src[position++]
-				if (srcStringEnd >= position) {
-					return srcString.slice(position - srcStringStart, (position += value) - srcStringStart)
-				}
-				return readString8(value)
-			case 0xda:
-			// str 16
-				value = dataView.getUint16(position)
-				position += 2
-				return readString16(value)
-			case 0xdb:
-			// str 32
-				value = dataView.getUint32(position)
-				position += 4
-				return readString32(value)
-			case 0xdc:
-			// array 16
-				value = dataView.getUint16(position)
-				position += 2
-				return readArray(value)
-			case 0xdd:
-			// array 32
-				value = dataView.getUint32(position)
-				position += 4
-				return readArray(value)
-			case 0xde:
-			// map 16
-				value = dataView.getUint16(position)
-				position += 2
-				return readMap(value)
-			case 0xdf:
-			// map 32
-				value = dataView.getUint32(position)
-				position += 4
-				return readMap(value)
-			default: // negative int
-				if (token >= 0xe0)
-					return token - 0x100
-				if (token === undefined) {
-					let error = new Error('Unexpected end of MessagePack data')
-					error.incomplete = true
-					throw error
-				}
-				throw new Error('Unknown MessagePack token ' + token)
 
-		}
+			}
+		case 7: // fixed value
+			switch (token) {
+				case 0x14: return false
+				case 0x15: return true
+				case 0x16: return null
+				case 0x17: return; // undefined
+				// case 0x19: // half-precision float
+				default:
+					throw new Error('Unknown token ' + token)
+			}
+		default: // negative int
+			if (token >= 0xe0)
+				return token - 0x100
+			if (token === undefined) {
+				let error = new Error('Unexpected end of MessagePack data')
+				error.incomplete = true
+				throw error
+			}
+			throw new Error('Unknown MessagePack token ' + token)
 	}
 }
 const validName = /^[a-zA-Z_$][a-zA-Z\d_$]*$/
@@ -342,6 +259,7 @@ let readString16 = readStringJS
 let readString32 = readStringJS
 
 exports.setExtractor = (extractStrings) => {
+	return
 	readFixedString = readString(1)
 	readString8 = readString(2)
 	readString16 = readString(3)
@@ -438,30 +356,6 @@ function readStringJS(length) {
 	}
 	return srcString.slice(start - srcStringStart, end - srcStringStart)
 }*/
-function readArray(length) {
-	let array = new Array(length)
-	for (let i = 0; i < length; i++) {
-		array[i] = read()
-	}
-	return array
-}
-
-function readMap(length) {
-	if (currentDecoder.mapsAsObjects) {
-		let object = {}
-		for (let i = 0; i < length; i++) {
-			object[read()] = read()
-		}
-		return object
-	} else {
-		let map = new Map()
-		for (let i = 0; i < length; i++) {
-			map.set(read(), read())
-		}
-		return map
-	}
-}
-
 let fromCharCode = String.fromCharCode
 function longStringInJS(length) {
 	let start = position
@@ -617,7 +511,7 @@ function shortStringInJS(length) {
 }
 
 function readBin(length) {
-	return currentUnpackr.copyBuffers ?
+	return currentDecoder.copyBuffers ?
 		// specifically use the copying slice (not the node one)
 		Uint8Array.prototype.slice.call(src, position, position += length) :
 		src.subarray(position, position += length)

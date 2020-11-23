@@ -6,7 +6,7 @@
   "license": "MIT",
   "types": "./index.d.ts",
   "keywords": [
-    "CBOR"
+    "CBOR",
     "performance",
     "structured",
     "clone"
@@ -30,6 +30,7 @@
     "msgpackr-extract": "^0.3.4"
   },
   "devDependencies": {
+    "cbor": "^5",
     "chai": "^4",
     "mocha": "^4",
     "webpack": "^4.44.1",

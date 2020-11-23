@@ -9,41 +9,27 @@ function tryRequire(module) {
 }
 if (typeof chai === 'undefined') { chai = require('chai') }
 assert = chai.assert
-if (typeof msgpackr === 'undefined') { msgpackr = require('..') }
-var msgpack_msgpack = tryRequire('@msgpack/msgpack');
-var msgpack_lite = tryRequire('msgpack-lite');
-var unpack = msgpackr.unpack
-var pack = msgpackr.pack
+if (typeof cborX === 'undefined') { cborX = require('..') }
+var cbor_module = tryRequire('cbor');
+var decode = cborX.decode
+var encode = cborX.encode
 
 addCompatibilitySuite = (data) => () => {
-	if (msgpack_msgpack) {
-		test('from @msgpack/msgpack', function(){
-			var serialized = msgpack_msgpack.encode(data)
-			var deserialized = unpack(serialized)
+	if (cbor_module) {
+		test('from cbor', function(){
+			var serialized = cbor_module.encode(data)
+			var deserialized = decode(serialized)
 			assert.deepEqual(deserialized, data)
 		})
 
-		test('to @msgpack/msgpack', function(){
-			var serialized = pack(data)
-			var deserialized = msgpack_msgpack.decode(serialized)
-			assert.deepEqual(deserialized, data)
-		})
-	}
-	if (msgpack_lite) {
-		test('from msgpack-lite', function(){
-			var serialized = msgpack_lite.encode(data)
-			var deserialized = unpack(serialized)
-			assert.deepEqual(deserialized, data)
-		})
-
-		test('to msgpack-lite', function(){
-			var serialized = pack(data)
-			var deserialized = msgpack_lite.decode(serialized)
+		test('to cbor', function(){
+			var serialized = encode(data)
+			var deserialized = cbor_module.decodeFirstSync(serialized)
 			assert.deepEqual(deserialized, data)
 		})
 	}
 }
 
-suite('msgpackr compatibility tests (example)', addCompatibilitySuite(require('./example.json')))
-suite('msgpackr compatibility tests (example4)', addCompatibilitySuite(require('./example4.json')))
-suite('msgpackr compatibility tests (example5)', addCompatibilitySuite(require('./example5.json')))
+suite('cbor-x compatibility tests (example)', addCompatibilitySuite(require('./example.json')))
+suite('cbor-x compatibility tests (example4)', addCompatibilitySuite(require('./example4.json')))
+suite('cbor-x compatibility tests (example5)', addCompatibilitySuite(require('./example5.json')))

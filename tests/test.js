@@ -1,5 +1,5 @@
-//var inspector = require('inspector')
-//inspector.open(9330, null, true)
+var inspector = require('inspector')
+inspector.open(9330, null, true)
 
 function tryRequire(module) {
 	try {
@@ -10,15 +10,15 @@ function tryRequire(module) {
 }
 if (typeof chai === 'undefined') { chai = require('chai') }
 assert = chai.assert
-if (typeof msgpackr === 'undefined') { msgpackr = require('..') }
-var Packr = msgpackr.Packr
-var PackrStream = msgpackr.PackrStream
-var UnpackrStream = msgpackr.UnpackrStream
-var unpack = msgpackr.unpack
-var pack = msgpackr.pack
-var DECIMAL_FIT = msgpackr.DECIMAL_FIT
+if (typeof cborX === 'undefined') { cborX = require('..') }
+var Encoder = cborX.Encoder
+var EncoderStream = cborX.EncoderStream
+var DecoderStream = cborX.DecoderStream
+var decode = cborX.decode
+var encode = cborX.encode
+var DECIMAL_FIT = cborX.DECIMAL_FIT
 
-var addExtension = msgpackr.addExtension
+var addExtension = cborX.addExtension
 
 var zlib = tryRequire('zlib')
 var deflateSync = zlib.deflateSync
@@ -28,7 +28,7 @@ var inflateSync = zlib.brotliDecompressSync
 var constants = zlib.constants
 import('./test.mjs')
 try {
-//	var { decode, encode } = require('msgpack-lite')
+//	var { decode, encode } = require('msgencode-lite')
 } catch (error) {}
 
 if (typeof XMLHttpRequest === 'undefined') {
@@ -42,8 +42,8 @@ if (typeof XMLHttpRequest === 'undefined') {
 }
 var ITERATIONS = 10000
 
-suite('msgpackr basic tests', function(){
-	test('pack/unpack data', function(){
+suite('cborX basic tests', function(){
+	test.only('encode/decode data', function(){
 		var data = {
 			data: [
 				{ a: 1, name: 'one', type: 'odd', isOdd: true },
@@ -66,9 +66,10 @@ suite('msgpackr basic tests', function(){
 			]
 		}
 		let structures = []
-		let packr = new Packr({ structures })
-		var serialized = packr.pack(data)
-		var deserialized = packr.unpack(serialized)
+		debugger
+		let encoder = new Encoder({ structures })
+		var serialized = encoder.encode(data)
+		var deserialized = encoder.decode(serialized)
 		assert.deepEqual(deserialized, data)
 	})
 
@@ -88,18 +89,18 @@ suite('msgpackr basic tests', function(){
 			]
 		]
 		let structures = []
-		let packr = new Packr({ structures })
-		var serialized = packr.pack(data)
-		var deserialized = packr.unpack(serialized)
+		let encoder = new Encoder({ structures })
+		var serialized = encoder.encode(data)
+		var deserialized = encoder.decode(serialized)
 		assert.deepEqual(deserialized, data)
 	})
 
-	test('pack/unpack sample data', function(){
+	test('encode/decode sample data', function(){
 		var data = sampleData
 		let structures = []
-		let packr = new Packr({ structures, useRecords: true })
-		var serialized = packr.pack(data)
-		var deserialized = packr.unpack(serialized)
+		let encoder = new Encoder({ structures, useRecords: true })
+		var serialized = encoder.encode(data)
+		var deserialized = encoder.decode(serialized)
 		assert.deepEqual(deserialized, data)
 	})
 
@@ -119,23 +120,23 @@ suite('msgpackr basic tests', function(){
 			prop2: 'more string',
 			num: 3,
 		}
-		let packr = new Packr()
+		let encoder = new Encoder()
 		addExtension({
 			Class: Extended,
 			type: 11,
-			unpack: function(buffer) {
+			decode: function(buffer) {
 				let e = new Extended()
-				let data = packr.unpack(buffer)
+				let data = encoder.decode(buffer)
 				e.value = data[0]
 				e.string = data[1]
 				return e
 			},
-			pack: function(instance) {
-				return packr.pack([instance.value, instance.string])
+			encode: function(instance) {
+				return encoder.encode([instance.value, instance.string])
 			}
 		})
-		var serialized = pack(data)
-		var deserialized = unpack(serialized)
+		var serialized = encode(data)
+		var deserialized = decode(serialized)
 		assert.deepEqual(data, deserialized)
 		assert.equal(deserialized.extendedInstance.getDouble(), 8)
 	})
@@ -148,7 +149,7 @@ suite('msgpackr basic tests', function(){
 				b[1] = 0
 				b[2] = 0
 				let s = td.decode(b)
-				if (!require('msgpackr-extract').isOneByte(s)) {
+				if (!require('cborX-extract').isOneByte(s)) {
 					console.log(i.toString(16), s.length)
 					total++
 				}
@@ -166,11 +167,11 @@ suite('msgpackr basic tests', function(){
 		object.children[1] = object
 		object.children[2] = object.children[0]
 		object.childrenAgain = object.children
-		let packr = new Packr({
+		let encoder = new Encoder({
 			structuredClone: true,
 		})
-		var serialized = packr.pack(object)
-		var deserialized = packr.unpack(serialized)
+		var serialized = encoder.encode(object)
+		var deserialized = encoder.decode(serialized)
 		assert.equal(deserialized.self, deserialized)
 		assert.equal(deserialized.children[0].name, 'child')
 		assert.equal(deserialized.children[1], deserialized)
@@ -186,11 +187,11 @@ suite('msgpackr basic tests', function(){
 			float32Array: new Float32Array([2.25,6]),
 			uint16Array: new Uint16Array([3,4])
 		}
-		let packr = new Packr({
+		let encoder = new Encoder({
 			structuredClone: true,
 		})
-		var serialized = packr.pack(object)
-		var deserialized = packr.unpack(serialized)
+		var serialized = encoder.encode(object)
+		var deserialized = encoder.decode(serialized)
 		assert.deepEqual(Array.from(deserialized.set), Array.from(object.set))
 		assert.equal(deserialized.error.message, object.error.message)
 		assert.equal(deserialized.regexp.test('TEST'), true)
@@ -214,9 +215,9 @@ suite('msgpackr basic tests', function(){
 			farFutureDate: new Date(3532219539133),
 			ancient: new Date(-3532219539133),
 		}
-		let packr = new Packr()
-		var serialized = packr.pack(data)
-		var deserialized = packr.unpack(serialized)
+		let encoder = new Encoder()
+		var serialized = encoder.encode(data)
+		var deserialized = encoder.decode(serialized)
 		assert.equal(deserialized.map.get(4), 'four')
 		assert.equal(deserialized.map.get('three'), 3)
 		assert.equal(deserialized.date.getTime(), 1532219539733)
@@ -233,12 +234,12 @@ suite('msgpackr basic tests', function(){
 			map: map,
 			date: new Date(1532219539011),
 		}
-		let packr = new Packr({
+		let encoder = new Encoder({
 			mapsAsObjects: true,
 			useTimestamp32: true,
 		})
-		var serialized = packr.pack(data)
-		var deserialized = packr.unpack(serialized)
+		var serialized = encoder.encode(data)
+		var deserialized = encoder.decode(serialized)
 		assert.equal(deserialized.map[4], 'four')
 		assert.equal(deserialized.map.three, 3)
 		assert.equal(deserialized.date.getTime(), 1532219539000)
@@ -250,12 +251,12 @@ suite('msgpackr basic tests', function(){
 			c: 0.00000000000352501,
 			d: 3252.77,
 		}
-		let packr = new Packr({
+		let encoder = new Encoder({
 			useFloat32: DECIMAL_FIT
 		})
-		var serialized = packr.pack(data)
+		var serialized = encoder.encode(data)
 		assert.equal(serialized.length, 32)
-		var deserialized = packr.unpack(serialized)
+		var deserialized = encoder.decode(serialized)
 		assert.deepEqual(deserialized, data)
 	})
 
@@ -272,22 +273,22 @@ suite('msgpackr basic tests', function(){
 			//negativeZero: -0,
 			Infinity: Infinity
 		}
-		var serialized = pack(data)
-		var deserialized = unpack(serialized)
+		var serialized = encode(data)
+		var deserialized = decode(serialized)
 		assert.deepEqual(deserialized, data)
 	})
 
 	test('buffers', function(){
 		var data = {
 			buffer1: new Uint8Array([2,3,4]),
-			buffer2: new Uint8Array(pack(sampleData))
+			buffer2: new Uint8Array(encode(sampleData))
 		}
-		var serialized = pack(data)
-		var deserialized = unpack(serialized)
+		var serialized = encode(data)
+		var deserialized = decode(serialized)
 		assert.deepEqual(deserialized, data)
 	})
 
-	test('notepack test', function() {
+	test('noteencode test', function() {
 		const data = {
 		  foo: 1,
 		  bar: [1, 2, 3, 4, 'abc', 'def'],
@@ -301,25 +302,25 @@ suite('msgpackr basic tests', function(){
 		    }
 		  }
 		};
-		var serialized = pack(data)
-		var deserialized = unpack(serialized)
-		var deserialized = unpack(serialized)
-		var deserialized = unpack(serialized)
+		var serialized = encode(data)
+		var deserialized = decode(serialized)
+		var deserialized = decode(serialized)
+		var deserialized = decode(serialized)
 		assert.deepEqual(deserialized, data)
 	})
 
 	test('utf16 causing expansion', function() {
 		this.timeout(10000)
 		let data = {fixstr: 'ᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝ', str8:'ᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝ'}
-		var serialized = pack(data)
-		deserialized = unpack(serialized)
+		var serialized = encode(data)
+		deserialized = decode(serialized)
 		assert.deepEqual(deserialized, data)
 	})
-	if (PackrStream) {
+	if (EncoderStream) {
 		test('serialize/parse stream', () => {
-			const serializeStream = new PackrStream({
+			const serializeStream = new EncoderStream({
 			})
-			const parseStream = new UnpackrStream()
+			const parseStream = new DecoderStream()
 			serializeStream.pipe(parseStream)
 			const received = []
 			parseStream.on('data', data => {
@@ -347,7 +348,7 @@ suite('msgpackr basic tests', function(){
 	}
 
 })
-suite('msgpackr performance tests', function(){
+suite('cborX performance tests', function(){
 	test('performance JSON.parse', function() {
 		var data = sampleData
 		this.timeout(10000)
@@ -365,29 +366,29 @@ suite('msgpackr performance tests', function(){
 			var serialized = JSON.stringify(data)
 		}
 	})
-	test('performance unpack', function() {
+	test('performance decode', function() {
 		var data = sampleData
 		this.timeout(10000)
 		let structures = []
-		var serialized = pack(data)
-		console.log('MessagePack size', serialized.length)
-		let packr = new Packr({ structures })
-		var serialized = packr.pack(data)
-		console.log('msgpackr w/ record ext size', serialized.length)
+		var serialized = encode(data)
+		console.log('CBOR size', serialized.length)
+		let encoder = new Encoder({ structures })
+		var serialized = encoder.encode(data)
+		console.log('cborX w/ record ext size', serialized.length)
 		for (var i = 0; i < ITERATIONS; i++) {
-			var deserialized = packr.unpack(serialized)
+			var deserialized = encoder.decode(serialized)
 		}
 	})
-	test('performance pack', function() {
+	test('performance encode', function() {
 		var data = sampleData
 		this.timeout(10000)
 		let structures = []
-		let packr = new Packr({ structures })
+		let encoder = new Encoder({ structures })
 
 		for (var i = 0; i < ITERATIONS; i++) {
-			//serialized = pack(data, { shared: sharedStructure })
-			var serialized = packr.pack(data)
-			packr.resetMemory()
+			//serialized = encode(data, { shared: sharedStructure })
+			var serialized = encoder.encode(data)
+			encoder.resetMemory()
 			//var serializedGzip = deflateSync(serialized)
 		}
 		//console.log('serialized', serialized.length, global.propertyComparisons)
