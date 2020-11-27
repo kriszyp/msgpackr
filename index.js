@@ -6,7 +6,7 @@ if (extractor)
 exports.Decoder = decodeModule.Decoder
 exports.EncoderStream = require('./stream').EncoderStream
 exports.DecoderStream = require('./stream').DecoderStream
-let encoder = new exports.Encoder({ objectsAsMaps: true })
+let encoder = new exports.Encoder({ useRecords: false })
 exports.decode = encoder.decode
 exports.encode = encoder.encode
 exports.C1 = decodeModule.C1

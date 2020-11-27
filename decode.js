@@ -21,9 +21,6 @@ let defaultOptions = {
 	useRecords: false,
 	mapsAsObjects: true
 }
-class C1Type {}
-const C1 = new C1Type()
-C1.name = 'MessagePack 0xC1'
 
 class Decoder {
 	constructor(options) {
@@ -108,7 +105,7 @@ function read() {
 				break
 			case 0x1a:
 				if (majorType == 7) {
-					let result = dataView.getFloat32(position)
+					let value = dataView.getFloat32(position)
 					if (currentDecoder.useFloat32 > 2) {
 						// this does rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
 						let multiplier = mult10[((src[position] & 0x7f) << 1) | (src[position + 1] >> 7)]
@@ -116,16 +113,16 @@ function read() {
 						return ((multiplier * value + (value > 0 ? 0.5 : -0.5)) >> 0) / multiplier
 					}
 					position += 4
-					return result
+					return value
 				}
 				token = dataView.getUint32(position)
 				position += 4
 				break
 			case 0x1b:
 				if (majorType == 7) {
-					let result = dataView.getFloat64(position)
+					let value = dataView.getFloat64(position)
 					position += 8
-					return result
+					return value
 				}
 				if (currentDecoder.uint64AsNumber)
 					return src[position++] * 0x100000000000000 + src[position++] * 0x1000000000000 + src[position++] * 0x10000000000 + src[position++] * 0x100000000 +
@@ -176,8 +173,8 @@ function read() {
 				return map
 			}
 		case 6: // extension
-			if (token >= 0x20) {
-				let structure = currentStructures[token - 0x20]
+			if (token >= 0x40 && token < 0x100) { // record structures
+				let structure = currentStructures[token - 0x40]
 				if (structure) {
 					if (!structure.read)
 						structure.read = createStructureReader(structure)
@@ -192,7 +189,7 @@ function read() {
 						currentDecoder.structures = currentStructures = updatedStructures
 					else
 						currentStructures.splice.apply(currentStructures, [0, updatedStructures.length].concat(updatedStructures))
-					structure = currentStructures[token - 0x20]
+					structure = currentStructures[token - 0x40]
 					if (structure) {
 						if (!structure.read)
 							structure.read = createStructureReader(structure)
@@ -202,14 +199,13 @@ function read() {
 				} else
 					return token
 			} else {
-				let value = src[position++]
-				if (value == 0x72) {
+				if (token == 6) {
 					return recordDefinition(src[position++])
 				} else {
-					if (currentExtensions[value])
-						return currentExtensions[value]([src[position++]])
+					if (currentExtensions[token])
+						return currentExtensions[token]()
 					else
-						throw new Error('Unknown extension ' + value)
+						throw new Error('Unknown extension ' + token)
 				}
 
 			}
@@ -224,14 +220,12 @@ function read() {
 					throw new Error('Unknown token ' + token)
 			}
 		default: // negative int
-			if (token >= 0xe0)
-				return token - 0x100
-			if (token === undefined) {
-				let error = new Error('Unexpected end of MessagePack data')
+			if (isNaN(token)) {
+				let error = new Error('Unexpected end of CBOR data')
 				error.incomplete = true
 				throw error
 			}
-			throw new Error('Unknown MessagePack token ' + token)
+			throw new Error('Unknown CBOR token ' + token)
 	}
 }
 const validName = /^[a-zA-Z_$][a-zA-Z\d_$]*$/
@@ -531,14 +525,13 @@ const recordDefinition = (id) => {
 	return structure.read()
 }
 let glbl = typeof window == 'object' ? window : global
-currentExtensions[0] = (data) => {} // notepack defines extension 0 to mean undefined, so use that as the default here
 
-currentExtensions[0x65] = () => {
+currentExtensions[8] = () => {
 	let data = read()
 	return (glbl[data[0]] || Error)(data[1])
 }
 
-currentExtensions[0x69] = (data) => {
+currentExtensions[9] = (data) => {
 	// id extension (for structured clones)
 	let id = dataView.getUint32(position - 4)
 	if (!referenceMap)
@@ -561,7 +554,7 @@ currentExtensions[0x69] = (data) => {
 	return targetProperties // no cycle, can just use the returned read object
 }
 
-currentExtensions[0x70] = (data) => {
+currentExtensions[10] = (data) => {
 	// pointer extension (for structured clones)
 	let id = dataView.getUint32(position - 4)
 	let refEntry = referenceMap.get(id)
@@ -569,11 +562,11 @@ currentExtensions[0x70] = (data) => {
 	return refEntry.target
 }
 
-currentExtensions[0x73] = () => new Set(read())
+currentExtensions[11] = () => new Set(read())
 
 const typedArrays = ['Int8','Uint8	','Uint8Clamped','Int16','Uint16','Int32','Uint32','Float32','Float64','BigInt64','BigUint64'].map(type => type + 'Array')
 
-currentExtensions[0x74] = (data) => {
+currentExtensions[12] = (data) => {
 	let typeCode = data[0]
 	let typedArrayName = typedArrays[typeCode]
 	if (!typedArrayName)
@@ -581,25 +574,14 @@ currentExtensions[0x74] = (data) => {
 	// we have to always slice/copy here to get a new ArrayBuffer that is word/byte aligned
 	return new glbl[typedArrayName](Uint8Array.prototype.slice.call(data, 1).buffer)
 }
-currentExtensions[0x78] = () => {
+currentExtensions[13] = () => {
 	let data = read()
 	return new RegExp(data[0], data[1])
 }
 
-currentExtensions[0xff] = (data) => {
+currentExtensions[1] = (data) => {
 	// 32-bit date extension
-	if (data.length == 4)
-		return new Date((data[0] * 0x1000000 + (data[1] << 16) + (data[2] << 8) + data[3]) * 1000)
-	else if (data.length == 8)
-		return new Date(
-			((data[0] << 22) + (data[1] << 14) + (data[2] << 6) + (data[3] >> 2)) / 1000000 +
-			((data[3] & 0x3) * 0x100000000 + data[4] * 0x1000000 + (data[5] << 16) + (data[6] << 8) + data[7]) * 1000)
-	else if (data.length == 12)// TODO: Implement support for negative
-		return new Date(
-			((data[0] << 24) + (data[1] << 16) + (data[2] << 8) + data[3]) / 1000000 +
-			(((data[4] & 0x80) ? -0x1000000000000 : 0) + data[6] * 0x10000000000 + data[7] * 0x100000000 + data[8] * 0x1000000 + (data[9] << 16) + (data[10] << 8) + data[11]) * 1000)
-	else
-		throw new Error('Invalid timestamp length')
+	return new Date(read() * 1000)
 } // notepack defines extension 0 to mean undefined, so use that as the default here
 // registration of bulk record definition?
 // currentExtensions[0x52] = () =>
@@ -646,5 +628,3 @@ for (let i = 0; i < 256; i++) {
 }
 exports.mult10 = mult10
 exports.typedArrays = typedArrays
-exports.C1 = C1
-exports.C1Type = C1Type

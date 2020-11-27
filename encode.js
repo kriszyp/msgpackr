@@ -33,7 +33,7 @@ class Encoder extends Decoder {
 			} : false
 
 		let encoder = this
-		let maxSharedStructures = 32
+		let maxSharedStructures = 64
 		let isSequential = options && options.sequential
 		if (isSequential) {
 			maxSharedStructures = 0
@@ -61,7 +61,7 @@ class Encoder extends Decoder {
 			sharedStructures = encoder.structures
 			if (sharedStructures) {
 				if (sharedStructures.uninitialized)
-					packr.structures = sharedStructures = packr.getStructures()
+					encoder.structures = sharedStructures = encoder.getStructures()
 				let sharedStructuresLength = sharedStructures.length
 				if (sharedStructuresLength >  maxSharedStructures && !isSequential)
 					sharedStructuresLength = maxSharedStructures
@@ -232,17 +232,17 @@ class Encoder extends Decoder {
 					}
 				} else if (value >> 0 === value) { // negative integer
 					if (value >= -0x18) {
-						target[position++] = 0x38 + value
+						target[position++] = 0x1f - value
 					} else if (value >= -0x100) {
 						target[position++] = 0x38
-						target[position++] = value + 0x100
+						target[position++] = ~value
 					} else if (value >= -0x10000) {
 						target[position++] = 0x39
-						targetView.setUint16(position, -value)
+						targetView.setUint16(position, ~value)
 						position += 2
 					} else {
 						target[position++] = 0x3a
-						targetView.setUint32(position, -value)
+						targetView.setUint32(position, ~value)
 						position += 4
 					}
 				} else {
@@ -332,14 +332,14 @@ class Encoder extends Decoder {
 							let extensionClass = extensionClasses[i]
 							if (value instanceof extensionClass) {
 								let extension = extensions[i]
-								let result = extension.pack.call(this, value, (size) => {
+								let result = extension.encode.call(this, value, (size) => {
 									position += size
 									if (position > safeEnd)
 										makeRoom(position)
 									return {
 										target, targetView, position: position - size
 									}
-								}, pack)
+								}, encode)
 								if (result) {
 									position = writeExtensionData(result, target, position, extension.type)
 								}
@@ -386,8 +386,8 @@ class Encoder extends Decoder {
 			}
 			let key
 			for (let i = 0; i < length; i++) {
-				pack(key = keys[i])
-				pack(object[key])
+				encode(key = keys[i])
+				encode(object[key])
 			}
 		} :
 		(object, safePrototype) => {
@@ -460,6 +460,7 @@ class Encoder extends Decoder {
 			}
 			let recordId = transition[RECORD_SYMBOL]
 			if (recordId) {
+				target[position++] = 0xd8
 				target[position++] = recordId
 			} else {
 				recordId = structures.nextId++
@@ -467,22 +468,22 @@ class Encoder extends Decoder {
 					recordId = 0x40
 					structures.nextId = 0x41
 				}
-				if (recordId >= 0x80) {// cycle back around
+				if (recordId >= 0x100) {// cycle back around
 					structures.nextId = (recordId = maxSharedStructures + 0x40) + 1
 				}
 				transition[RECORD_SYMBOL] = recordId
 				structures[0x3f & recordId] = keys
 				if (sharedStructures && sharedStructures.length <= maxSharedStructures) {
-					target[position++] = recordId
+					target[position++] = 0xd8 // tag one byte
+					target[position++] = recordId // tag number
 					hasSharedUpdate = true
 				} else {
-					target[position++] = 0xd4 // fixext 1
-					target[position++] = 0x72 // "r" record defintion extension type
+					target[position++] = 0xc6 // tag 6
 					target[position++] = recordId
 					if (hasNewTransition)
 						transitionsCount += serializationsSinceTransitionRebuild
 					// record the removal of the id, we can maintain our shared structure
-					if (recordIdsToRemove.length >= 0x40 - maxSharedStructures)
+					if (recordIdsToRemove.length >= 0xc0 - maxSharedStructures)
 						recordIdsToRemove.shift()[RECORD_SYMBOL] = 0 // we are cycling back through, and have to remove old ones
 					recordIdsToRemove.push(transition)
 					encode(keys)
@@ -506,9 +507,6 @@ class Encoder extends Decoder {
 			return target = newBuffer
 		}
 	}
-	encode(value) {
-		return this.pack(value)
-	}
 	resetMemory() {
 		// this means we are finished using our local buffer and we can write over it safely
 		this.offset = 0
@@ -527,71 +525,56 @@ function copyBinary(source, target, targetOffset, offset, endOffset) {
 
 extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/, C1Type ]
 extensions = [{
-	pack(date, allocateForWrite) {
+	encode(date, allocateForWrite) {
 		let seconds = date.getTime() / 1000
 		if ((this.useTimestamp32 || date.getMilliseconds() === 0) && seconds >= 0 && seconds < 0x100000000) {
 			// Timestamp 32
 			let { target, targetView, position} = allocateForWrite(6)
-			target[position++] = 0xd6
-			target[position++] = 0xff
+			target[position++] = 0xc1
+			target[position++] = 0x1a
 			targetView.setUint32(position, seconds)
-		} else if (seconds > 0 && seconds < 0x400000000) {
-			// Timestamp 64
-			let { target, targetView, position} = allocateForWrite(10)
-			target[position++] = 0xd7
-			target[position++] = 0xff
-			targetView.setUint32(position, date.getMilliseconds() * 4000000 + ((seconds / 1000 / 0x100000000) >> 0))
-			targetView.setUint32(position + 4, seconds)
 		} else {
-			// Timestamp 96
-			let { target, targetView, position} = allocateForWrite(15)
-			target[position++] = 0xc7
-			target[position++] = 12
-			target[position++] = 0xff
-			targetView.setUint32(position, date.getMilliseconds() * 1000000)
-			targetView.setBigInt64(position + 4, BigInt(Math.floor(seconds)))
+			// Timestamp float64
+			let { target, targetView, position} = allocateForWrite(10)
+			target[position++] = 0xc1
+			target[position++] = 0xfb
+			targetView.setFloat64(position, seconds)
 		}
 	}
 }, {
-	pack(set, allocateForWrite, pack) {
+	encode(set, allocateForWrite, encode) {
 		let array = Array.from(set)
 		if (this.structuredClone) {
-			let { target, position} = allocateForWrite(3)
-			target[position++] = 0xd4
-			target[position++] = 0x73 // 's' for Set
-			target[position++] = 0
+			let { target, position} = allocateForWrite(1)
+			target[position++] = 0xd1 // 's' for Set
 		}
-		pack(array)
+		encode(array)
 	}
 }, {
-	pack(error, allocateForWrite, pack) {
+	encode(error, allocateForWrite, encode) {
 		if (this.structuredClone) {
-			let { target, position} = allocateForWrite(3)
-			target[position++] = 0xd4
-			target[position++] = 0x65 // 'e' for error
-			target[position++] = 0
+			let { target, position} = allocateForWrite(1)
+			target[position++] = 0xce // 'e' for error
 		}
-		pack([ error.name, error.message ])
+		encode([ error.name, error.message ])
 	}
 }, {
-	pack(regex, allocateForWrite, pack) {
+	encode(regex, allocateForWrite, encode) {
 		if (this.structuredClone) {
-			let { target, position} = allocateForWrite(3)
-			target[position++] = 0xd4
-			target[position++] = 0x78 // 'x' for regeXp
-			target[position++] = 0
+			let { target, position} = allocateForWrite(1)
+			target[position++] = 0xd3
 		}
-		pack([ regex.source, regex.flags ])
+		encode([ regex.source, regex.flags ])
 	}
 }, {
-	pack(arrayBuffer, allocateForWrite) {
+	encode(arrayBuffer, allocateForWrite) {
 		if (this.structuredClone)
 			writeExtBuffer(arrayBuffer, 0x10, allocateForWrite)
 		else
 			writeBuffer(hasNodeBuffer ? Buffer.from(arrayBuffer) : new Uint8Array(arrayBuffer), allocateForWrite)
 	}
 }, {
-	pack(typedArray, allocateForWrite) {
+	encode(typedArray, allocateForWrite) {
 		let constructor = typedArray.constructor
 		if (constructor !== ByteArray && this.structuredClone)
 			writeExtBuffer(typedArray.buffer, typedArrays.indexOf(constructor.name), allocateForWrite)
@@ -599,7 +582,7 @@ extensions = [{
 			writeBuffer(typedArray, allocateForWrite)
 	}
 }, {
-	pack(c1, allocateForWrite) { // specific 0xC1 object
+	encode(c1, allocateForWrite) { // specific 0xC1 object
 		let { target, position} = allocateForWrite(1)
 		target[position] = 0xc1
 	}
@@ -719,10 +702,10 @@ function insertIds(serialized, idsToInsert) {
 
 exports.addExtension = function(extension) {
 	if (extension.Class) {
-		if (!extension.pack)
-			throw new Error('Extension has no pack function')
+		if (!extension.encode)
+			throw new Error('Extension has no encode function')
 		extensionClasses.unshift(extension.Class)
 		extensions.unshift(extension)
 	}
-	unpackModule.addExtension(extension)
+	decoderModule.addExtension(extension)
 }

@@ -43,7 +43,7 @@ if (typeof XMLHttpRequest === 'undefined') {
 var ITERATIONS = 10000
 
 suite('cborX basic tests', function(){
-	test.only('encode/decode data', function(){
+	test('encode/decode data', function(){
 		var data = {
 			data: [
 				{ a: 1, name: 'one', type: 'odd', isOdd: true },
@@ -66,7 +66,6 @@ suite('cborX basic tests', function(){
 			]
 		}
 		let structures = []
-		debugger
 		let encoder = new Encoder({ structures })
 		var serialized = encoder.encode(data)
 		var deserialized = encoder.decode(serialized)
@@ -255,7 +254,7 @@ suite('cborX basic tests', function(){
 			useFloat32: DECIMAL_FIT
 		})
 		var serialized = encoder.encode(data)
-		assert.equal(serialized.length, 32)
+		assert.equal(serialized.length, 31)
 		var deserialized = encoder.decode(serialized)
 		assert.deepEqual(deserialized, data)
 	})
