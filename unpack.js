@@ -72,10 +72,11 @@ class Unpackr {
 			} else if (!currentStructures || currentStructures.length > 0) {
 				currentStructures = []
 			}
-		} else
+		} else {
 			currentUnpackr = defaultOptions
 			if (!currentStructures || currentStructures.length > 0)
 				currentStructures = []
+		}
 		try {
 			return read()
 		} finally {
