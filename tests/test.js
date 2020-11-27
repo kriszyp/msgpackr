@@ -383,11 +383,12 @@ suite('msgpackr performance tests', function(){
 		this.timeout(10000)
 		let structures = []
 		let packr = new Packr({ structures })
+		let buffer = Buffer.alloc(0x10000)
 
 		for (var i = 0; i < ITERATIONS; i++) {
 			//serialized = pack(data, { shared: sharedStructure })
+			packr.useBuffer(buffer)
 			var serialized = packr.pack(data)
-			packr.resetMemory()
 			//var serializedGzip = deflateSync(serialized)
 		}
 		//console.log('serialized', serialized.length, global.propertyComparisons)

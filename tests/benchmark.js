@@ -49,16 +49,16 @@ if (JSON) {
 }
 
 if (msgpackr) {
-//  let packr = new msgpackr.Packr({ objectsAsMaps: true })
+  let packr = new msgpackr.Packr({ useRecords: false })
   buf = bench('require("msgpackr").pack(obj);', msgpackr.pack, data);
-//    buf = bench('require("msgpack").serialize(obj);', data => {let result = packr.serialize(data); packr.resetMemory(); return result;}, data);
+    //buf = bench('require("msgpackr").pack(obj);', data => {let result = packr.pack(data); packr.resetMemory(); return result;}, data);
 
   obj = bench('require("msgpackr").unpack(buf);', msgpackr.unpack, buf);
   test(obj);
 
   packr = new msgpackr.Packr({ structures: [] })
   buf = bench('msgpackr w/ shared structures: packr.pack(obj);', packr.pack.bind(packr), data);
-//  buf = bench('msgpackr w/ shared structures: packr.pack(obj);', data => {let result = packr.pack(data); packr.resetMemory(); return result;}, data);
+  //buf = bench('msgpackr w/ shared structures: packr.pack(obj);', data => {let result = packr.pack(data); packr.resetMemory(); return result;}, data);
 
   obj = bench('msgpackr w/ shared structures: packr.unpack(buf);', packr.unpack.bind(packr), buf);
   test(obj);

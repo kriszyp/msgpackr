@@ -528,9 +528,11 @@ class Packr extends Unpackr {
 	encode(value) {
 		return this.pack(value)
 	}
-	resetMemory() {
-		// this means we are finished using our local buffer and we can write over it safely
-		this.offset = 0
+	useBuffer(buffer) {
+		// this means we are finished using our own buffer and we can write over it safely
+		target = buffer
+		targetView = new DataView(target.buffer, target.byteOffset, target.byteLength)
+		position = 0
 	}
 }
 exports.Packr = Packr
