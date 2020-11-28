@@ -565,13 +565,13 @@ currentExtensions[11] = () => new Set(read())
 
 const typedArrays = ['Int8','Uint8	','Uint8Clamped','Int16','Uint16','Int32','Uint32','Float32','Float64','BigInt64','BigUint64'].map(type => type + 'Array')
 
-currentExtensions[12] = (data) => {
-	let typeCode = data[0]
+currentExtensions[12] = () => {
+	let [ typeCode, buffer ] = read()
 	let typedArrayName = typedArrays[typeCode]
 	if (!typedArrayName)
 		throw new Error('Could not find typed array for code ' + typeCode)
 	// we have to always slice/copy here to get a new ArrayBuffer that is word/byte aligned
-	return new glbl[typedArrayName](Uint8Array.prototype.slice.call(data, 1).buffer)
+	return new glbl[typedArrayName](buffer.buffer)
 }
 currentExtensions[13] = () => {
 	let data = read()
@@ -581,10 +581,7 @@ currentExtensions[13] = () => {
 currentExtensions[1] = (data) => {
 	// 32-bit date extension
 	return new Date(read() * 1000)
-} // notepack defines extension 0 to mean undefined, so use that as the default here
-// registration of bulk record definition?
-// currentExtensions[0x52] = () =>
-
+}
 function saveState(callback) {
 	let savedSrcEnd = srcEnd
 	let savedPosition = position
