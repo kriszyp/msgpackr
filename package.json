@@ -27,7 +27,7 @@
     "require": "./index.js"
   },
   "optionalDependencies": {
-    "cbor-extract": "^0.3.4"
+    "cbor-extract": "^0.1.0"
   },
   "devDependencies": {
     "cbor": "^5",
