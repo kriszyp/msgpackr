@@ -51,7 +51,12 @@ receivingStream.on('data', (data) => {
  The `EncoderStream` and `DecoderStream` instances  will have also the record structure extension enabled by default (see below).
 
 ## Browser Usage
-Cbor-x works as standalone JavaScript as well, and runs on modern browsers. It includes a bundled script for ease of direct loading. For module-based development, it is recommended that you directly import the module of interest, to minimize dependencies that get pulled into your application:
+Cbor-x  works as standalone JavaScript as well, and runs on modern browsers. It includes a bundled script, at `dist/index.js` for ease of direct loading:
+```
+<script src="node_modules/cbor-x/dist/index.js"></script>
+```
+
+For module-based development, it is recommended that you directly import the module of interest, to minimize dependencies that get pulled into your application:
 ```
 import { decode } from 'cbor-x/decode' // if you only need to decode
 ```
@@ -205,15 +210,7 @@ addExtension({
 Cbor-x is already fast, but here are some tips for making it faster.
 
 #### Arena Allocation (`resetMemory()`)
-During the serialization process, data is written to buffers. Again, allocating new buffers is a relatively expensive process, and the `resetMemory` method can help allow reuse of buffers that will further improve performance. The `resetMemory` method can be called when previously created buffer(s) are no longer needed. For example, if we serialized an object, and wrote it to a database, we could indicate that we are done:
-```
-let buffer = encoder.encode(data);
-writeToStorageSync(buffer);
-// finished with buffer, we can reset the memory on our encoder now:
-encoder.resetMemory()
-// future serialization can now reuse memory for better performance
-```
-The use of `resetMemory` is never required, buffers will still be handled and cleaned up through GC if not used, it just provides a small performance boost.
+During the serialization process, data is written to buffers. Again, allocating new buffers is a relatively expensive process, and the `useBuffer` method can help allow reuse of buffers that will further improve performance. With `useBuffer` method, you can provide a buffer, serialize data into it, and when it is known that you are done using that buffer, you can call `useBuffer` again to reuse it. The use of `useBuffer` is never required, buffers will still be handled and cleaned up through GC if not used, it just provides a small performance boost.
 
 ## Record Structure Extension Definition
 The record struction extension uses extension id 0x72 ("r") to declare the use of this functionality. The extension "data" byte (or bytes) identifies the byte or bytes used to identify the start of a record in the subsequent CBOR block or stream. The identifier byte (or the first byte in a sequence) must be from 0x40 - 0x7f (and therefore replaces one byte representations of positive integers 64 - 127, which can alternately be represented with int or uint types). The extension declaration must be immediately follow by an CBOR array that defines the field names of the record structure.
@@ -237,6 +234,11 @@ cbor-x saves all JavaScript `Date`s using the standard CBOR date extension (type
 
 ### Structured Cloning
 With structured cloning enabled, cbor-x will also use extensions to store Set, Map, Error, RegExp, ArrayBufferView objects and preserve their types.
+
+## Alternate Encoding/Package
+The high-performance serialization and deserialization algorithms in the msgpackr package are also available in the [cbor-x](https://github.com/kriszyp/cbor-x) for the CBOR format. A quick summary of the pros and cons of using MessagePack vs CBOR are:
+* MessagePack has wider adoption, and, at least with this implementation is slightly more efficient.
+* CBOR has an official IETF standardization track, and the record extensions is conceptually/philosophically a better fit for CBOR tags.
 
 ## License
 

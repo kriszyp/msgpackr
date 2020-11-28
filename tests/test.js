@@ -383,11 +383,12 @@ suite('cborX performance tests', function(){
 		this.timeout(10000)
 		let structures = []
 		let encoder = new Encoder({ structures })
+		let buffer = Buffer.alloc(0x10000)
 
 		for (var i = 0; i < ITERATIONS; i++) {
 			//serialized = encode(data, { shared: sharedStructure })
+			encoder.useBuffer(buffer)
 			var serialized = encoder.encode(data)
-			encoder.resetMemory()
 			//var serializedGzip = deflateSync(serialized)
 		}
 		//console.log('serialized', serialized.length, global.propertyComparisons)

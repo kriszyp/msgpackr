@@ -21,7 +21,7 @@ function tryRequire(moduleId) {
 		return require(moduleId)
 	} catch (error) {
 		if (typeof window == 'undefined')
-			console.warn('Native extraction module not loaded, cbor-x will still run, but with decreased performance. ' + error.message.split('\n')[0])
+			console.warn('Native extraction module not loaded, cbor-x will still run, but with decreased performance. ' + error.message)
 		else
 			console.warn('For browser usage, directly use msgencoder/decode or msgencoder/encode modules. ' + error.message.split('\n')[0])
 	}
