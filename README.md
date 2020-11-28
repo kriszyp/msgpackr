@@ -32,15 +32,15 @@ We can use the including streaming functionality (which further improves perform
 
 ```
 import { PackrStream } from 'msgpackr';
-let stream = PackrStream();
+let stream = new PackrStream();
 stream.write(myData);
 
 ```
 Or for a full example of sending and receiving data on a stream:
 ```
 import { PackrStream } from 'msgpackr';
-let sendingStream = PackrStream();
-let receivingStream = UnpackrStream();
+let sendingStream = new PackrStream();
+let receivingStream = new UnpackrStream();
 // we are just piping to our own stream, but normally you would send and
 // receive over some type of inter-process or network connection.
 sendingStream.pipe(receivingStream);
@@ -87,7 +87,7 @@ If you prefer to use encoder/decode terminology, msgpackr exports aliases, so `d
 There is a critical difference between maps (or dictionaries) that hold an arbitrary set of keys and values (JavaScript `Map` is designed for these), and records or object structures that have a well-defined set of fields. Typical JS objects/records may have many instances re(use) the same structure. By using the record extension, this distinction is preserved in MessagePack and the encoding can reuse structures and not only provides better type preservation, but yield much more compact encodings and increase decoding performance by 2-3x. Msgpackr automatically generates record definitions that are reused and referenced by objects with the same structure. There are a number of ways to use this to our advantage. For large object structures with repeating nested objects with similar structures, simply serializing with the record extension can yield significant benefits. To use the record structures extension, we create a new `Packr` instance. By default a new `Packr` instance will have the record extension enabled:
 ```
 import { Packr } from 'msgpackr';
-let packr = Packr();
+let packr = new Packr();
 packr.pack(bigDataWithLotsOfObjects);
 
 ```
@@ -100,14 +100,14 @@ When creating a new `Packr`, `Unpackr`, `PackrStream`, or `UnpackrStream` instan
 Another useful way of using msgpackr, and the record extension, is for storing data in a databases, files, or other storage systems. If a number of objects with common data structures are being stored, a shared structure can be used to greatly improve data storage and deserialization efficiency. In the simplest form, provide a `structures` array, which is updated if any new object structure is encountered:
 ```
 import { Packr } from 'msgpackr';
-let packr = Packr({
+let packr = new Packr({
 	structures: [... structures that were last generated ...]
 });
 ```
 If you are working with persisted data, you will need to persist the `structures` data when it is updated. Msgpackr provides an API for loading and saving the `structures` on demand (which is robust and can be used in multiple-process situations where other processes may be updating this same `structures` array), we just need to provide a way to store the generated shared structure so it is available to deserialize stored data in the future:
 ```
 import { Packr } from 'msgpackr';
-let packr = Packr({
+let packr = new Packr({
 	getStructures() {
 		// storing our data in file (but we could also store in a db or key-value store)
 		return unpack(readFileSync('my-shared-structures.mp')) || [];
@@ -239,6 +239,11 @@ msgpackr saves all JavaScript `Date`s using the standard MessagePack date extens
 
 ### Structured Cloning
 With structured cloning enabled, msgpackr will also use extensions to store Set, Map, Error, RegExp, ArrayBufferView objects and preserve their types.
+
+## Alternate Encoding/Package
+The high-performance serialization and deserialization algorithms in the msgpackr package are also available in the [cbor-x](https://github.com/kriszyp/cbor-x) for the CBOR format. A quick summary of the pros and cons of using MessagePack vs CBOR are:
+* MessagePack has wider adoption, and, at least with this implementation is slightly more efficient.
+* CBOR has an official IETF standardization track, and the record extensions is conceptually/philosophically a better fit for CBOR tags.
 
 ## License
 

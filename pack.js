@@ -49,7 +49,7 @@ class Packr extends Unpackr {
 			throw new Error('Too many shared structures')
 		}
 
-		this.pack = function(value) {
+		this.pack = this.encode = function(value) {
 			if (!target) {
 				target = new ByteArrayAllocate(8192)
 				targetView = new DataView(target.buffer, 0, 8192)
@@ -524,9 +524,6 @@ class Packr extends Unpackr {
 			safeEnd = newBuffer.length - 10
 			return target = newBuffer
 		}
-	}
-	encode(value) {
-		return this.pack(value)
 	}
 	useBuffer(buffer) {
 		// this means we are finished using our own buffer and we can write over it safely
