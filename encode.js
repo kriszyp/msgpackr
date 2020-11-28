@@ -284,8 +284,8 @@ class Encoder extends Decoder {
 								let idsToInsert = referenceMap.idsToInsert || (referenceMap.idsToInsert = [])
 								referee.id = idsToInsert.push(referee)
 							}
-							target[position++] = 0xd6 // fixext 4
-							target[position++] = 0x70 // "p" for pointer
+							target[position++] = 0xca // tag 10
+							target[position++] = 0x1a // uint32
 							targetView.setUint32(position, referee.id)
 							position += 4
 							return
@@ -346,6 +346,8 @@ class Encoder extends Decoder {
 								let result
 								try {
 									result = extension.encode.call(this, value, (size) => {
+										target = currentTarget
+										currentTarget = null
 										position += size
 										if (position > safeEnd)
 											makeRoom(position)
@@ -599,7 +601,7 @@ extensions = [{
 	encode(typedArray, allocateForWrite, encode) {
 		let constructor = typedArray.constructor
 		if (constructor !== ByteArray && this.structuredClone)
-			writeExtBuffer(typedArray.buffer, typedArrays.indexOf(constructor.name), allocateForWrite, encode)
+			writeExtBuffer(typedArray, typedArrays.indexOf(constructor.name), allocateForWrite, encode)
 		else
 			writeBuffer(typedArray, allocateForWrite)
 	}
@@ -610,8 +612,10 @@ extensions = [{
 	}
 }]
 
-function writeExtBuffer(buffer, type, allocateForWrite, encode) {
-	let length = buffer.byteLength
+function writeExtBuffer(typedArray, type, allocateForWrite, encode) {
+	let length = typedArray.byteLength
+	let offset = typedArray.byteOffset || 0
+	let buffer = typedArray.buffer || typedArray
 	let { target, position, targetView } = allocateForWrite(1)
 	/*if (length < 0x100) {
 		target[position++] = 0xc7
@@ -622,7 +626,8 @@ function writeExtBuffer(buffer, type, allocateForWrite, encode) {
 		target[position++] = length & 0xff
 	} else {*/
 	target[position++] = 0xcc
-	encode([type, hasNodeBuffer ? Buffer.from(buffer) : new Uint8Array(buffer)])
+	encode([type, hasNodeBuffer ? Buffer.from(buffer, offset, length) :
+		new Uint8Array(buffer, offset, length)])
 }
 function writeBuffer(buffer, allocateForWrite) {
 	let length = buffer.byteLength
@@ -703,8 +708,8 @@ function insertIds(serialized, idsToInsert) {
 		serialized.copyWithin(offset + distanceToMove, offset, lastEnd)
 		distanceToMove -= 6
 		let position = offset + distanceToMove
-		serialized[position++] = 0xd6
-		serialized[position++] = 0x69 // 'i'
+		serialized[position++] = 0xc9 // tag 9
+		serialized[position++] = 0x1a // uint32
 		serialized[position++] = id << 24
 		serialized[position++] = (id << 16) & 0xff
 		serialized[position++] = (id << 8) & 0xff

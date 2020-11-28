@@ -122,7 +122,7 @@ suite('cborX basic tests', function(){
 		let encoder = new Encoder()
 		addExtension({
 			Class: Extended,
-			type: 11,
+			type: 30,
 			decode: function(buffer) {
 				let e = new Extended()
 				let data = encoder.decode(buffer)
@@ -227,8 +227,6 @@ suite('cborX basic tests', function(){
 		var map = new Map()
 		map.set(4, 'four')
 		map.set('three', 3)
-
-
 		var data = {
 			map: map,
 			date: new Date(1532219539011),

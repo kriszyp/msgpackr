@@ -17,6 +17,7 @@ let srcStringEnd = 0
 let referenceMap
 let currentExtensions = []
 let dataView
+let needsBufferCopy
 let defaultOptions = {
 	useRecords: false,
 	mapsAsObjects: true
@@ -504,7 +505,7 @@ function shortStringInJS(length) {
 }
 
 function readBin(length) {
-	return currentDecoder.copyBuffers ?
+	return (currentDecoder.copyBuffers || needsBufferCopy) ?
 		// specifically use the copying slice (not the node one)
 		Uint8Array.prototype.slice.call(src, position, position += length) :
 		src.subarray(position, position += length)
@@ -532,7 +533,8 @@ currentExtensions[8] = () => {
 
 currentExtensions[9] = (data) => {
 	// id extension (for structured clones)
-	let id = dataView.getUint32(position - 4)
+	let id = dataView.getUint32(++position)
+	position += 4
 	if (!referenceMap)
 		referenceMap = new Map()
 	let token = src[position]
@@ -553,9 +555,10 @@ currentExtensions[9] = (data) => {
 	return targetProperties // no cycle, can just use the returned read object
 }
 
-currentExtensions[10] = (data) => {
+currentExtensions[10] = () => {
 	// pointer extension (for structured clones)
-	let id = dataView.getUint32(position - 4)
+	let id = dataView.getUint32(++position)
+	position += 4
 	let refEntry = referenceMap.get(id)
 	refEntry.used = true
 	return refEntry.target
@@ -566,12 +569,17 @@ currentExtensions[11] = () => new Set(read())
 const typedArrays = ['Int8','Uint8	','Uint8Clamped','Int16','Uint16','Int32','Uint32','Float32','Float64','BigInt64','BigUint64'].map(type => type + 'Array')
 
 currentExtensions[12] = () => {
-	let [ typeCode, buffer ] = read()
-	let typedArrayName = typedArrays[typeCode]
-	if (!typedArrayName)
-		throw new Error('Could not find typed array for code ' + typeCode)
-	// we have to always slice/copy here to get a new ArrayBuffer that is word/byte aligned
-	return new glbl[typedArrayName](buffer.buffer)
+	needsBufferCopy = true
+	try {
+		let [ typeCode, buffer ] = read()
+		let typedArrayName = typedArrays[typeCode]
+		if (!typedArrayName)
+			throw new Error('Could not find typed array for code ' + typeCode)
+		// we have to always slice/copy here to get a new ArrayBuffer that is word/byte aligned
+		return new glbl[typedArrayName](buffer.buffer)
+	} finally {
+		needsBufferCopy = false
+	}
 }
 currentExtensions[13] = () => {
 	let data = read()

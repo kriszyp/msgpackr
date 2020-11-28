@@ -1,4 +1,5 @@
 exports.Encoder = require('./encode').Encoder
+exports.addExtension = require('./encode').addExtension
 let decodeModule = require('./decode')
 let extractor = tryRequire('cbor-extract')
 if (extractor)
