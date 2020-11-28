@@ -1,4 +1,4 @@
-var msgpackr = tryRequire("..");
+var cborX = tryRequire("..");
 var msgpack_node = tryRequire("msgpack");
 var msgpack_msgpack = tryRequire("@msgpack/msgpack");
 var msgpack_lite = tryRequire("msgpack-lite");
@@ -48,19 +48,19 @@ if (JSON) {
   test(obj);
 }
 
-if (msgpackr) {
+if (cborX) {
 //  let packr = new msgpackr.Packr({ objectsAsMaps: true })
-  buf = bench('require("msgpackr").pack(obj);', msgpackr.pack, data);
+  buf = bench('require("cbor-x").encode(obj);', cborX.encode, data);
 //    buf = bench('require("msgpack").serialize(obj);', data => {let result = packr.serialize(data); packr.resetMemory(); return result;}, data);
 
-  obj = bench('require("msgpackr").unpack(buf);', msgpackr.unpack, buf);
+  obj = bench('require("cbor-x").decode(buf);', cborX.decode, buf);
   test(obj);
 
-  packr = new msgpackr.Packr({ structures: [] })
-  buf = bench('msgpackr w/ shared structures: packr.pack(obj);', packr.pack.bind(packr), data);
+  encoder = new cborX.Encoder({ structures: [] })
+  buf = bench('cbor-x w/ shared structures: packr.encode(obj);', encoder.encode.bind(encoder), data);
 //  buf = bench('msgpackr w/ shared structures: packr.pack(obj);', data => {let result = packr.pack(data); packr.resetMemory(); return result;}, data);
 
-  obj = bench('msgpackr w/ shared structures: packr.unpack(buf);', packr.unpack.bind(packr), buf);
+  obj = bench('cbor-x w/ shared structures: packr.decode(buf);', encoder.decode.bind(encoder), buf);
   test(obj);
 }
 

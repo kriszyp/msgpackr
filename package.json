@@ -27,7 +27,7 @@
     "require": "./index.js"
   },
   "optionalDependencies": {
-    "msgpackr-extract": "^0.3.4"
+    "cbor-extract": "^0.3.4"
   },
   "devDependencies": {
     "cbor": "^5",

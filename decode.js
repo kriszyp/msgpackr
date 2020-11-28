@@ -253,7 +253,6 @@ let readString16 = readStringJS
 let readString32 = readStringJS
 
 exports.setExtractor = (extractStrings) => {
-	return
 	readFixedString = readString(1)
 	readString8 = readString(2)
 	readString16 = readString(3)
@@ -262,7 +261,7 @@ exports.setExtractor = (extractStrings) => {
 		return function readString(length) {
 			let string = strings[stringPosition++]
 			if (string == null) {
-				strings = extractStrings(position - headerLength, srcEnd, src)
+				strings = extractStrings(position, srcEnd, length, src)
 				stringPosition = 0
 				string = strings[stringPosition++]
 			}

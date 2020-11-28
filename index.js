@@ -1,6 +1,6 @@
 exports.Encoder = require('./encode').Encoder
 let decodeModule = require('./decode')
-let extractor = tryRequire('msgpackr-extract')
+let extractor = tryRequire('cbor-extract')
 if (extractor)
 	decodeModule.setExtractor(extractor.extractStrings)
 exports.Decoder = decodeModule.Decoder
