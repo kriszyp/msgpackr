@@ -609,7 +609,7 @@ extensions = [{
 	pack(typedArray, allocateForWrite) {
 		let constructor = typedArray.constructor
 		if (constructor !== ByteArray && this.structuredClone)
-			writeExtBuffer(typedArray.buffer, typedArrays.indexOf(constructor.name), allocateForWrite)
+			writeExtBuffer(typedArray, typedArrays.indexOf(constructor.name), allocateForWrite)
 		else
 			writeBuffer(typedArray, allocateForWrite)
 	}
@@ -620,27 +620,31 @@ extensions = [{
 	}
 }]
 
-function writeExtBuffer(buffer, type, allocateForWrite) {
-	let length = buffer.byteLength
-	let { target, position, targetView } = allocateForWrite(7 + length)
-	/*if (length < 0x100) {
+function writeExtBuffer(typedArray, type, allocateForWrite, encode) {
+	let length = typedArray.byteLength
+	let offset = typedArray.byteOffset || 0
+	let buffer = typedArray.buffer || typedArray
+	if (length + 1 < 0x100) {
+		var { target, position } = allocateForWrite(4 + length)
 		target[position++] = 0xc7
-		target[position++] = length
-	} else if (length < 0x10000) {
+		target[position++] = length + 1
+	} else if (length + 1 < 0x10000) {
+		var { target, position } = allocateForWrite(5 + length)
 		target[position++] = 0xc8
-		target[position++] = length >> 8
-		target[position++] = length & 0xff
-	} else {*/
+		target[position++] = (length + 1) >> 8
+		target[position++] = (length + 1) & 0xff
+	} else {
+		var { target, position, targetView } = allocateForWrite(7 + length)
 		target[position++] = 0xc9
 		targetView.setUint32(position, length + 1) // plus one for the type byte
 		position += 4
-	//}
+	}
 	target[position++] = 0x74 // "t" for typed array
 	target[position++] = type
 	if (hasNodeBuffer)
-		Buffer.from(buffer).copy(target, position)
+		Buffer.from(buffer, offset, length).copy(target, position)
 	else
-		copyBinary(new Uint8Array(buffer), target, position, 0, length)
+		copyBinary(new Uint8Array(buffer, offset, length), target, position, 0, length)
 }
 function writeBuffer(buffer, allocateForWrite) {
 	let length = buffer.byteLength
