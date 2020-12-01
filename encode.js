@@ -617,14 +617,6 @@ function writeExtBuffer(typedArray, type, allocateForWrite, encode) {
 	let offset = typedArray.byteOffset || 0
 	let buffer = typedArray.buffer || typedArray
 	let { target, position, targetView } = allocateForWrite(1)
-	/*if (length < 0x100) {
-		target[position++] = 0xc7
-		target[position++] = length
-	} else if (length < 0x10000) {
-		target[position++] = 0xc8
-		target[position++] = length >> 8
-		target[position++] = length & 0xff
-	} else {*/
 	target[position++] = 0xcc
 	encode([type, hasNodeBuffer ? Buffer.from(buffer, offset, length) :
 		new Uint8Array(buffer, offset, length)])

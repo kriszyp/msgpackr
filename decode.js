@@ -101,6 +101,9 @@ function read() {
 				token = src[position++]
 				break
 			case 0x19:
+				if (majorType == 7) {
+					return getFloat16()
+				}
 				token = dataView.getUint16(position)
 				position += 2
 				break
@@ -523,6 +526,19 @@ const recordDefinition = (id) => {
 	let structure = currentStructures[id & 0x3f] = read()
 	structure.read = createStructureReader(structure)
 	return structure.read()
+}
+
+function getFloat16() {
+	let byte0 = src[position++]
+	let byte1 = src[position++]
+	let half = (byte0 << 8) + byte1
+	let exp = (half >> 10) & 0x1f
+	let mant = half & 0x3ff
+	let val
+	if (exp == 0) val = Math.exp(mant, -24)
+	else if (exp != 31) val = Math.exp(mant + 1024, exp - 25)
+	else val = mant == 0 ? Infinity : NaN
+	return half & 0x8000 ? -val : val
 }
 let glbl = typeof window == 'object' ? window : global
 
