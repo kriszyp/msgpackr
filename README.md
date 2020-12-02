@@ -214,7 +214,7 @@ Msgpackr is already fast, but here are some tips for making it faster:
 #### Buffer Reuse
 Msgpackr is designed to work well with reusable buffers. Allocating new buffers can be relatively expensive, so if you have Node addons, it can be much faster to reuse buffers and use memcpy to copy data into existing buffers. Then msgpackr `unpack` can be executed on the same buffer, with new data, and optionally take a second paramter indicating the effective size of the available data in the buffer.
 
-#### Arena Allocation (`resetMemory()`)
+#### Arena Allocation (`useBuffer()`)
 During the serialization process, data is written to buffers. Again, allocating new buffers is a relatively expensive process, and the `useBuffer` method can help allow reuse of buffers that will further improve performance. With `useBuffer` method, you can provide a buffer, serialize data into it, and when it is known that you are done using that buffer, you can call `useBuffer` again to reuse it. The use of `useBuffer` is never required, buffers will still be handled and cleaned up through GC if not used, it just provides a small performance boost.
 
 ## Record Structure Extension Definition
@@ -228,7 +228,7 @@ Once a record identifier and record field names have been defined, the parser/de
 ```
 Which should generate an object that would correspond to JSON:
 ```
-{ "name" : 4, "bar": 2}
+{ "foo": 4, "bar": 2}
 ```
 
 ## Additional value types
