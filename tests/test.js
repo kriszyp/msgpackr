@@ -1,5 +1,5 @@
 var inspector = require('inspector')
-inspector.open(9330, null, true)
+//inspector.open(9330, null, true)
 
 function tryRequire(module) {
 	try {
@@ -122,10 +122,9 @@ suite('cborX basic tests', function(){
 		let encoder = new Encoder()
 		addExtension({
 			Class: Extended,
-			type: 30,
-			decode: function(buffer) {
+			tag: 300,
+			decode: function(data) {
 				let e = new Extended()
-				let data = encoder.decode(buffer)
 				e.value = data[0]
 				e.string = data[1]
 				return e
@@ -275,7 +274,7 @@ suite('cborX basic tests', function(){
 		assert.deepEqual(deserialized, data)
 	})
 
-	test('buffers', function(){
+	test('buffers', function() {
 		var data = {
 			buffer1: new Uint8Array([2,3,4]),
 			buffer2: new Uint8Array(encode(sampleData))

@@ -17,7 +17,6 @@ let srcStringEnd = 0
 let referenceMap
 let currentExtensions = []
 let dataView
-let needsBufferCopy
 let defaultOptions = {
 	useRecords: false,
 	mapsAsObjects: true
@@ -35,7 +34,7 @@ class Decoder {
 	}
 	decode(source, end, continueReading) {
 		if (src) {
-			// re-entrant execution, save the state and restore it after we do this unpack
+			// re-entrant execution, save the state and restore it after we do this decode
 			return saveState(() => {
 				src = null
 				return this ? this.decode(source, end, continueReading) : Decoder.prototype.decode.call(defaultOptions, source, end, continueReading)
@@ -207,7 +206,7 @@ function read() {
 					return recordDefinition(src[position++])
 				} else {
 					if (currentExtensions[token])
-						return currentExtensions[token]()
+						return currentExtensions[token](read())
 					else
 						throw new Error('Unknown extension ' + token)
 				}
@@ -508,7 +507,7 @@ function shortStringInJS(length) {
 }
 
 function readBin(length) {
-	return (currentDecoder.copyBuffers || needsBufferCopy) ?
+	return currentDecoder.copyBuffers ?
 		// specifically use the copying slice (not the node one)
 		Uint8Array.prototype.slice.call(src, position, position += length) :
 		src.subarray(position, position += length)
@@ -542,22 +541,19 @@ function getFloat16() {
 }
 let glbl = typeof window == 'object' ? window : global
 
-currentExtensions[8] = () => {
-	let data = read()
+currentExtensions[8] = (data) => {
 	return (glbl[data[0]] || Error)(data[1])
 }
 
-currentExtensions[9] = (data) => {
+currentExtensions[9] = (id) => {
 	// id extension (for structured clones)
-	let id = dataView.getUint32(++position)
-	position += 4
 	if (!referenceMap)
 		referenceMap = new Map()
 	let token = src[position]
 	let target
 	// TODO: handle Maps, Sets, and other types that can cycle; this is complicated, because you potentially need to read
 	// ahead past references to record structure definitions
-	if (token >= 0x90 && token < 0xa0 || token == 0xdc || token == 0xdd)
+	if ((token >> 5) == 4)
 		target = []
 	else
 		target = {}
@@ -571,40 +567,32 @@ currentExtensions[9] = (data) => {
 	return targetProperties // no cycle, can just use the returned read object
 }
 
-currentExtensions[10] = () => {
+currentExtensions[10] = (id) => {
 	// pointer extension (for structured clones)
-	let id = dataView.getUint32(++position)
-	position += 4
 	let refEntry = referenceMap.get(id)
 	refEntry.used = true
 	return refEntry.target
 }
 
-currentExtensions[11] = () => new Set(read())
+currentExtensions[11] = (array) => new Set(array)
 
 const typedArrays = ['Int8','Uint8	','Uint8Clamped','Int16','Uint16','Int32','Uint32','Float32','Float64','BigInt64','BigUint64'].map(type => type + 'Array')
 
-currentExtensions[12] = () => {
-	needsBufferCopy = true
-	try {
-		let [ typeCode, buffer ] = read()
-		let typedArrayName = typedArrays[typeCode]
-		if (!typedArrayName)
-			throw new Error('Could not find typed array for code ' + typeCode)
-		// we have to always slice/copy here to get a new ArrayBuffer that is word/byte aligned
-		return new glbl[typedArrayName](buffer.buffer)
-	} finally {
-		needsBufferCopy = false
-	}
+currentExtensions[12] = (data) => {
+	let [ typeCode, buffer ] = data
+	let typedArrayName = typedArrays[typeCode]
+	if (!typedArrayName)
+		throw new Error('Could not find typed array for code ' + typeCode)
+	// we have to always slice/copy here to get a new ArrayBuffer that is word/byte aligned
+	return new glbl[typedArrayName](Uint8Array.prototype.slice.call(buffer, 0).buffer)
 }
-currentExtensions[13] = () => {
-	let data = read()
+currentExtensions[13] = (data) => {
 	return new RegExp(data[0], data[1])
 }
 
 currentExtensions[1] = (data) => {
 	// 32-bit date extension
-	return new Date(read() * 1000)
+	return new Date(data * 1000)
 }
 function saveState(callback) {
 	let savedSrcEnd = srcEnd
@@ -639,7 +627,7 @@ exports.clearSource = function() {
 }
 
 exports.addExtension = function(extension) {
-	currentExtensions[extension.type] = extension.unpack
+	currentExtensions[extension.tag] = extension.decode
 }
 
 let mult10 = new Array(147) // this is a table matching binary exponents to the multiplier to determine significant digit rounding

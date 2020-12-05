@@ -192,7 +192,7 @@ class MyCustomClass {...}
 let extEncoder = new Encoder();
 addExtension({
 	Class: MyCustomClass,
-	type: 11, // register our own extension code (a type code from 1-100)
+	tag: 311, // register our own extension code (a tag code > 255)
 	encode(instance) {
 		// define how your custom class should be encoded
 		return extEncoder.encode(instance.myData); // return a buffer

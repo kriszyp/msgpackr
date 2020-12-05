@@ -339,34 +339,22 @@ class Encoder extends Decoder {
 							let extensionClass = extensionClasses[i]
 							if (value instanceof extensionClass) {
 								let extension = extensions[i]
-								let currentTarget = target
-								let currentTargetView = targetView
-								let currentPosition = position
-								target = null
-								let result
-								try {
-									result = extension.encode.call(this, value, (size) => {
-										target = currentTarget
-										currentTarget = null
-										position += size
-										if (position > safeEnd)
-											makeRoom(position)
-										return {
-											target, targetView, position: position - size
-										}
-									}, encode)
-								} finally {
-									// restore current target information (unless already restored)
-									if (currentTarget) {
-										target = currentTarget
-										targetView = currentTargetView
-										position = currentPosition
-										safeEnd = target.length - 10
-									}
-								}
-								if (result) {
-									position = writeExtensionData(result, target, position, extension.type)
-								}
+								let tag = extension.tag
+								if (tag < 0x18) {
+									target[position++] = 0xc0 | tag
+								} else if (tag < 0x100) {
+									target[position++] = 0xd8
+									target[position++] = tag
+								} else if (tag < 0x10000) {
+									target[position++] = 0xd9
+									target[position++] = tag >> 8
+									target[position++] = tag & 0xff
+								} else if (tag > -1) {
+									target[position++] = 0xba
+									targetView.setUint32(position, tag)
+									position += 4
+								} // else undefined, don't write tag
+								extension.encode.call(this, value, encode)
 								return
 							}
 						}
@@ -549,92 +537,72 @@ function copyBinary(source, target, targetOffset, offset, endOffset) {
 
 extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/, C1Type ]
 extensions = [{
-	encode(date, allocateForWrite) {
+	tag: 1,
+	encode(date, encode) {
 		let seconds = date.getTime() / 1000
 		if ((this.useTimestamp32 || date.getMilliseconds() === 0) && seconds >= 0 && seconds < 0x100000000) {
 			// Timestamp 32
-			let { target, targetView, position} = allocateForWrite(6)
-			target[position++] = 0xc1
 			target[position++] = 0x1a
 			targetView.setUint32(position, seconds)
+			position += 4
 		} else {
 			// Timestamp float64
-			let { target, targetView, position} = allocateForWrite(10)
-			target[position++] = 0xc1
 			target[position++] = 0xfb
 			targetView.setFloat64(position, seconds)
+			position += 8
 		}
 	}
 }, {
-	encode(set, allocateForWrite, encode) {
+	tag: 11,
+	encode(set, encode) {
 		let array = Array.from(set)
-		if (this.structuredClone) {
-			let { target, position} = allocateForWrite(1)
-			target[position++] = 0xcb // tag 11
-		}
 		encode(array)
 	}
 }, {
-	encode(error, allocateForWrite, encode) {
-		if (this.structuredClone) {
-			let { target, position} = allocateForWrite(1)
-			target[position++] = 0xc8 // tag 8
-		}
+	tag: 8,
+	encode(error, encode) {
 		encode([ error.name, error.message ])
 	}
 }, {
-	encode(regex, allocateForWrite, encode) {
-		if (this.structuredClone) {
-			let { target, position} = allocateForWrite(1)
-			target[position++] = 0xcd
-		}
+	tag: 13,
+	encode(regex, encode) {
 		encode([ regex.source, regex.flags ])
 	}
 }, {
-	encode(arrayBuffer, allocateForWrite, encode) {
+	encode(arrayBuffer, encode) {
 		if (this.structuredClone)
-			writeExtBuffer(arrayBuffer, 0x10, allocateForWrite, encode)
+			writeExtBuffer(arrayBuffer, 0x10, encode)
 		else
-			writeBuffer(hasNodeBuffer ? Buffer.from(arrayBuffer) : new Uint8Array(arrayBuffer), allocateForWrite)
+			writeBuffer(hasNodeBuffer ? Buffer.from(arrayBuffer) : new Uint8Array(arrayBuffer))
 	}
 }, {
-	encode(typedArray, allocateForWrite, encode) {
+	encode(typedArray, encode) {
 		let constructor = typedArray.constructor
 		if (constructor !== ByteArray && this.structuredClone)
-			writeExtBuffer(typedArray, typedArrays.indexOf(constructor.name), allocateForWrite, encode)
+			writeExtBuffer(typedArray, typedArrays.indexOf(constructor.name), encode)
 		else
-			writeBuffer(typedArray, allocateForWrite)
-	}
-}, {
-	encode(c1, allocateForWrite) { // specific 0xC1 object
-		let { target, position} = allocateForWrite(1)
-		target[position] = 0xc1
+			writeBuffer(typedArray)
 	}
 }]
 
-function writeExtBuffer(typedArray, type, allocateForWrite, encode) {
+function writeExtBuffer(typedArray, type, encode) {
+	target[position++] = 0xcc // tag 12
 	let length = typedArray.byteLength
 	let offset = typedArray.byteOffset || 0
 	let buffer = typedArray.buffer || typedArray
-	let { target, position, targetView } = allocateForWrite(1)
-	target[position++] = 0xcc
 	encode([type, hasNodeBuffer ? Buffer.from(buffer, offset, length) :
 		new Uint8Array(buffer, offset, length)])
 }
-function writeBuffer(buffer, allocateForWrite) {
+function writeBuffer(buffer) {
 	let length = buffer.byteLength
-	var target, position
 	if (length < 0x100) {
-		var { target, position } = allocateForWrite(length + 2)
 		target[position++] = 0x58
 		target[position++] = length
 	} else if (length < 0x10000) {
-		var { target, position } = allocateForWrite(length + 3)
 		target[position++] = 0x59
 		target[position++] = length >> 8
 		target[position++] = length & 0xff
 	} else {
-		var { target, position, targetView } = allocateForWrite(length + 5)
 		target[position++] = 0x5a
 		targetView.setUint32(position, length)
 		position += 4
@@ -643,6 +611,7 @@ function writeBuffer(buffer, allocateForWrite) {
 		buffer.copy(target, position)
 	else
 		copyBinary(buffer, target, position, 0, length)
+	position += length
 }
 
 function writeExtensionData(result, target, position, type) {
