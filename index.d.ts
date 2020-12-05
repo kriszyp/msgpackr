@@ -1,4 +1,4 @@
-declare module 'msgpackr' {
+declare module 'cbor-x' {
 	interface Options {
 		useFloat32?: 0 | typeof ALWAYS | typeof DECIMAL_ROUND | typeof DECIMAL_FIT
 		useRecords?: boolean
@@ -11,35 +11,30 @@ declare module 'msgpackr' {
 		getStructures?(): {}[]
 		saveStructures?(structures: {}[]): boolean | void
 	}
-	export class Unpackr {
+	export class Decoder {
 		constructor(options?: Options)
-		unpack(messagePack: Buffer): any
 		decode(messagePack: Buffer): any
 	}
-	export class Decoder extends Unpackr {}
-	export class Packr extends Unpackr {
-		pack(value: any): Buffer
+	export class Encoder extends Decoder {
 		encode(value: any): Buffer
 		resetMemory(): void
 	}
-	export class Encoder extends Packr {}
+
 	interface Extension {
 		Class: Function
 		type: number
-		pack(value: any): Buffer
-		unpack(messagePack: Buffer): any
+		encode(value: any): Buffer
+		decode(messagePack: Buffer): any
 	}
-	export function unpack(messagePack: Buffer): any
-	export function pack(value: any): Buffer
 	export function decode(messagePack: Buffer): any
 	export function encode(value: any): Buffer
 	export function addExtension(extension: Extension)
 	export const ALWAYS = 1
 	export const DECIMAL_ROUND = 3
 	export const DECIMAL_FIT = 4
-	export class UnpackrStream {
+	export class DecoderStream {
 	}
-	export class PackrStream {
+	export class EncoderStream {
 		write(value)
 		end(value?)
 	}
