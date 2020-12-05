@@ -56,6 +56,8 @@ Cbor-x  works as standalone JavaScript as well, and runs on modern browsers. It 
 <script src="node_modules/cbor-x/dist/index.js"></script>
 ```
 
+This is UMD based, and will register as a module if possible, or create a `cbor` global with all the exported functions.
+
 For module-based development, it is recommended that you directly import the module of interest, to minimize dependencies that get pulled into your application:
 ```
 import { decode } from 'cbor-x/decode' // if you only need to decode
@@ -81,7 +83,7 @@ This option is disabled by default because it uses extensions and reference chec
 
 
 ## Record / Object Structures
-There is a critical difference between maps (or dictionaries) that hold an arbitrary set of keys and values (JavaScript `Map` is designed for these), and records or object structures that have a well-defined set of fields. Typical JS objects/records may have many instances re(use) the same structure. By using the record extension, this distinction is preserved in CBOR and the encoding can reuse structures and not only provides better type preservation, but yield much more compact encodings and increase decoding performance by 2-3x. cbor-x automatically generates record definitions that are reused and referenced by objects with the same structure. There are a number of ways to use this to our advantage. For large object structures with repeating nested objects with similar structures, simply serializing with the record extension can yield significant benefits. To use the record structures extension, we create a new `Encoder` instance. By default a new `Encoder` instance will have the record extension enabled:
+There is a critical difference between maps (or dictionaries) that hold an arbitrary set of keys and values (JavaScript `Map` is designed for these), and records or object structures that have a well-defined set of fields. Typical JS objects/records may have many instances re(use) the same structure. By using the record extension, this distinction is preserved in CBOR and the encoding can reuse structures and not only provides better type preservation, but yield much more compact encodings and increase decoding performance by 2-3x. cbor-x automatically generates record definitions that are reused and referenced by objects with the same structure. Records use CBOR's tags to align well CBOR's tag/extension mechanism. There are a number of ways to use this to our advantage. For large object structures with repeating nested objects with similar structures, simply serializing with the record extension can yield significant benefits. To use the record structures extension, we create a new `Encoder` instance. By default a new `Encoder` instance will have the record extension enabled:
 ```
 import { Encoder } from 'cbor-x';
 let encoder = new Encoder();
@@ -215,19 +217,16 @@ During the serialization process, data is written to buffers. Again, allocating 
 ## Record Structure Extension Definition
 The record struction extension uses tag 6 to declare a new record structure. This is followed by an array where the first byte indicates the tag of the record structure and the remaining elements are the field names. The record tag id must be from 0x40 - 0xff (and therefore replaces one byte representations of positive integers 64 - 255, which can alternately be represented with int or uint types). The extension declaration must be immediately follow by the field names of the record structure.
 
-## Additional value types
-cbor-x supports `undefined` (using fixext1 + type: 0 + data: 0 to match other JS implementations), `NaN`, `Infinity`, and `-Infinity` (using standard IEEE 754 representations with doubles/floats).
-
 ### Dates
-cbor-x saves all JavaScript `Date`s using the standard CBOR date extension (type -1), using the smallest of 32-bit, 64-bit or 96-bit format needed to store the date without data loss (or using 32-bit if useTimestamp32 options is specified).
+cbor-x saves all JavaScript `Date`s using the standard CBOR date extension (tag 1).
 
 ### Structured Cloning
-With structured cloning enabled, cbor-x will also use extensions to store Set, Map, Error, RegExp, ArrayBufferView objects and preserve their types.
+With structured cloning enabled, cbor-x will also use tags/extensions to store Set, Map, Error, RegExp, ArrayBufferView objects and preserve their types.
 
 ## Alternate Encoding/Package
-The high-performance serialization and deserialization algorithms in the msgpackr package are also available in the [cbor-x](https://github.com/kriszyp/cbor-x) for the CBOR format. A quick summary of the pros and cons of using MessagePack vs CBOR are:
+The high-performance serialization and deserialization algorithms in the msgpackr package are also available in the [msgpackr](https://github.com/kriszyp/msgpackr) for the MessagePack format, with the same API and design. A quick summary of the pros and cons of using MessagePack vs CBOR are:
 * MessagePack has wider adoption, and, at least with this implementation is slightly more efficient (by roughly 1%).
-* CBOR has an official IETF standardization track, and the record extensions is conceptually/philosophically a better fit for CBOR tags.
+* CBOR has an [official IETF standardization track](https://tools.ietf.org/html/rfc7049), and the record extensions is conceptually/philosophically a better fit for CBOR tags.
 
 ## License
 
