@@ -202,15 +202,10 @@ function read() {
 				} else
 					return token
 			} else {
-				if (token == 6) {
-					return recordDefinition(src[position++])
-				} else {
-					if (currentExtensions[token])
-						return currentExtensions[token](read())
-					else
-						throw new Error('Unknown extension ' + token)
-				}
-
+				if (currentExtensions[token])
+					return currentExtensions[token](read())
+				else
+					throw new Error('Unknown extension ' + token)
 			}
 		case 7: // fixed value
 			switch (token) {
@@ -520,12 +515,6 @@ function readExt(length) {
 	else
 		throw new Error('Unknown extension type ' + type)
 }
-// the registration of the record definition extension (as "r")
-const recordDefinition = (id) => {
-	let structure = currentStructures[id & 0x3f] = read()
-	structure.read = createStructureReader(structure)
-	return structure.read()
-}
 
 function getFloat16() {
 	let byte0 = src[position++]
@@ -540,6 +529,15 @@ function getFloat16() {
 	return half & 0x8000 ? -val : val
 }
 let glbl = typeof window == 'object' ? window : global
+
+// the registration of the record definition extension (tag 6)
+currentExtensions[6] = (structure) => {
+	let id = structure[0]
+	structure = structure.slice(1)
+	currentStructures[id - 0x40] = structure
+	structure.read = createStructureReader(structure)
+	return structure.read()
+}
 
 currentExtensions[8] = (data) => {
 	return (glbl[data[0]] || Error)(data[1])
@@ -606,7 +604,7 @@ function saveState(callback) {
 	// TODO: We may need to revisit this if we do more external calls to user code (since it could be slow)
 	let savedSrc = new Uint8Array(src.slice(0, srcEnd)) // we copy the data in case it changes while external data is processed
 	let savedStructures = currentStructures
-	let savedPackr = currentDecoder
+	let savedDecoder = currentDecoder
 	let value = callback()
 	srcEnd = savedSrcEnd
 	position = savedPosition

@@ -213,18 +213,7 @@ Cbor-x is already fast, but here are some tips for making it faster.
 During the serialization process, data is written to buffers. Again, allocating new buffers is a relatively expensive process, and the `useBuffer` method can help allow reuse of buffers that will further improve performance. With `useBuffer` method, you can provide a buffer, serialize data into it, and when it is known that you are done using that buffer, you can call `useBuffer` again to reuse it. The use of `useBuffer` is never required, buffers will still be handled and cleaned up through GC if not used, it just provides a small performance boost.
 
 ## Record Structure Extension Definition
-The record struction extension uses extension id 0x72 ("r") to declare the use of this functionality. The extension "data" byte (or bytes) identifies the byte or bytes used to identify the start of a record in the subsequent CBOR block or stream. The identifier byte (or the first byte in a sequence) must be from 0x40 - 0x7f (and therefore replaces one byte representations of positive integers 64 - 127, which can alternately be represented with int or uint types). The extension declaration must be immediately follow by an CBOR array that defines the field names of the record structure.
-
-Once a record identifier and record field names have been defined, the parser/decoder should proceed to read the next value. Any subsequent use of the record identifier as a value in the block or stream should parsed as a record instance, and the next n values, where is n is the number of fields (as defined in the array of field names), should be read as the values of the fields. For example, here we have defined a structure with fields "foo" and "bar", with the record identifier 0x40, and then read a record instance that defines the field values of 4 and 2, respectively:
-```
-+--------+--------+--------+~~~~~~~~~~~~~~~~~~~~~~~~~+--------+--------+--------+
-|  0xd4  |  0x72  |  0x40  | array: [ "foo", "bar" ] |  0x40  |  0x04  |  0x02  |
-+--------+--------+--------+~~~~~~~~~~~~~~~~~~~~~~~~~+--------+--------+--------+
-```
-Which should generate an object that would correspond to JSON:
-```
-{ "name" : 4, "bar": 2}
-```
+The record struction extension uses tag 6 to declare a new record structure. This is followed by an array where the first byte indicates the tag of the record structure and the remaining elements are the field names. The record tag id must be from 0x40 - 0xff (and therefore replaces one byte representations of positive integers 64 - 255, which can alternately be represented with int or uint types). The extension declaration must be immediately follow by the field names of the record structure.
 
 ## Additional value types
 cbor-x supports `undefined` (using fixext1 + type: 0 + data: 0 to match other JS implementations), `NaN`, `Infinity`, and `-Infinity` (using standard IEEE 754 representations with doubles/floats).
@@ -237,7 +226,7 @@ With structured cloning enabled, cbor-x will also use extensions to store Set, M
 
 ## Alternate Encoding/Package
 The high-performance serialization and deserialization algorithms in the msgpackr package are also available in the [cbor-x](https://github.com/kriszyp/cbor-x) for the CBOR format. A quick summary of the pros and cons of using MessagePack vs CBOR are:
-* MessagePack has wider adoption, and, at least with this implementation is slightly more efficient.
+* MessagePack has wider adoption, and, at least with this implementation is slightly more efficient (by roughly 1%).
 * CBOR has an official IETF standardization track, and the record extensions is conceptually/philosophically a better fit for CBOR tags.
 
 ## License

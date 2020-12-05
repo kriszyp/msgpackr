@@ -473,7 +473,7 @@ class Encoder extends Decoder {
 			}
 			let recordId = transition[RECORD_SYMBOL]
 			if (recordId) {
-				target[position++] = 0xd8
+				target[position++] = 0xd8 // tag one byte
 				target[position++] = recordId
 			} else {
 				recordId = structures.nextId++
@@ -485,21 +485,20 @@ class Encoder extends Decoder {
 					structures.nextId = (recordId = maxSharedStructures + 0x40) + 1
 				}
 				transition[RECORD_SYMBOL] = recordId
-				structures[0x3f & recordId] = keys
+				structures[recordId - 0x40] = keys
 				if (sharedStructures && sharedStructures.length <= maxSharedStructures) {
 					target[position++] = 0xd8 // tag one byte
 					target[position++] = recordId // tag number
 					hasSharedUpdate = true
 				} else {
 					target[position++] = 0xc6 // tag 6
-					target[position++] = recordId
 					if (newTransitions)
 						transitionsCount += serializationsSinceTransitionRebuild * newTransitions
 					// record the removal of the id, we can maintain our shared structure
 					if (recordIdsToRemove.length >= 0xc0 - maxSharedStructures)
 						recordIdsToRemove.shift()[RECORD_SYMBOL] = 0 // we are cycling back through, and have to remove old ones
 					recordIdsToRemove.push(transition)
-					encode(keys)
+					encode([ recordId ].concat(keys))
 				}
 			}
 			// now write the values
