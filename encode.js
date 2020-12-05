@@ -3,9 +3,9 @@ let decoderModule = require('./decode')
 let Decoder = decoderModule.Decoder
 let mult10 = decoderModule.mult10
 const typedArrays = decoderModule.typedArrays
-let encoder
+let textEncoder
 try {
-	encoder = new TextEncoder()
+	textEncoder = new TextEncoder()
 } catch (error) {}
 let extensions, extensionClasses
 const hasNodeBuffer = typeof Buffer !== 'undefined'
@@ -29,9 +29,9 @@ class Encoder extends Decoder {
 		let lastSharedStructuresLength = 0
 		let encodeUtf8 = ByteArray.prototype.utf8Write ? function(string, position, maxBytes) {
 			return target.utf8Write(string, position, maxBytes)
-		} : (encoder && encoder.encodeInto) ?
+		} : (textEncoder && textEncoder.encodeInto) ?
 			function(string, position) {
-				return encoder.encodeInto(string, target.subarray(position)).written
+				return textEncoder.encodeInto(string, target.subarray(position)).written
 			} : false
 
 		let encoder = this

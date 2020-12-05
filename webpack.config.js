@@ -6,7 +6,7 @@ module.exports = {
     },
     output: {
         path: path.join(__dirname, 'dist'),
-        library: 'msgpackr',
+        library: 'cbor',
         libraryTarget: 'umd'
     },
     node: { Buffer: false },

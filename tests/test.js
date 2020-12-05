@@ -1,4 +1,4 @@
-var inspector = require('inspector')
+//var inspector = require('inspector')
 //inspector.open(9330, null, true)
 
 function tryRequire(module) {
@@ -10,15 +10,15 @@ function tryRequire(module) {
 }
 if (typeof chai === 'undefined') { chai = require('chai') }
 assert = chai.assert
-if (typeof cborX === 'undefined') { cborX = require('..') }
-var Encoder = cborX.Encoder
-var EncoderStream = cborX.EncoderStream
-var DecoderStream = cborX.DecoderStream
-var decode = cborX.decode
-var encode = cborX.encode
-var DECIMAL_FIT = cborX.DECIMAL_FIT
+if (typeof cbor === 'undefined') { cbor = require('..') }
+var Encoder = cbor.Encoder
+var EncoderStream = cbor.EncoderStream
+var DecoderStream = cbor.DecoderStream
+var decode = cbor.decode
+var encode = cbor.encode
+var DECIMAL_FIT = cbor.DECIMAL_FIT
 
-var addExtension = cborX.addExtension
+var addExtension = cbor.addExtension
 
 var zlib = tryRequire('zlib')
 var deflateSync = zlib.deflateSync
@@ -42,7 +42,7 @@ if (typeof XMLHttpRequest === 'undefined') {
 }
 var ITERATIONS = 10000
 
-suite('cborX basic tests', function(){
+suite('cbor basic tests', function(){
 	test('encode/decode data', function(){
 		var data = {
 			data: [
@@ -147,7 +147,7 @@ suite('cborX basic tests', function(){
 				b[1] = 0
 				b[2] = 0
 				let s = td.decode(b)
-				if (!require('cborX-extract').isOneByte(s)) {
+				if (!require('cbor-extract').isOneByte(s)) {
 					console.log(i.toString(16), s.length)
 					total++
 				}
@@ -348,7 +348,7 @@ suite('cborX basic tests', function(){
 	}
 
 })
-suite('cborX performance tests', function(){
+suite('cbor performance tests', function(){
 	test('performance JSON.parse', function() {
 		var data = sampleData
 		this.timeout(10000)
@@ -374,7 +374,7 @@ suite('cborX performance tests', function(){
 		console.log('CBOR size', serialized.length)
 		let encoder = new Encoder({ structures })
 		var serialized = encoder.encode(data)
-		console.log('cborX w/ record ext size', serialized.length)
+		console.log('cbor w/ record ext size', serialized.length)
 		for (var i = 0; i < ITERATIONS; i++) {
 			var deserialized = encoder.decode(serialized)
 		}

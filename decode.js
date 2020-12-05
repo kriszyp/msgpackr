@@ -530,6 +530,26 @@ function getFloat16() {
 }
 let glbl = typeof window == 'object' ? window : global
 
+currentExtensions[0] = (dateString) => {
+	// string date extension
+	return new Date(dateString)
+}
+
+currentExtensions[1] = (epochSec) => {
+	// numeric date extension
+	return new Date(epochSec * 1000)
+}
+
+currentExtensions[2] = (buffer) => {
+	// bigint extension
+	return new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength).getBigUint64(0)
+}
+
+currentExtensions[3] = (buffer) => {
+	// negative bigint extension
+	return BigInt(-1) - (new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength).getBigUint64(0))
+}
+
 // the registration of the record definition extension (tag 6)
 currentExtensions[6] = (structure) => {
 	let id = structure[0]
@@ -588,10 +608,6 @@ currentExtensions[13] = (data) => {
 	return new RegExp(data[0], data[1])
 }
 
-currentExtensions[1] = (data) => {
-	// 32-bit date extension
-	return new Date(data * 1000)
-}
 function saveState(callback) {
 	let savedSrcEnd = srcEnd
 	let savedPosition = position
