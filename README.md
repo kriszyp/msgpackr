@@ -209,7 +209,7 @@ addExtension({
 ### Additional Performance Optimizations
 Cbor-x is already fast, but here are some tips for making it faster.
 
-#### Arena Allocation (`resetMemory()`)
+#### Arena Allocation (`useBuffer()`)
 During the serialization process, data is written to buffers. Again, allocating new buffers is a relatively expensive process, and the `useBuffer` method can help allow reuse of buffers that will further improve performance. With `useBuffer` method, you can provide a buffer, serialize data into it, and when it is known that you are done using that buffer, you can call `useBuffer` again to reuse it. The use of `useBuffer` is never required, buffers will still be handled and cleaned up through GC if not used, it just provides a small performance boost.
 
 ## Record Structure Extension Definition

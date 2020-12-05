@@ -178,11 +178,15 @@ suite('cborX basic tests', function(){
 	})
 
 	test('structured cloning: types', function() {
+		let b = Buffer.alloc(20)
+		let fa = new Float32Array(b.buffer, 8, 2)
+		fa[0] = 2.25
+		fa[1] = 6
 		let object = {
 			error: new Error('test'),
 			set: new Set(['a', 'b']),
 			regexp: /test/gi,
-			float32Array: new Float32Array([2.25,6]),
+			float32Array: fa,
 			uint16Array: new Uint16Array([3,4])
 		}
 		let encoder = new Encoder({
