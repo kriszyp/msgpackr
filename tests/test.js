@@ -10,15 +10,15 @@ function tryRequire(module) {
 }
 if (typeof chai === 'undefined') { chai = require('chai') }
 assert = chai.assert
-if (typeof cbor === 'undefined') { cbor = require('..') }
-var Encoder = cbor.Encoder
-var EncoderStream = cbor.EncoderStream
-var DecoderStream = cbor.DecoderStream
-var decode = cbor.decode
-var encode = cbor.encode
-var DECIMAL_FIT = cbor.DECIMAL_FIT
+if (typeof CBOR === 'undefined') { CBOR = require('..') }
+var Encoder = CBOR.Encoder
+var EncoderStream = CBOR.EncoderStream
+var DecoderStream = CBOR.DecoderStream
+var decode = CBOR.decode
+var encode = CBOR.encode
+var DECIMAL_FIT = CBOR.DECIMAL_FIT
 
-var addExtension = cbor.addExtension
+var addExtension = CBOR.addExtension
 
 var zlib = tryRequire('zlib')
 var deflateSync = zlib.deflateSync
@@ -42,7 +42,7 @@ if (typeof XMLHttpRequest === 'undefined') {
 }
 var ITERATIONS = 10000
 
-suite('cbor basic tests', function(){
+suite('CBOR basic tests', function(){
 	test('encode/decode data', function(){
 		var data = {
 			data: [
@@ -147,7 +147,7 @@ suite('cbor basic tests', function(){
 				b[1] = 0
 				b[2] = 0
 				let s = td.decode(b)
-				if (!require('cbor-extract').isOneByte(s)) {
+				if (!require('CBOR-extract').isOneByte(s)) {
 					console.log(i.toString(16), s.length)
 					total++
 				}
@@ -348,7 +348,7 @@ suite('cbor basic tests', function(){
 	}
 
 })
-suite('cbor performance tests', function(){
+suite('CBOR performance tests', function(){
 	test('performance JSON.parse', function() {
 		var data = sampleData
 		this.timeout(10000)
@@ -374,7 +374,7 @@ suite('cbor performance tests', function(){
 		console.log('CBOR size', serialized.length)
 		let encoder = new Encoder({ structures })
 		var serialized = encoder.encode(data)
-		console.log('cbor w/ record ext size', serialized.length)
+		console.log('CBOR w/ record ext size', serialized.length)
 		for (var i = 0; i < ITERATIONS; i++) {
 			var deserialized = encoder.decode(serialized)
 		}

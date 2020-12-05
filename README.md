@@ -56,7 +56,7 @@ Cbor-x  works as standalone JavaScript as well, and runs on modern browsers. It 
 <script src="node_modules/cbor-x/dist/index.js"></script>
 ```
 
-This is UMD based, and will register as a module if possible, or create a `cbor` global with all the exported functions.
+This is UMD based, and will register as a module if possible, or create a `CBOR` global with all the exported functions.
 
 For module-based development, it is recommended that you directly import the module of interest, to minimize dependencies that get pulled into your application:
 ```

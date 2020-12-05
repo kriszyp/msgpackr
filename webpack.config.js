@@ -6,7 +6,7 @@ module.exports = {
     },
     output: {
         path: path.join(__dirname, 'dist'),
-        library: 'cbor',
+        library: 'CBOR',
         libraryTarget: 'umd'
     },
     node: { Buffer: false },
