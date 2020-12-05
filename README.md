@@ -183,7 +183,7 @@ msgpack.Decoder().on("data",ondata).decode(buf); | 1000000 |  2246 | 445235
 See the [benchmark.md](benchmark.md) for more benchmarks and information about benchmarking.
 
 ## Custom Extensions
-You can add your own custom extensions, which can be used to encode specific types/classes in certain ways. This is done by using the `addExtension` function, and specifying the class, extension type code (should be a number from 1-100, reserving negatives for CBOR, 101-127 for cbor-x), and your encode and decode functions (or just the one you need). You can use cbor-x encoding and decoding within your extensions, but if you do so, you must create a separate Encoder instance, otherwise you could override data in the same encoding buffer:
+You can add your own custom extensions, which can be used to encode specific types/classes in certain ways. This is done by using the `addExtension` function, and specifying the class, extension type code (should be a number greater than 256, all others are reserved for  CBOR or cbor-x), and your encode and decode functions (or just the one you need). You can use cbor-x encoding and decoding within your extensions:
 ```
 import { addExtension, Encoder } from 'cbor-x';
 
@@ -193,14 +193,14 @@ let extEncoder = new Encoder();
 addExtension({
 	Class: MyCustomClass,
 	tag: 311, // register our own extension code (a tag code > 255)
-	encode(instance) {
+	encode(instance, encode) {
 		// define how your custom class should be encoded
-		return extEncoder.encode(instance.myData); // return a buffer
+		encode(instance.myData); // return a buffer
 	}
-	decode(buffer) {
+	decode(data) {
 		// define how your custom class should be decoded
 		let instance = new MyCustomClass();
-		instance.myData = extEncoder.decode(buffer);
+		instance.myData = data
 		return instance; // decoded value from buffer
 	}
 });
