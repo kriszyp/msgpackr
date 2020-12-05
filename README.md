@@ -149,18 +149,20 @@ Cbor-x is fast. Really fast. Here is comparison with the next fastest JS project
 
 operation                                                  |   op   |   ms  |  op/s
 ---------------------------------------------------------- | ------: | ----: | -----:
-buf = Buffer(JSON.stringify(obj));                         |   75900 |  5003 |  15170
-obj = JSON.parse(buf);                                     |   90800 |  5002 |  18152
-require("cbor-x").encode(obj);                             |  158400 |  5000 |  31680
-require("cbor-x").decode(buf);                           |   99200 |  5003 |  19828
-cbor-x w/ shared structures: encoder.encode(obj);            |  183400 |  5002 |  36665
-cbor-x w/ shared structures: encoder.decode(buf);          |  415000 |  5000 |  83000
-buf = require("msgpack-lite").encode(obj);                 |   30600 |  5005 |   6113
-obj = require("msgpack-lite").decode(buf);                 |   15900 |  5030 |   3161
-buf = require("@msgpack/msgpack").encode(obj);             |  101200 |  5001 |  20235
-obj = require("@msgpack/msgpack").decode(buf);             |   71200 |  5004 |  14228
-buf = require("notepack").encode(obj);                     |   65300 |  5006 |  13044
-obj = require("notepack").decode(buf);                     |   32300 |  5001 |   6458
+buf = Buffer(JSON.stringify(obj));                         |   78200 |  5004 |  15627
+obj = JSON.parse(buf);                                     |   89600 |  5003 |  17909
+require("cbor-x").encode(obj);                             |  163100 |  5001 |  32613
+require("cbor-x").decode(buf);                             |  100200 |  5004 |  20023
+cbor-x w/ shared structures: packr.encode(obj);            |  178300 |  5002 |  35645
+cbor-x w/ shared structures: packr.decode(buf);            |  414000 |  5000 |  82800
+buf = require("cbor").encode(obj);                         |    7800 |  5016 |   1555
+obj = require("cbor").decode(buf);                         |    3200 |  5087 |    629
+buf = require("cbor-sync").encode(obj);                    |   18600 |  5012 |   3711
+obj = require("cbor-sync").decode(buf);                    |   20000 |  5020 |   3984
+buf = require("msgpack-lite").encode(obj);                 |   30900 |  5013 |   6163
+obj = require("msgpack-lite").decode(buf);                 |   15800 |  5012 |   3152
+buf = require("notepack").encode(obj);                     |   62600 |  5006 |  12504
+obj = require("notepack").decode(buf);                     |   33700 |  5007 |   6730
 require("avsc")...make schema/type...type.toBuffer(obj);   |   86900 |  5002 |  17373
 require("avsc")...make schema/type...type.fromBuffer(obj); |  106100 |  5000 |  21220
 

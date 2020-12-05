@@ -11,6 +11,7 @@ var notepack = tryRequire("notepack");
 var what_the_pack = tryRequire("what-the-pack");
 var avro = tryRequire('avsc')
 var cbor = tryRequire('cbor')
+var cborSync = tryRequire('cbor-sync')
 
 msgpack5 = msgpack5 && msgpack5();
 msgpack_codec = msgpack_codec && msgpack_codec.msgpack;
@@ -127,9 +128,15 @@ if (avro) {
   buf = bench('require("avsc")...make schema/type...type.toBuffer(obj);', type.toBuffer.bind(type), data);
   obj = bench('require("avsc")...make schema/type...type.fromBuffer(obj);', type.fromBuffer.bind(type), buf);
 }
+
 if (cbor) {
   buf = bench('buf = require("cbor").encode(obj);', cbor.encode, data);
   obj = bench('obj = require("cbor").decode(buf);', cbor.decode, buf);
+  test(obj);
+}
+if (cborSync) {
+  buf = bench('buf = require("cbor-sync").encode(obj);', cborSync.encode, data);
+  obj = bench('obj = require("cbor-sync").decode(buf);', cborSync.decode, buf);
   test(obj);
 }
 

@@ -29,7 +29,9 @@
     "cbor-extract": "^0.2.0"
   },
   "devDependencies": {
+    "async": "^3",
     "cbor": "^5",
+    "cbor-sync": "^1.0.4",
     "@types/node": "latest",
     "chai": "^4",
     "mocha": "^4",

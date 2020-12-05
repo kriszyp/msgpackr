@@ -3,7 +3,7 @@
 var PassThrough = require("stream").PassThrough;
 var async = require("async");
 
-let { PackrStream, UnpackrStream } = require("..");
+let { EncoderStream, DecoderStream } = require("..");
 var msgpack = require("msgpack-lite");
 var Encoder = require("msgpack-lite/lib/encoder").Encoder;
 var Decoder = require("msgpack-lite/lib/decoder").Decoder;
@@ -21,7 +21,7 @@ var packjoin = repeatbuf(packed, joincount); // 3KB per chunk
 var limit = 2;
 
 var blocksToJoin = []
-var streamForJoin = new PackrStream();
+var streamForJoin = new EncoderStream();
 streamForJoin.on("data", data => blocksToJoin.push(data));
 for (var j = 0; j < joincount; j++) {
   streamForJoin.write(data);
@@ -38,8 +38,8 @@ if (argv[0] === "-v") {
 if (argv[0] - 0) limit = argv.shift() - 0;
 
 var list = [
-  ['new PackrStream().write(obj);', encode5],
-  ['new UnpackrStream().write(buf);', decode5],
+  ['new EncoderStream().write(obj);', encode5],
+  ['new DecoderStream().write(buf);', decode5],
   ['stream.write(msgpack.encode(obj));', encode1],
   ['stream.write(msgpack.decode(buf));', decode1],
   ['stream.write(notepack.encode(obj));', encode4],
@@ -53,7 +53,7 @@ var list = [
 ];
 
 function encode5(callback) {
-  var stream = new PackrStream();
+  var stream = new EncoderStream();
   var cnt = counter(callback);
   stream.on("data", cnt.inc);
   stream.on("end", cnt.end);
@@ -115,7 +115,7 @@ function encode4(callback) {
 }
 
 function decode5(callback) {
-  var stream = new UnpackrStream();
+  var stream = new DecoderStream();
   var cnt = counter(callback);
   stream.on("data", cnt.inc);
   stream.on("end", cnt.end);
