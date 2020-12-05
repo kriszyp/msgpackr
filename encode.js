@@ -2,7 +2,6 @@
 let decoderModule = require('./decode')
 let Decoder = decoderModule.Decoder
 let mult10 = decoderModule.mult10
-let C1Type = decoderModule.C1Type
 const typedArrays = decoderModule.typedArrays
 let encoder
 try {
@@ -534,7 +533,7 @@ function copyBinary(source, target, targetOffset, offset, endOffset) {
 	}
 }
 
-extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/, C1Type ]
+extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/ ]
 extensions = [{
 	tag: 1,
 	encode(date, encode) {
