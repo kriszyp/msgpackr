@@ -57,6 +57,8 @@ Msgpackr works as standalone JavaScript as well, and runs on modern browsers. It
 <script src="node_modules/msgpackr/dist/index.js"></script>
 ```
 
+This is UMD based, and will register as a module if possible, or create a `msgpackr` global with all the exported functions.
+
 For module-based development, it is recommended that you directly import the module of interest, to minimize dependencies that get pulled into your application:
 ```
 import { unpack } from 'msgpackr/unpack' // if you only need to unpack
@@ -241,9 +243,9 @@ msgpackr saves all JavaScript `Date`s using the standard MessagePack date extens
 With structured cloning enabled, msgpackr will also use extensions to store Set, Map, Error, RegExp, ArrayBufferView objects and preserve their types.
 
 ## Alternate Encoding/Package
-The high-performance serialization and deserialization algorithms in the msgpackr package are also available in the [cbor-x](https://github.com/kriszyp/cbor-x) for the CBOR format. A quick summary of the pros and cons of using MessagePack vs CBOR are:
-* MessagePack has wider adoption, and, at least with this implementation is slightly more efficient.
-* CBOR has an official IETF standardization track, and the record extensions is conceptually/philosophically a better fit for CBOR tags.
+The high-performance serialization and deserialization algorithms in the msgpackr package are also available in the [cbor-x](https://github.com/kriszyp/cbor-x) for the CBOR format, with the same API and design. A quick summary of the pros and cons of using MessagePack vs CBOR are:
+* MessagePack has wider adoption, and, at least with this implementation is slightly more efficient (by roughly 1%).
+* CBOR has an [official IETF standardization track](https://tools.ietf.org/html/rfc7049), and the record extensions is conceptually/philosophically a better fit for CBOR tags.
 
 ## License
 

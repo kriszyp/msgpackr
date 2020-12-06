@@ -4,9 +4,9 @@ let Unpackr = unpackModule.Unpackr
 let mult10 = unpackModule.mult10
 let C1Type = unpackModule.C1Type
 const typedArrays = unpackModule.typedArrays
-let encoder
+let textEncoder
 try {
-	encoder = new TextEncoder()
+	textEncoder = new TextEncoder()
 } catch (error) {}
 let extensions, extensionClasses
 const hasNodeBuffer = typeof Buffer !== 'undefined'
@@ -30,9 +30,9 @@ class Packr extends Unpackr {
 		let lastSharedStructuresLength = 0
 		let encodeUtf8 = ByteArray.prototype.utf8Write ? function(string, position, maxBytes) {
 			return target.utf8Write(string, position, maxBytes)
-		} : (encoder && encoder.encodeInto) ?
+		} : (textEncoder && textEncoder.encodeInto) ?
 			function(string, position) {
-				return encoder.encodeInto(string, target.subarray(position)).written
+				return textEncoder.encodeInto(string, target.subarray(position)).written
 			} : false
 
 		let packr = this
@@ -698,9 +698,9 @@ function writeExtensionData(result, target, position, type) {
 				target[position++] = length & 0xff
 			} else {
 				target[position++] = 0xc9
-				target[position++] = length << 24
-				target[position++] = (length << 16) & 0xff
-				target[position++] = (length << 8) & 0xff
+				target[position++] = length >> 24
+				target[position++] = (length >> 16) & 0xff
+				target[position++] = (length >> 8) & 0xff
 				target[position++] = length & 0xff
 			}
 	}
@@ -727,9 +727,9 @@ function insertIds(serialized, idsToInsert) {
 		let position = offset + distanceToMove
 		serialized[position++] = 0xd6
 		serialized[position++] = 0x69 // 'i'
-		serialized[position++] = id << 24
-		serialized[position++] = (id << 16) & 0xff
-		serialized[position++] = (id << 8) & 0xff
+		serialized[position++] = id >> 24
+		serialized[position++] = (id >> 16) & 0xff
+		serialized[position++] = (id >> 8) & 0xff
 		serialized[position++] = id & 0xff
 		lastEnd = offset
 	}
