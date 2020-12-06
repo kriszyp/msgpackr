@@ -58,10 +58,9 @@ if (cborX) {
   test(obj);
 
   encoder = new cborX.Encoder({ structures: [] })
-  buf = bench('cbor-x w/ shared structures: packr.encode(obj);', encoder.encode.bind(encoder), data);
-//  buf = bench('msgpackr w/ shared structures: packr.pack(obj);', data => {let result = packr.pack(data); packr.resetMemory(); return result;}, data);
+  buf = bench('cbor-x w/ shared structures: encoder.encode(obj);', encoder.encode.bind(encoder), data);
 
-  obj = bench('cbor-x w/ shared structures: packr.decode(buf);', encoder.decode.bind(encoder), buf);
+  obj = bench('cbor-x w/ shared structures: encoder.decode(buf);', encoder.decode.bind(encoder), buf);
   test(obj);
 }
 

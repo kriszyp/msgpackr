@@ -202,8 +202,13 @@ function read() {
 				} else
 					return token
 			} else {
-				if (currentExtensions[token])
-					return currentExtensions[token](read())
+				let extension = currentExtensions[token]
+				if (extension) {
+					if (extension.handlesRead)
+						return extension(read)
+					else
+						return extension(read())
+				}
 				else
 					throw new Error('Unknown extension ' + token)
 			}
@@ -228,14 +233,16 @@ function read() {
 }
 const validName = /^[a-zA-Z_$][a-zA-Z\d_$]*$/
 function createStructureReader(structure) {
+	let l = structure.length
 	function readObject() {
 		// This initial function is quick to instantiate, but runs slower. After several iterations pay the cost to build the faster function
 		if (readObject.count++ > 2) {
-			this.read = (new Function('r', 'return function(){return {' + structure.map(key => validName.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '}}'))(read)
+			this.read = (new Function('a', 'r', 'return function(){a();return {' + structure.map(key => validName.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '}}'))(readArrayHeader, read)
 			return this.read()
 		}
+		readArrayHeader(l)
 		let object = {}
-		for (let i = 0, l = structure.length; i < l; i++) {
+		for (let i = 0; i < l; i++) {
 			let key = structure[i]
 			object[key] = read()
 		}
@@ -243,6 +250,22 @@ function createStructureReader(structure) {
 	}
 	readObject.count = 0
 	return readObject
+}
+
+function readArrayHeader(expectedLength) {
+	// consume the array header, TODO: check expected length
+	let token = src[position++]
+	//let majorType = token >> 5
+	token = token & 0x1f
+	if (token > 0x17) {
+		switch (token) {
+			case 0x18: position++
+				break
+			case 0x19: position += 2
+				break
+			case 0x1a: position += 4
+		}
+	}
 }
 
 let readFixedString = readStringJS
@@ -551,19 +574,22 @@ currentExtensions[3] = (buffer) => {
 }
 
 // the registration of the record definition extension (tag 6)
-currentExtensions[6] = (structure) => {
-	let id = structure[0]
-	structure = structure.slice(1)
+const recordDefinition = () => {
+	readArrayHeader(3)
+	let id = read()
+	let structure = read()
 	currentStructures[id - 0x40] = structure
 	structure.read = createStructureReader(structure)
 	return structure.read()
 }
+recordDefinition.handlesRead = true
+currentExtensions[40006] = recordDefinition
 
-currentExtensions[8] = (data) => {
+currentExtensions[40008] = (data) => {
 	return (glbl[data[0]] || Error)(data[1])
 }
 
-currentExtensions[9] = (id) => {
+currentExtensions[40009] = (id) => {
 	// id extension (for structured clones)
 	if (!referenceMap)
 		referenceMap = new Map()
@@ -585,18 +611,18 @@ currentExtensions[9] = (id) => {
 	return targetProperties // no cycle, can just use the returned read object
 }
 
-currentExtensions[10] = (id) => {
+currentExtensions[40010] = (id) => {
 	// pointer extension (for structured clones)
 	let refEntry = referenceMap.get(id)
 	refEntry.used = true
 	return refEntry.target
 }
 
-currentExtensions[11] = (array) => new Set(array)
+currentExtensions[40011] = (array) => new Set(array)
 
 const typedArrays = ['Int8','Uint8	','Uint8Clamped','Int16','Uint16','Int32','Uint32','Float32','Float64','BigInt64','BigUint64'].map(type => type + 'Array')
 
-currentExtensions[12] = (data) => {
+currentExtensions[40012] = (data) => {
 	let [ typeCode, buffer ] = data
 	let typedArrayName = typedArrays[typeCode]
 	if (!typedArrayName)
@@ -604,7 +630,7 @@ currentExtensions[12] = (data) => {
 	// we have to always slice/copy here to get a new ArrayBuffer that is word/byte aligned
 	return new glbl[typedArrayName](Uint8Array.prototype.slice.call(buffer, 0).buffer)
 }
-currentExtensions[13] = (data) => {
+currentExtensions[40013] = (data) => {
 	return new RegExp(data[0], data[1])
 }
 

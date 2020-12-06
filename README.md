@@ -216,8 +216,11 @@ Cbor-x is already fast, but here are some tips for making it faster.
 #### Arena Allocation (`useBuffer()`)
 During the serialization process, data is written to buffers. Again, allocating new buffers is a relatively expensive process, and the `useBuffer` method can help allow reuse of buffers that will further improve performance. With `useBuffer` method, you can provide a buffer, serialize data into it, and when it is known that you are done using that buffer, you can call `useBuffer` again to reuse it. The use of `useBuffer` is never required, buffers will still be handled and cleaned up through GC if not used, it just provides a small performance boost.
 
+## Extensions
+Cbor-x uses tag 40000 to 40300 for its extensions.
+
 ## Record Structure Extension Definition
-The record struction extension uses tag 6 to declare a new record structure. This is followed by an array where the first byte indicates the tag of the record structure and the remaining elements are the field names. The record tag id must be from 0x40 - 0xff (and therefore replaces one byte representations of positive integers 64 - 255, which can alternately be represented with int or uint types). The extension declaration must be immediately follow by the field names of the record structure.
+The record struction extension uses tag 40006 to declare a new record structure. This is followed by an array where the first byte indicates the tag id of the record structure to declare and the next element is an array of the field names, and the third element is array of the property values. The extension declaration must be immediately follow by the field names of the record structure.
 
 ### Dates
 cbor-x saves all JavaScript `Date`s using the standard CBOR date extension (tag 1).
@@ -227,7 +230,7 @@ With structured cloning enabled, cbor-x will also use tags/extensions to store S
 
 ## Alternate Encoding/Package
 The high-performance serialization and deserialization algorithms in the msgpackr package are also available in the [msgpackr](https://github.com/kriszyp/msgpackr) for the MessagePack format, with the same API and design. A quick summary of the pros and cons of using MessagePack vs CBOR are:
-* MessagePack has wider adoption, and, at least with this implementation is slightly more efficient (by roughly 1%).
+* MessagePack has wider adoption, and, at least with this implementation is slightly more efficient (by roughly 2-4%).
 * CBOR has an [official IETF standardization track](https://tools.ietf.org/html/rfc7049), and the record extensions is conceptually/philosophically a better fit for CBOR tags.
 
 ## License

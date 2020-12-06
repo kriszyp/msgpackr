@@ -101,7 +101,7 @@ class Encoder extends Decoder {
 				encode(value)
 				encoder.offset = position // update the offset so next serialization doesn't write over our buffer, but can continue writing to same buffer sequentially
 				if (referenceMap && referenceMap.idsToInsert) {
-					position += referenceMap.idsToInsert.length * 6
+					position += referenceMap.idsToInsert.length * 8
 					if (position > safeEnd)
 						makeRoom(position)
 					encoder.offset = position
@@ -283,7 +283,9 @@ class Encoder extends Decoder {
 								let idsToInsert = referenceMap.idsToInsert || (referenceMap.idsToInsert = [])
 								referee.id = idsToInsert.push(referee)
 							}
-							target[position++] = 0xca // tag 10
+							target[position++] = 0xd9
+							target[position++] = 40010 >> 8
+							target[position++] = 40010 & 0xff
 							target[position++] = 0x1a // uint32
 							targetView.setUint32(position, referee.id)
 							position += 4
@@ -298,17 +300,8 @@ class Encoder extends Decoder {
 						length = value.length
 						if (length < 0x18) {
 							target[position++] = 0x80 | length
-						} else if (length < 0x100) {
-							target[position++] = 0x98
-							target[position++] = length
-						} else if (length < 0x10000) {
-							target[position++] = 0x99
-							target[position++] = length >> 8
-							target[position++] = length & 0xff
 						} else {
-							target[position++] = 0x9a
-							targetView.setUint32(position, length)
-							position += 4
+							writeArrayHeader(length)
 						}
 						for (let i = 0; i < length; i++) {
 							encode(value[i])
@@ -349,7 +342,7 @@ class Encoder extends Decoder {
 									target[position++] = tag >> 8
 									target[position++] = tag & 0xff
 								} else if (tag > -1) {
-									target[position++] = 0xba
+									target[position++] = 0xda
 									targetView.setUint32(position, tag)
 									position += 4
 								} // else undefined, don't write tag
@@ -461,7 +454,8 @@ class Encoder extends Decoder {
 			let keys = Object.keys(object)
 			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null))
 			let newTransitions = 0
-			for (let i =0, l = keys.length; i < l; i++) {
+			let length = keys.length
+			for (let i =0; i < length; i++) {
 				let key = keys[i]
 				nextTransition = transition[key]
 				if (!nextTransition) {
@@ -490,18 +484,27 @@ class Encoder extends Decoder {
 					target[position++] = recordId // tag number
 					hasSharedUpdate = true
 				} else {
-					target[position++] = 0xc6 // tag 6
+					target[position++] = 0xd9
+					target[position++] = 40006 >> 8
+					target[position++] = 40006 & 0xff
 					if (newTransitions)
 						transitionsCount += serializationsSinceTransitionRebuild * newTransitions
 					// record the removal of the id, we can maintain our shared structure
 					if (recordIdsToRemove.length >= 0xc0 - maxSharedStructures)
 						recordIdsToRemove.shift()[RECORD_SYMBOL] = 0 // we are cycling back through, and have to remove old ones
 					recordIdsToRemove.push(transition)
-					encode([ recordId ].concat(keys))
+					target[position++] = 0x83 // array header, length 3
+					encode(recordId)
+					encode(keys)
 				}
 			}
+			if (length < 0x18) { // write the array header
+				target[position++] = 0x80 | length
+			} else {
+				writeArrayHeader(length)
+			}
 			// now write the values
-			for (let i =0, l = keys.length; i < l; i++)
+			for (let i =0; i < length; i++)
 				encode(object[keys[i]])
 		}
 		const makeRoom = (end) => {
@@ -533,6 +536,21 @@ function copyBinary(source, target, targetOffset, offset, endOffset) {
 	}
 }
 
+function writeArrayHeader(length) {
+	if (length < 0x100) {
+		target[position++] = 0x98
+		target[position++] = length
+	} else if (length < 0x10000) {
+		target[position++] = 0x99
+		target[position++] = length >> 8
+		target[position++] = length & 0xff
+	} else {
+		target[position++] = 0x9a
+		targetView.setUint32(position, length)
+		position += 4
+	}
+}
+
 extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/ ]
 extensions = [{
 	tag: 1,
@@ -551,18 +569,18 @@ extensions = [{
 		}
 	}
 }, {
-	tag: 11,
+	tag: 40011,
 	encode(set, encode) {
 		let array = Array.from(set)
 		encode(array)
 	}
 }, {
-	tag: 8,
+	tag: 40008,
 	encode(error, encode) {
 		encode([ error.name, error.message ])
 	}
 }, {
-	tag: 13,
+	tag: 40013,
 	encode(regex, encode) {
 		encode([ regex.source, regex.flags ])
 	}
@@ -584,7 +602,9 @@ extensions = [{
 }]
 
 function writeExtBuffer(typedArray, type, encode) {
-	target[position++] = 0xcc // tag 12
+	target[position++] = 0xd9
+	target[position++] = 40012 >> 8
+	target[position++] = 40012 & 0xff
 	let length = typedArray.byteLength
 	let offset = typedArray.byteOffset || 0
 	let buffer = typedArray.buffer || typedArray
@@ -612,66 +632,25 @@ function writeBuffer(buffer) {
 	position += length
 }
 
-function writeExtensionData(result, target, position, type) {
-	let length = result.length
-	switch (length) {
-		case 1:
-			target[position++] = 0xd4
-			break
-		case 2:
-			target[position++] = 0xd5
-			break
-		case 4:
-			target[position++] = 0xd6
-			break
-		case 8:
-			target[position++] = 0xd7
-			break
-		case 16:
-			target[position++] = 0xd8
-			break
-		default:
-			if (length < 0x100) {
-				target[position++] = 0xc7
-				target[position++] = length
-			} else if (length < 0x10000) {
-				target[position++] = 0xc8
-				target[position++] = length << 8
-				target[position++] = length & 0xff
-			} else {
-				target[position++] = 0xc9
-				target[position++] = length << 24
-				target[position++] = (length << 16) & 0xff
-				target[position++] = (length << 8) & 0xff
-				target[position++] = length & 0xff
-			}
-	}
-	target[position++] = type
-	if (result.copy)
-		result.copy(target, position)
-	else
-		copyBinary(result, target, position, 0, length)
-	position += length
-	return position
-}
-
 function insertIds(serialized, idsToInsert) {
 	// insert the ids that need to be referenced for structured clones
 	let nextId
-	let distanceToMove = idsToInsert.length * 6
+	let distanceToMove = idsToInsert.length * 8
 	let lastEnd = serialized.length - distanceToMove
 	idsToInsert.sort((a, b) => a.offset > b.offset ? 1 : -1)
 	while (nextId = idsToInsert.pop()) {
 		let offset = nextId.offset
 		let id = nextId.id
 		serialized.copyWithin(offset + distanceToMove, offset, lastEnd)
-		distanceToMove -= 6
+		distanceToMove -= 8
 		let position = offset + distanceToMove
-		serialized[position++] = 0xc9 // tag 9
+		serialized[position++] = 0xd9
+		serialized[position++] = 40009 >> 8
+		serialized[position++] = 40009 & 0xff
 		serialized[position++] = 0x1a // uint32
-		serialized[position++] = id << 24
-		serialized[position++] = (id << 16) & 0xff
-		serialized[position++] = (id << 8) & 0xff
+		serialized[position++] = id >> 24
+		serialized[position++] = (id >> 16) & 0xff
+		serialized[position++] = (id >> 8) & 0xff
 		serialized[position++] = id & 0xff
 		lastEnd = offset
 	}
