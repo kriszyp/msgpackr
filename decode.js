@@ -8,6 +8,8 @@ let srcEnd
 let position = 0
 let alreadySet
 const EMPTY_ARRAY = []
+const RECORD_STARTING_ID_PREFIX = 0x9d
+const RECORD_STARTING_ID = 40100
 let strings = EMPTY_ARRAY
 let stringPosition = 0
 let currentDecoder = {}
@@ -176,8 +178,8 @@ function read() {
 				return map
 			}
 		case 6: // extension
-			if (token >= 0x40 && token < 0x100) { // record structures
-				let structure = currentStructures[token - 0x40]
+			if ((token >> 8) == RECORD_STARTING_ID_PREFIX) { // record structures
+				let structure = currentStructures[token & 0xff]
 				if (structure) {
 					if (!structure.read)
 						structure.read = createStructureReader(structure)
@@ -192,7 +194,7 @@ function read() {
 						currentDecoder.structures = currentStructures = updatedStructures
 					else
 						currentStructures.splice.apply(currentStructures, [0, updatedStructures.length].concat(updatedStructures))
-					structure = currentStructures[token - 0x40]
+					structure = currentStructures[token & 0xff]
 					if (structure) {
 						if (!structure.read)
 							structure.read = createStructureReader(structure)
@@ -578,7 +580,7 @@ const recordDefinition = () => {
 	readArrayHeader(3)
 	let id = read()
 	let structure = read()
-	currentStructures[id - 0x40] = structure
+	currentStructures[id & 0xff] = structure
 	structure.read = createStructureReader(structure)
 	return structure.read()
 }

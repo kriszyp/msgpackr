@@ -11,6 +11,8 @@ let extensions, extensionClasses
 const hasNodeBuffer = typeof Buffer !== 'undefined'
 const ByteArrayAllocate = hasNodeBuffer ? Buffer.allocUnsafeSlow : Uint8Array
 const ByteArray = hasNodeBuffer ? Buffer : Uint8Array
+const RECORD_STARTING_ID_PREFIX = 0x9d
+const MAX_STRUCTURES = 0x100
 let target
 let targetView
 let position = 0
@@ -87,12 +89,12 @@ class Encoder extends Decoder {
 							}
 							transition = nextTransition
 						}
-						transition[RECORD_SYMBOL] = i + 0x40
+						transition[RECORD_SYMBOL] = i
 					}
 					lastSharedStructuresLength = sharedStructures.length
 				}
 				if (!isSequential)
-					sharedStructures.nextId = sharedStructuresLength + 0x40
+					sharedStructures.nextId = sharedStructuresLength
 			}
 			if (hasSharedUpdate)
 				hasSharedUpdate = false
@@ -466,21 +468,23 @@ class Encoder extends Decoder {
 			}
 			let recordId = transition[RECORD_SYMBOL]
 			if (recordId) {
-				target[position++] = 0xd8 // tag one byte
+				target[position++] = 0xd9 // tag two byte
+				target[position++] = RECORD_STARTING_ID_PREFIX
 				target[position++] = recordId
 			} else {
 				recordId = structures.nextId++
 				if (!recordId) {
-					recordId = 0x40
-					structures.nextId = 0x41
+					recordId = 0
+					structures.nextId = 1
 				}
-				if (recordId >= 0x100) {// cycle back around
-					structures.nextId = (recordId = maxSharedStructures + 0x40) + 1
+				if (recordId >= MAX_STRUCTURES) {// cycle back around
+					structures.nextId = (recordId = maxSharedStructures) + 1
 				}
 				transition[RECORD_SYMBOL] = recordId
-				structures[recordId - 0x40] = keys
+				structures[recordId] = keys
 				if (sharedStructures && sharedStructures.length <= maxSharedStructures) {
-					target[position++] = 0xd8 // tag one byte
+					target[position++] = 0xd9 // tag two byte
+					target[position++] = RECORD_STARTING_ID_PREFIX
 					target[position++] = recordId // tag number
 					hasSharedUpdate = true
 				} else {
@@ -490,11 +494,13 @@ class Encoder extends Decoder {
 					if (newTransitions)
 						transitionsCount += serializationsSinceTransitionRebuild * newTransitions
 					// record the removal of the id, we can maintain our shared structure
-					if (recordIdsToRemove.length >= 0xc0 - maxSharedStructures)
+					if (recordIdsToRemove.length >= MAX_STRUCTURES - maxSharedStructures)
 						recordIdsToRemove.shift()[RECORD_SYMBOL] = 0 // we are cycling back through, and have to remove old ones
 					recordIdsToRemove.push(transition)
 					target[position++] = 0x83 // array header, length 3
-					encode(recordId)
+					target[position++] = 0x19 // uint16
+					target[position++] = RECORD_STARTING_ID_PREFIX
+					target[position++] = recordId
 					encode(keys)
 				}
 			}

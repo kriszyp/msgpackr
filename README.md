@@ -217,7 +217,7 @@ Cbor-x is already fast, but here are some tips for making it faster.
 During the serialization process, data is written to buffers. Again, allocating new buffers is a relatively expensive process, and the `useBuffer` method can help allow reuse of buffers that will further improve performance. With `useBuffer` method, you can provide a buffer, serialize data into it, and when it is known that you are done using that buffer, you can call `useBuffer` again to reuse it. The use of `useBuffer` is never required, buffers will still be handled and cleaned up through GC if not used, it just provides a small performance boost.
 
 ## Extensions
-Cbor-x uses tag 40000 to 40300 for its extensions.
+Cbor-x uses tag ids 40000 to 40500 for its extensions.
 
 ## Record Structure Extension Definition
 The record struction extension uses tag 40006 to declare a new record structure. This is followed by an array where the first byte indicates the tag id of the record structure to declare and the next element is an array of the field names, and the third element is array of the property values. The extension declaration must be immediately follow by the field names of the record structure.
