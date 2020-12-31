@@ -6,7 +6,7 @@
 [![types](https://img.shields.io/npm/types/cbor-x)](README.md)
 [![module](https://img.shields.io/badge/module-ESM%2FCJS-blue)](README.md)
 
-The cbor-x package is an extremely fast CBOR NodeJS/JavaScript implementation. Currently, it is significantly faster than any other known implementations, faster than Avro (for JS), and generally faster than native V8 JSON.stringify/parse. It also includes an optional record extension (the `x` in cbor-x), for defining record structures that makes CBOR even faster and more compact, often over twice as fast as even native JSON functions, several times faster than other JS implementations, and 15-50% more compact. See the performance section for more details. Structured cloning (with support for cyclical references) is also supported through optional extensions.
+The cbor-x package is an extremely fast CBOR NodeJS/JavaScript implementation. Currently, it is significantly faster than any other known implementations, faster than Avro (for JS), and generally faster than native V8 JSON.stringify/parse. It implements the CBOR format as specificed in [RFC-7049](https://tools.ietf.org/html/rfc7049), numerous [registered IANA tag extensions](https://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml), [RFC-8746](https://tools.ietf.org/html/rfc8746) and proposed optional record extension (the `x` in cbor-x), for defining record structures that makes CBOR even faster and more compact, often over twice as fast as even native JSON functions, several times faster than other JS implementations, and 15-50% more compact. See the performance section for more details. Structured cloning (with support for cyclical references) is supported through these tag extensions.
 
 ## Basic Usage
 
@@ -64,7 +64,7 @@ import { decode } from 'cbor-x/decode' // if you only need to decode
 ```
 
 ## Structured Cloning
-You can also use cbor-x for [structured cloning](https://html.spec.whatwg.org/multipage/structured-data.html). By enabling the `structuredClone` option, you can include references to other objects or cyclic references, and object identity will be preserved. Structured cloning also enables preserving certain typed objects like `Error`, `Set`, `RegExp` and TypedArray instances. For example:
+You can also use cbor-x for [structured cloning](https://html.spec.whatwg.org/multipage/structured-data.html). By enabling the `structuredClone` option, you can include references to other objects or cyclic references, and object identity will be preserved. Structured cloning also enables preserving certain typed objects like `Error`, `Set`, `RegExp` and TypedArray instances, using [registered CBOR tag extensions](https://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml). For example:
 ```
 let obj = {
 	set: new Set(['a', 'b']),
@@ -80,7 +80,6 @@ copy.set.has('a') // true
 ```
 
 This option is disabled by default because it uses extensions and reference checking degrades performance (by about 25-30%). (Note this implementation doesn't serialize every class/type specified in the HTML specification since not all of them make sense for storing across platforms.)
-
 
 ## Record / Object Structures
 There is a critical difference between maps (or dictionaries) that hold an arbitrary set of keys and values (JavaScript `Map` is designed for these), and records or object structures that have a well-defined set of fields. Typical JS objects/records may have many instances re(use) the same structure. By using the record extension, this distinction is preserved in CBOR and the encoding can reuse structures and not only provides better type preservation, but yield much more compact encodings and increase decoding performance by 2-3x. cbor-x automatically generates record definitions that are reused and referenced by objects with the same structure. Records use CBOR's tags to align well CBOR's tag/extension mechanism. There are a number of ways to use this to our advantage. For large object structures with repeating nested objects with similar structures, simply serializing with the record extension can yield significant benefits. To use the record structures extension, we create a new `Encoder` instance. By default a new `Encoder` instance will have the record extension enabled:
