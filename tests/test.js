@@ -247,6 +247,27 @@ suite('msgpackr basic tests', function(){
 		assert.equal(deserialized.map.three, 3)
 		assert.equal(deserialized.date.getTime(), 1532219539000)
 	})
+	test('key caching', function() {
+		var data = {
+			foo: 2,
+			bar: 'test',
+			four: 4,
+			seven: 7,
+			'longer but still should cache': null,
+			foz: 3,
+			'really long string that should not be cached because it is too long': true,
+		}
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.deepEqual(deserialized, data)
+		// do multiple times to test caching
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.deepEqual(deserialized, data)
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.deepEqual(deserialized, data)
+	})
 	test('decimal float32', function() {
 		var data = {
 			a: 2.526,

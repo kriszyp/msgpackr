@@ -134,13 +134,21 @@ function read() {
 			if (currentUnpackr.mapsAsObjects) {
 				let object = {}
 				for (let i = 0; i < token; i++) {
-					object[read()] = read()
+					let nextToken = src[position]
+					if (nextToken >= 0xa0 && nextToken < 0xc0)
+						object[readKey()] = read()
+					else
+						object[read()] = read()
 				}
 				return object
 			} else {
 				let map = new Map()
 				for (let i = 0; i < token; i++) {
-					map.set(read(), read())
+					let nextToken = src[position]
+					if (nextToken >= 0xa0 && nextToken < 0xc0)
+						map.set(readKey(), read())
+					else
+						map.set(read(), read())
 				}
 				return map
 			}
@@ -453,13 +461,21 @@ function readMap(length) {
 	if (currentUnpackr.mapsAsObjects) {
 		let object = {}
 		for (let i = 0; i < length; i++) {
-			object[read()] = read()
+			let nextToken = src[position]
+			if (nextToken >= 0xa0 && nextToken < 0xc0)
+				object[readKey()] = read()
+			else
+				object[read()] = read()
 		}
 		return object
 	} else {
 		let map = new Map()
 		for (let i = 0; i < length; i++) {
-			map.set(read(), read())
+			let nextToken = src[position]
+			if (nextToken >= 0xa0 && nextToken < 0xc0)
+				map.set(readKey(), read())
+			else
+				map.set(read(), read())
 		}
 		return map
 	}
@@ -633,6 +649,58 @@ function readExt(length) {
 	else
 		throw new Error('Unknown extension type ' + type)
 }
+
+let keyCache = new Array(4096)
+function readKey() {
+	// fixstr, use key cache
+	let length = src[position++] - 0xa0
+	let key = ((length << 5) ^ (length > 1 ? dataView.getUint16(position) : length > 0 ? src[position] : 0)) & 0xfff
+	let entry = keyCache[key]
+	let checkPosition = position
+	let end = position + length - 3
+	let chunk
+	let i = 0
+	if (entry && entry.bytes == length) {
+		while (checkPosition < end) {
+			chunk = dataView.getUint32(checkPosition)
+			if (chunk != entry[i++]) {
+				checkPosition = 0x70000000
+				break
+			}
+			checkPosition += 4
+		}
+		end += 3
+		while (checkPosition < end) {
+			chunk = src[checkPosition++]
+			if (chunk != entry[i++]) {
+				checkPosition = 0x70000000
+				break
+			}
+		}
+		if (checkPosition === end) {
+			position = checkPosition
+			return entry.string
+		}
+		end -= 3
+	}
+	entry = []
+	keyCache[key] = entry
+	entry.bytes = length
+	checkPosition = position
+	position--
+	while (checkPosition < end) {
+		chunk = dataView.getUint32(checkPosition)
+		entry.push(chunk)
+		checkPosition += 4
+	}
+	end += 3
+	while (checkPosition < end) {
+		chunk = src[checkPosition++]
+		entry.push(chunk)
+	}
+	return entry.string = read()
+}
+
 // the registration of the record definition extension (as "r")
 const recordDefinition = (id) => {
 	let structure = currentStructures[id & 0x3f] = read()
@@ -680,7 +748,7 @@ currentExtensions[0x70] = (data) => {
 
 currentExtensions[0x73] = () => new Set(read())
 
-const typedArrays = ['Int8','Uint8	','Uint8Clamped','Int16','Uint16','Int32','Uint32','Float32','Float64','BigInt64','BigUint64'].map(type => type + 'Array')
+const typedArrays = ['Int8','Uint8','Uint8Clamped','Int16','Uint16','Int32','Uint32','Float32','Float64','BigInt64','BigUint64'].map(type => type + 'Array')
 
 currentExtensions[0x74] = (data) => {
 	let typeCode = data[0]
