@@ -557,7 +557,11 @@ function writeArrayHeader(length) {
 	}
 }
 
-extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/ ]
+extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, ByteArray,
+	Uint8Array, Uint8ClampedArray, Uint16Array, Uint32Array, BigUint64Array, Int8Array, Int16Array, Int32Array, BigInt64Array,
+	Float32Array, Float64Array]
+
+//Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/
 extensions = [{
 	tag: 1,
 	encode(date, encode) {
@@ -575,47 +579,52 @@ extensions = [{
 		}
 	}
 }, {
-	tag: 40011,
+	tag: 258, // https://github.com/input-output-hk/cbor-sets-spec/blob/master/CBOR_SETS.md
 	encode(set, encode) {
 		let array = Array.from(set)
 		encode(array)
 	}
 }, {
-	tag: 40008,
+	tag: 27, // http://cbor.schmorp.de/generic-object
 	encode(error, encode) {
 		encode([ error.name, error.message ])
 	}
 }, {
-	tag: 40013,
+	tag: 27, // http://cbor.schmorp.de/generic-object
 	encode(regex, encode) {
-		encode([ regex.source, regex.flags ])
+		encode([ 'RegExp', regex.source, regex.flags ])
 	}
 }, {
 	encode(arrayBuffer, encode) {
-		if (this.structuredClone)
-			writeExtBuffer(arrayBuffer, 0x10, encode)
-		else
-			writeBuffer(hasNodeBuffer ? Buffer.from(arrayBuffer) : new Uint8Array(arrayBuffer))
+		writeBuffer(arrayBuffer)
 	}
 }, {
-	encode(typedArray, encode) {
-		let constructor = typedArray.constructor
-		if (constructor !== ByteArray && this.structuredClone)
-			writeExtBuffer(typedArray, typedArrays.indexOf(constructor.name), encode)
-		else
-			writeBuffer(typedArray)
+	encode(arrayBuffer, encode) {
+		writeBuffer(arrayBuffer)
 	}
-}]
+}, typedArrayEncoder(64),
+	typedArrayEncoder(68),
+	typedArrayEncoder(69),
+	typedArrayEncoder(70),
+	typedArrayEncoder(71),
+	typedArrayEncoder(72),
+	typedArrayEncoder(77),
+	typedArrayEncoder(78),
+	typedArrayEncoder(79),
+	typedArrayEncoder(81),
+	typedArrayEncoder(82)]
 
-function writeExtBuffer(typedArray, type, encode) {
-	target[position++] = 0xd9
-	target[position++] = 40012 >> 8
-	target[position++] = 40012 & 0xff
-	let length = typedArray.byteLength
-	let offset = typedArray.byteOffset || 0
-	let buffer = typedArray.buffer || typedArray
-	encode([type, hasNodeBuffer ? Buffer.from(buffer, offset, length) :
-		new Uint8Array(buffer, offset, length)])
+function typedArrayEncoder(tag) {
+	return {
+		tag: tag,
+		encode: function writeExtBuffer(typedArray, encode) {
+			let length = typedArray.byteLength
+			let offset = typedArray.byteOffset || 0
+			let buffer = typedArray.buffer || typedArray
+			encode(hasNodeBuffer ? Buffer.from(buffer, offset, length) :
+				new Uint8Array(buffer, offset, length))
+		}
+	}
 }
 function writeBuffer(buffer) {
 	let length = buffer.byteLength

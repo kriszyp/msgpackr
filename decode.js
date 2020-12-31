@@ -587,8 +587,8 @@ const recordDefinition = () => {
 recordDefinition.handlesRead = true
 currentExtensions[40006] = recordDefinition
 
-currentExtensions[40008] = (data) => {
-	return (glbl[data[0]] || Error)(data[1])
+currentExtensions[27] = (data) => { // http://cbor.schmorp.de/generic-object
+	return (glbl[data[0]] || Error)(data[1], data[2])
 }
 
 currentExtensions[40009] = (id) => {
@@ -620,20 +620,20 @@ currentExtensions[40010] = (id) => {
 	return refEntry.target
 }
 
-currentExtensions[40011] = (array) => new Set(array)
+currentExtensions[258] = (array) => new Set(array) // https://github.com/input-output-hk/cbor-sets-spec/blob/master/CBOR_SETS.md
 
-const typedArrays = ['Int8','Uint8	','Uint8Clamped','Int16','Uint16','Int32','Uint32','Float32','Float64','BigInt64','BigUint64'].map(type => type + 'Array')
-
-currentExtensions[40012] = (data) => {
-	let [ typeCode, buffer ] = data
-	let typedArrayName = typedArrays[typeCode]
-	if (!typedArrayName)
-		throw new Error('Could not find typed array for code ' + typeCode)
-	// we have to always slice/copy here to get a new ArrayBuffer that is word/byte aligned
-	return new glbl[typedArrayName](Uint8Array.prototype.slice.call(buffer, 0).buffer)
+const typedArrays = ['Uint8', 'Uint8Clamped', 'Uint16', 'Uint32', 'BigUint64','Int8', 'Int16', 'Int32', 'BigInt64', 'Float32', 'Float64'].map(type => type + 'Array')
+const typedArrayTags = [64, 68, 69, 70, 71, 72, 77, 78, 79, 81, 82]
+for (let i = 0; i < typedArrays.length; i++) {
+	registerTypedArray(typedArrays[i], typedArrayTags[i])
 }
-currentExtensions[40013] = (data) => {
-	return new RegExp(data[0], data[1])
+function registerTypedArray(typedArrayName, tag) {
+	currentExtensions[tag] = (buffer) => {
+		if (!typedArrayName)
+			throw new Error('Could not find typed array for code ' + typeCode)
+		// we have to always slice/copy here to get a new ArrayBuffer that is word/byte aligned
+		return new glbl[typedArrayName](Uint8Array.prototype.slice.call(buffer, 0).buffer)
+	}
 }
 
 function saveState(callback) {
