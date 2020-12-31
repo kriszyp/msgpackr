@@ -10,7 +10,7 @@ exports.DecoderStream = require('./stream').DecoderStream
 let encoder = new exports.Encoder({ useRecords: false })
 exports.decode = encoder.decode
 exports.encode = encoder.encode
-exports.C1 = decodeModule.C1
+exports.Tag = decodeModule.Tag
 Object.assign(exports, {
 	ALWAYS:1,
 	DECIMAL_ROUND: 3,
@@ -24,6 +24,6 @@ function tryRequire(moduleId) {
 		if (typeof window == 'undefined')
 			console.warn('Native extraction module not loaded, cbor-x will still run, but with decreased performance. ' + error.message)
 		else
-			console.warn('For browser usage, directly use msgencoder/decode or msgencoder/encode modules. ' + error.message.split('\n')[0])
+			console.warn('For browser usage, directly use encode/decode modules. ' + error.message.split('\n')[0])
 	}
 }

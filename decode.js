@@ -212,7 +212,7 @@ function read() {
 						return extension(read())
 				}
 				else
-					throw new Error('Unknown extension ' + token)
+					return new Tag(read())
 			}
 		case 7: // fixed value
 			switch (token) {
@@ -553,6 +553,13 @@ function getFloat16() {
 	else val = mant == 0 ? Infinity : NaN
 	return half & 0x8000 ? -val : val
 }
+class Tag {
+	constructor(value) {
+		this.value = value
+	}
+}
+
+
 let glbl = typeof window == 'object' ? window : global
 
 currentExtensions[0] = (dateString) => {
@@ -678,3 +685,4 @@ for (let i = 0; i < 256; i++) {
 }
 exports.mult10 = mult10
 exports.typedArrays = typedArrays
+exports.Tag = Tag

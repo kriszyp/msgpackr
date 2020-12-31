@@ -186,7 +186,7 @@ msgpack.Decoder().on("data",ondata).decode(buf); | 1000000 |  2246 | 445235
 See the [benchmark.md](benchmark.md) for more benchmarks and information about benchmarking.
 
 ## Custom Extensions
-You can add your own custom extensions, which can be used to encode specific types/classes in certain ways. This is done by using the `addExtension` function, and specifying the class, extension type code (should be a number greater than 256, all others are reserved for  CBOR or cbor-x), and your encode and decode functions (or just the one you need). You can use cbor-x encoding and decoding within your extensions:
+You can add your own custom extensions, which can be used to encode specific types/classes in certain ways. This is done by using the `addExtension` function, and specifying the class, extension type code (custom extensions should be a number greater than 40500, all others are reserved for  CBOR or cbor-x), and your encode and decode functions (or just the one you need). You can use cbor-x encoding and decoding within your extensions:
 ```
 import { addExtension, Encoder } from 'cbor-x';
 
@@ -195,7 +195,7 @@ class MyCustomClass {...}
 let extEncoder = new Encoder();
 addExtension({
 	Class: MyCustomClass,
-	tag: 311, // register our own extension code (a tag code > 255)
+	tag: 43311, // register our own extension code (a tag code)
 	encode(instance, encode) {
 		// define how your custom class should be encoded
 		encode(instance.myData); // return a buffer
@@ -209,6 +209,12 @@ addExtension({
 });
 ```
 
+## Unknown Tags
+If no extension is registered for a tag, the decoder will return an instance of the `Tag` class, where the value provided for the tag will be available in the `value` property of the `Tag` instance. The `Tag` class is an export of the package and decode module.
+
+### CBOR Compliance
+The cbor-x package is designed to encode and decode to the CBOR extended generic data model, implementing extensions to support the extended model, and will generally attempt to use preferred serializations where feasible. When duplicate keys are encountered in maps, previous entries will be lost, and the final entry is preserved.
+
 ### Additional Performance Optimizations
 Cbor-x is already fast, but here are some tips for making it faster.
 
@@ -216,10 +222,10 @@ Cbor-x is already fast, but here are some tips for making it faster.
 During the serialization process, data is written to buffers. Again, allocating new buffers is a relatively expensive process, and the `useBuffer` method can help allow reuse of buffers that will further improve performance. With `useBuffer` method, you can provide a buffer, serialize data into it, and when it is known that you are done using that buffer, you can call `useBuffer` again to reuse it. The use of `useBuffer` is never required, buffers will still be handled and cleaned up through GC if not used, it just provides a small performance boost.
 
 ## Extensions
-Cbor-x uses tag ids 40000 to 40500 for its extensions.
+Cbor-x currently uses tag ids 40000 to 40500 for its proposed extensions (until accepted).
 
 ## Record Structure Extension Definition
-The record struction extension uses tag 40006 to declare a new record structure. This is followed by an array where the first byte indicates the tag id of the record structure to declare and the next element is an array of the field names, and the third element is array of the property values. The extension declaration must be immediately follow by the field names of the record structure.
+The record struction extension uses tag 40006 to declare a new record structure. This is followed by an array where the first element indicates the tag id of the record structure to declare and the next element is an array of the field names, and the third element is array of the property values. The extension declaration must be immediately follow by the field names of the record structure.
 
 ### Dates
 cbor-x saves all JavaScript `Date`s using the standard CBOR date extension (tag 1).
@@ -228,9 +234,9 @@ cbor-x saves all JavaScript `Date`s using the standard CBOR date extension (tag 
 With structured cloning enabled, cbor-x will also use tags/extensions to store Set, Map, Error, RegExp, ArrayBufferView objects and preserve their types.
 
 ## Alternate Encoding/Package
-The high-performance serialization and deserialization algorithms in the msgpackr package are also available in the [msgpackr](https://github.com/kriszyp/msgpackr) for the MessagePack format, with the same API and design. A quick summary of the pros and cons of using MessagePack vs CBOR are:
+The high-performance serialization and deserialization algorithms in this package are also available in the [msgpackr](https://github.com/kriszyp/msgpackr) for the MessagePack format, with the same API and design. A quick summary of the pros and cons of using MessagePack vs CBOR are:
 * MessagePack has wider adoption, and, at least with this implementation is slightly more efficient (by roughly 2-4%).
-* CBOR has an [official IETF standardization track](https://tools.ietf.org/html/rfc7049), and the record extensions is conceptually/philosophically a better fit for CBOR tags.
+* CBOR has an [official IETF standardization track](https://www.rfc-editor.org/rfc/rfc8949.html), and the record extensions is conceptually/philosophically a better fit for CBOR tags.
 
 ## License
 

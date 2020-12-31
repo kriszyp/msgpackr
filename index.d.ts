@@ -38,4 +38,7 @@ declare module 'cbor-x' {
 		write(value)
 		end(value?)
 	}
+	export class Tag {
+		value: any
+	}
 }
