@@ -6,7 +6,7 @@
 [![types](https://img.shields.io/npm/types/cbor-x)](README.md)
 [![module](https://img.shields.io/badge/module-ESM%2FCJS-blue)](README.md)
 
-The cbor-x package is an extremely fast CBOR NodeJS/JavaScript implementation. Currently, it is significantly faster than any other known implementations, faster than Avro (for JS), and generally faster than native V8 JSON.stringify/parse. It implements the CBOR format as specificed in [RFC-7049](https://tools.ietf.org/html/rfc7049), numerous [registered IANA tag extensions](https://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml), [RFC-8746](https://tools.ietf.org/html/rfc8746) and proposed optional record extension (the `x` in cbor-x), for defining record structures that makes CBOR even faster and more compact, often over twice as fast as even native JSON functions, several times faster than other JS implementations, and 15-50% more compact. See the performance section for more details. Structured cloning (with support for cyclical references) is supported through these tag extensions.
+The cbor-x package is an extremely fast CBOR NodeJS/JavaScript implementation. Currently, it is significantly faster than any other known implementations, faster than Avro (for JS), and generally faster than native V8 JSON.stringify/parse. It implements the CBOR format as specificed in [RFC-7049](https://tools.ietf.org/html/rfc7049), numerous [registered IANA tag extensions](https://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml) (the `x` in cbor-x), [RFC-8746](https://tools.ietf.org/html/rfc8746) and proposed optional record extension, for defining record structures that makes CBOR even faster and more compact, often over twice as fast as even native JSON functions, several times faster than other JS implementations, and 15-50% more compact. See the performance section for more details. Structured cloning (with support for cyclical references) is supported through these tag extensions.
 
 ## Basic Usage
 
@@ -24,7 +24,7 @@ let data = decode(serializedAsBuffer);
 This `encode` function will generate standard CBOR without any extensions that should be compatible with any standard CBOR parser/decoder. It will serialize JavaScript objects as CBOR `map`s by default. The `decode` function will deserialize CBOR `map`s as an `Object` with the properties from the map.
 
 ## Node Usage
-The cbor-x encodeage runs on any modern JS platform, but is optimized for NodeJS usage (and will use a node addon for performance boost as an optional dependency).
+The cbor-x package runs on any modern JS platform, but is optimized for NodeJS usage (and will use a node addon for performance boost as an optional dependency).
 
 ### Streams
 We can use the including streaming functionality (which further improves performance). The `EncoderStream` is a NodeJS transform stream that can be used to serialize objects to a binary stream (writing to network/socket, IPC, etc.), and the `DecoderStream` can be used to deserialize objects from a binary sream (reading from network/socket, etc.):
