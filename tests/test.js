@@ -33,7 +33,7 @@ try {
 
 if (typeof XMLHttpRequest === 'undefined') {
 	var fs = require('fs')
-	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/example4.json'))
+	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/example5.json'))
 } else {
 	var xhr = new XMLHttpRequest()
 	xhr.open('GET', 'example4.json', false)
@@ -95,6 +95,16 @@ suite('msgpackr basic tests', function(){
 	})
 
 	test('pack/unpack sample data', function(){
+		var data = sampleData
+		let structures = []
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.deepEqual(deserialized, data)
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.deepEqual(deserialized, data)
+	})
+	test('pack/unpack sample data with records', function(){
 		var data = sampleData
 		let structures = []
 		let packr = new Packr({ structures, useRecords: true })
@@ -253,9 +263,7 @@ suite('msgpackr basic tests', function(){
 			bar: 'test',
 			four: 4,
 			seven: 7,
-			'longer but still should cache': null,
 			foz: 3,
-			'really long string that should not be cached because it is too long': true,
 		}
 		var serialized = pack(data)
 		var deserialized = unpack(serialized)

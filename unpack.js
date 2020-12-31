@@ -134,21 +134,13 @@ function read() {
 			if (currentUnpackr.mapsAsObjects) {
 				let object = {}
 				for (let i = 0; i < token; i++) {
-					let nextToken = src[position]
-					if (nextToken >= 0xa0 && nextToken < 0xc0)
-						object[readKey()] = read()
-					else
-						object[read()] = read()
+					object[readKey()] = read()
 				}
 				return object
 			} else {
 				let map = new Map()
 				for (let i = 0; i < token; i++) {
-					let nextToken = src[position]
-					if (nextToken >= 0xa0 && nextToken < 0xc0)
-						map.set(readKey(), read())
-					else
-						map.set(read(), read())
+					map.set(readKey(), read())
 				}
 				return map
 			}
@@ -166,9 +158,9 @@ function read() {
 		if (srcStringEnd >= position) {
 			return srcString.slice(position - srcStringStart, (position += length) - srcStringStart)
 		}
-		if (srcStringEnd == 0 && srcEnd < 120 && length < 16) {
+		if (srcStringEnd == 0 && srcEnd < 180) {
 			// for small blocks, avoiding the overhead of the extract call is helpful
-			let string = /*length < 16 ? */shortStringInJS(length)// : longStringInJS(length)
+			let string = length < 16 ? shortStringInJS(length) : longStringInJS(length)
 			if (string != null)
 				return string
 		}
@@ -461,21 +453,13 @@ function readMap(length) {
 	if (currentUnpackr.mapsAsObjects) {
 		let object = {}
 		for (let i = 0; i < length; i++) {
-			let nextToken = src[position]
-			if (nextToken >= 0xa0 && nextToken < 0xc0)
-				object[readKey()] = read()
-			else
-				object[read()] = read()
+			object[readKey()] = read()
 		}
 		return object
 	} else {
 		let map = new Map()
 		for (let i = 0; i < length; i++) {
-			let nextToken = src[position]
-			if (nextToken >= 0xa0 && nextToken < 0xc0)
-				map.set(readKey(), read())
-			else
-				map.set(read(), read())
+			map.set(readKey(), read())
 		}
 		return map
 	}
@@ -652,8 +636,18 @@ function readExt(length) {
 
 let keyCache = new Array(4096)
 function readKey() {
-	// fixstr, use key cache
-	let length = src[position++] - 0xa0
+	let length = src[position++]
+	if (length >= 0xa0 && length < 0xc0) {
+		// fixstr, potentially use key cache
+		length = length - 0xa0
+		if (srcStringEnd >= position) // if it has been extracted, must use it (and faster anyway)
+			return srcString.slice(position - srcStringStart, (position += length) - srcStringStart)
+		else if (srcStringEnd > 0)
+			return readFixedString(length)
+	} else { // not cacheable, go back and do a standard read
+		position--
+		return read()
+	}
 	let key = ((length << 5) ^ (length > 1 ? dataView.getUint16(position) : length > 0 ? src[position] : 0)) & 0xfff
 	let entry = keyCache[key]
 	let checkPosition = position
@@ -682,12 +676,11 @@ function readKey() {
 			return entry.string
 		}
 		end -= 3
+		checkPosition = position
 	}
 	entry = []
 	keyCache[key] = entry
 	entry.bytes = length
-	checkPosition = position
-	position--
 	while (checkPosition < end) {
 		chunk = dataView.getUint32(checkPosition)
 		entry.push(chunk)
@@ -698,7 +691,13 @@ function readKey() {
 		chunk = src[checkPosition++]
 		entry.push(chunk)
 	}
-	return entry.string = read()
+	if (srcStringEnd == 0 && srcEnd < 180) {
+		// for small blocks, avoiding the overhead of the extract call is helpful
+		let string = length < 16 ? shortStringInJS(length) : longStringInJS(length)
+		if (string != null)
+			return entry.string = string
+	}
+	return entry.string = readFixedString(length)
 }
 
 // the registration of the record definition extension (as "r")
