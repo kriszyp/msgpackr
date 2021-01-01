@@ -140,7 +140,7 @@ function read() {
 			} else {
 				let map = new Map()
 				for (let i = 0; i < token; i++) {
-					map.set(readKey(), read())
+					map.set(read(), read())
 				}
 				return map
 			}
@@ -158,7 +158,7 @@ function read() {
 		if (srcStringEnd >= position) {
 			return srcString.slice(position - srcStringStart, (position += length) - srcStringStart)
 		}
-		if (srcStringEnd == 0 && srcEnd < 180) {
+		if (srcStringEnd == 0 && srcEnd < 140) {
 			// for small blocks, avoiding the overhead of the extract call is helpful
 			let string = length < 16 ? shortStringInJS(length) : longStringInJS(length)
 			if (string != null)
@@ -355,6 +355,7 @@ exports.setExtractor = (extractStrings) => {
 			if (string == null) {
 				strings = extractStrings(position - headerLength, srcEnd, src)
 				stringPosition = 0
+				srcStringEnd = 1 // even if a utf-8 string was decoded, must indicate we are in the midst of extracted strings and can't skip strings
 				string = strings[stringPosition++]
 			}
 			let srcStringLength = string.length
@@ -459,7 +460,7 @@ function readMap(length) {
 	} else {
 		let map = new Map()
 		for (let i = 0; i < length; i++) {
-			map.set(readKey(), read())
+			map.set(read(), read())
 		}
 		return map
 	}
@@ -642,7 +643,7 @@ function readKey() {
 		length = length - 0xa0
 		if (srcStringEnd >= position) // if it has been extracted, must use it (and faster anyway)
 			return srcString.slice(position - srcStringStart, (position += length) - srcStringStart)
-		else if (srcStringEnd > 0)
+		else if (!(srcStringEnd == 0 && srcEnd < 180))
 			return readFixedString(length)
 	} else { // not cacheable, go back and do a standard read
 		position--
@@ -691,12 +692,10 @@ function readKey() {
 		chunk = src[checkPosition++]
 		entry.push(chunk)
 	}
-	if (srcStringEnd == 0 && srcEnd < 180) {
-		// for small blocks, avoiding the overhead of the extract call is helpful
-		let string = length < 16 ? shortStringInJS(length) : longStringInJS(length)
-		if (string != null)
-			return entry.string = string
-	}
+	// for small blocks, avoiding the overhead of the extract call is helpful
+	let string = length < 16 ? shortStringInJS(length) : longStringInJS(length)
+	if (string != null)
+		return entry.string = string
 	return entry.string = readFixedString(length)
 }
 
