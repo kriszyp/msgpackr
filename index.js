@@ -17,6 +17,8 @@ exports.unpack = packr.unpack
 exports.pack = packr.pack
 exports.decode = packr.unpack
 exports.encode = packr.pack
+exports.useRecords = false
+exports.mapsAsObjects = true
 Object.assign(exports, {
 	ALWAYS:1,
 	DECIMAL_ROUND: 3,

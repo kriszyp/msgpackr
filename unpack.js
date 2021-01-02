@@ -804,5 +804,7 @@ for (let i = 0; i < 256; i++) {
 }
 exports.mult10 = mult10
 exports.typedArrays = typedArrays
+exports.useRecords = false
+exports.mapsAsObjects = true
 exports.C1 = C1
 exports.C1Type = C1Type
