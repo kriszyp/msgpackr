@@ -96,7 +96,6 @@ suite('CBOR basic tests', function(){
 
 	test('encode/decode sample data', function(){
 		var data = sampleData
-		let structures = []
 		var serialized = CBOR.encode(data)
 		var deserialized = CBOR.decode(serialized)
 		assert.deepEqual(deserialized, data)
@@ -104,7 +103,7 @@ suite('CBOR basic tests', function(){
 		var deserialized = CBOR.decode(serialized)
 		assert.deepEqual(deserialized, data)
 	})
-	test('pack/unpack sample data with records', function(){
+	test('encode/decode sample data with records', function(){
 		var data = sampleData
 		let structures = []
 		let encoder = new Encoder({ structures, useRecords: true })
@@ -262,15 +261,15 @@ suite('CBOR basic tests', function(){
 			seven: 7,
 			foz: 3,
 		}
-		var serialized = pack(data)
-		var deserialized = unpack(serialized)
+		var serialized = CBOR.encode(data)
+		var deserialized = CBOR.decode(serialized)
 		assert.deepEqual(deserialized, data)
 		// do multiple times to test caching
-		var serialized = pack(data)
-		var deserialized = unpack(serialized)
+		var serialized = CBOR.encode(data)
+		var deserialized = CBOR.decode(serialized)
 		assert.deepEqual(deserialized, data)
-		var serialized = pack(data)
-		var deserialized = unpack(serialized)
+		var serialized = CBOR.encode(data)
+		var deserialized = CBOR.decode(serialized)
 		assert.deepEqual(deserialized, data)
 	})
 	test('decimal float32', function() {

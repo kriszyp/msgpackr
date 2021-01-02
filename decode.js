@@ -152,7 +152,7 @@ function read() {
 			}
 			if (srcStringEnd == 0 && srcEnd < 140 && token < 32) {
 				// for small blocks, avoiding the overhead of the extract call is helpful
-				let string = length < 16 ? shortStringInJS(token) : longStringInJS(length)
+				let string = token < 16 ? shortStringInJS(token) : longStringInJS(token)
 				if (string != null)
 					return string
 			}
@@ -540,9 +540,9 @@ function getFloat16() {
 let keyCache = new Array(4096)
 function readKey() {
 	let length = src[position++]
-	if (length >= 0xa0 && length < 0xc0) {
+	if (length >= 0x60 && length < 0x78) {
 		// fixstr, potentially use key cache
-		length = length - 0xa0
+		length = length - 0x60
 		if (srcStringEnd >= position) // if it has been extracted, must use it (and faster anyway)
 			return srcString.slice(position - srcStringStart, (position += length) - srcStringStart)
 		else if (!(srcStringEnd == 0 && srcEnd < 180))
@@ -733,4 +733,6 @@ for (let i = 0; i < 256; i++) {
 }
 exports.mult10 = mult10
 exports.typedArrays = typedArrays
+exports.useRecords = false
+exports.mapsAsObjects = true
 exports.Tag = Tag

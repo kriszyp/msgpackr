@@ -11,6 +11,8 @@ let encoder = new exports.Encoder({ useRecords: false })
 exports.decode = encoder.decode
 exports.encode = encoder.encode
 exports.Tag = decodeModule.Tag
+exports.useRecords = false
+exports.mapsAsObjects = true
 Object.assign(exports, {
 	ALWAYS:1,
 	DECIMAL_ROUND: 3,
