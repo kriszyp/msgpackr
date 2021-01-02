@@ -33,7 +33,7 @@ try {
 
 if (typeof XMLHttpRequest === 'undefined') {
 	var fs = require('fs')
-	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/example4.json'))
+	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/example5.json'))
 } else {
 	var xhr = new XMLHttpRequest()
 	xhr.open('GET', 'example4.json', false)
@@ -95,6 +95,16 @@ suite('CBOR basic tests', function(){
 	})
 
 	test('encode/decode sample data', function(){
+		var data = sampleData
+		let structures = []
+		var serialized = CBOR.encode(data)
+		var deserialized = CBOR.decode(serialized)
+		assert.deepEqual(deserialized, data)
+		var serialized = CBOR.encode(data)
+		var deserialized = CBOR.decode(serialized)
+		assert.deepEqual(deserialized, data)
+	})
+	test('pack/unpack sample data with records', function(){
 		var data = sampleData
 		let structures = []
 		let encoder = new Encoder({ structures, useRecords: true })
@@ -243,6 +253,25 @@ suite('CBOR basic tests', function(){
 		assert.equal(deserialized.map[4], 'four')
 		assert.equal(deserialized.map.three, 3)
 		assert.equal(deserialized.date.getTime(), 1532219539000)
+	})
+	test('key caching', function() {
+		var data = {
+			foo: 2,
+			bar: 'test',
+			four: 4,
+			seven: 7,
+			foz: 3,
+		}
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.deepEqual(deserialized, data)
+		// do multiple times to test caching
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.deepEqual(deserialized, data)
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.deepEqual(deserialized, data)
 	})
 	test('decimal float32', function() {
 		var data = {

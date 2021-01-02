@@ -150,9 +150,9 @@ function read() {
 			if (srcStringEnd >= position) {
 				return srcString.slice(position - srcStringStart, (position += token) - srcStringStart)
 			}
-			if (srcStringEnd == 0 && srcEnd < 120 && token < 16) {
+			if (srcStringEnd == 0 && srcEnd < 140 && token < 32) {
 				// for small blocks, avoiding the overhead of the extract call is helpful
-				let string = /*length < 16 ? */shortStringInJS(token)// : longStringInJS(length)
+				let string = length < 16 ? shortStringInJS(token) : longStringInJS(length)
 				if (string != null)
 					return string
 			}
@@ -167,7 +167,7 @@ function read() {
 			if (currentDecoder.mapsAsObjects) {
 				let object = {}
 				for (let i = 0; i < token; i++) {
-					object[read()] = read()
+					object[readKey()] = read()
 				}
 				return object
 			} else {
@@ -286,6 +286,7 @@ exports.setExtractor = (extractStrings) => {
 			if (string == null) {
 				strings = extractStrings(position, srcEnd, length, src)
 				stringPosition = 0
+				srcStringEnd = 1 // even if a utf-8 string was decoded, must indicate we are in the midst of extracted strings and can't skip strings
 				string = strings[stringPosition++]
 			}
 			let srcStringLength = string.length
@@ -354,24 +355,6 @@ function readStringJS(length) {
 
 	return result
 }
-/*function readShortString(length) {
-	let start = position
-	let end = start + length
-	while (position < end) {
-		const byte = src[position++];
-		if ((byte & 0x80) > 0) {
-			position = end
-			console.log('utf8 slice')
-			return src.utf8Slice(start, end)
-		}
-	}
-	if (srcStringEnd < end) {
-		srcStringStart = start
-		srcStringEnd = start + 8192
-		srcString = src.toString('latin1', start, srcStringEnd)
-	}
-	return srcString.slice(start - srcStringStart, end - srcStringStart)
-}*/
 let fromCharCode = String.fromCharCode
 function longStringInJS(length) {
 	let start = position
@@ -553,12 +536,76 @@ function getFloat16() {
 	else val = mant == 0 ? Infinity : NaN
 	return half & 0x8000 ? -val : val
 }
+
+let keyCache = new Array(4096)
+function readKey() {
+	let length = src[position++]
+	if (length >= 0xa0 && length < 0xc0) {
+		// fixstr, potentially use key cache
+		length = length - 0xa0
+		if (srcStringEnd >= position) // if it has been extracted, must use it (and faster anyway)
+			return srcString.slice(position - srcStringStart, (position += length) - srcStringStart)
+		else if (!(srcStringEnd == 0 && srcEnd < 180))
+			return readFixedString(length)
+	} else { // not cacheable, go back and do a standard read
+		position--
+		return read()
+	}
+	let key = ((length << 5) ^ (length > 1 ? dataView.getUint16(position) : length > 0 ? src[position] : 0)) & 0xfff
+	let entry = keyCache[key]
+	let checkPosition = position
+	let end = position + length - 3
+	let chunk
+	let i = 0
+	if (entry && entry.bytes == length) {
+		while (checkPosition < end) {
+			chunk = dataView.getUint32(checkPosition)
+			if (chunk != entry[i++]) {
+				checkPosition = 0x70000000
+				break
+			}
+			checkPosition += 4
+		}
+		end += 3
+		while (checkPosition < end) {
+			chunk = src[checkPosition++]
+			if (chunk != entry[i++]) {
+				checkPosition = 0x70000000
+				break
+			}
+		}
+		if (checkPosition === end) {
+			position = checkPosition
+			return entry.string
+		}
+		end -= 3
+		checkPosition = position
+	}
+	entry = []
+	keyCache[key] = entry
+	entry.bytes = length
+	while (checkPosition < end) {
+		chunk = dataView.getUint32(checkPosition)
+		entry.push(chunk)
+		checkPosition += 4
+	}
+	end += 3
+	while (checkPosition < end) {
+		chunk = src[checkPosition++]
+		entry.push(chunk)
+	}
+	// for small blocks, avoiding the overhead of the extract call is helpful
+	let string = length < 16 ? shortStringInJS(length) : longStringInJS(length)
+	if (string != null)
+		return entry.string = string
+	return entry.string = readFixedString(length)
+}
+
 class Tag {
 	constructor(value) {
 		this.value = value
 	}
 }
-
 
 let glbl = typeof window == 'object' ? window : global
 
@@ -591,6 +638,7 @@ const recordDefinition = () => {
 	structure.read = createStructureReader(structure)
 	return structure.read()
 }
+
 recordDefinition.handlesRead = true
 currentExtensions[40006] = recordDefinition
 

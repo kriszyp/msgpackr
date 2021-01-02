@@ -269,9 +269,6 @@ class Encoder extends Decoder {
 					}
 					target[position++] = 0xfb
 					targetView.setFloat64(position, value)
-					/*if (!target[position[4] && !target[position[5] && !target[position[6] && !target[position[7] && !(target[0] & 0x78) < ) {
-						// something like this can be represented as a float with binary rounding
-					}*/
 					position += 8
 				}
 			} else if (type === 'object') {
@@ -374,6 +371,7 @@ class Encoder extends Decoder {
 		}
 
 		const writeObject = this.useRecords === false ? this.variableMapSize ? (object) => {
+			// this method is slightly slower, but generates "preferred serialization" (optimally small for smaller objects)
 			let keys = Object.keys(object)
 			let length = keys.length
 			if (length < 0x18) {
