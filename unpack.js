@@ -424,24 +424,7 @@ function readStringJS(length) {
 
 	return result
 }
-/*function readShortString(length) {
-	let start = position
-	let end = start + length
-	while (position < end) {
-		const byte = src[position++];
-		if ((byte & 0x80) > 0) {
-			position = end
-			console.log('utf8 slice')
-			return src.utf8Slice(start, end)
-		}
-	}
-	if (srcStringEnd < end) {
-		srcStringStart = start
-		srcStringEnd = start + 8192
-		srcString = src.toString('latin1', start, srcStringEnd)
-	}
-	return srcString.slice(start - srcStringStart, end - srcStringStart)
-}*/
+
 function readArray(length) {
 	let array = new Array(length)
 	for (let i = 0; i < length; i++) {
