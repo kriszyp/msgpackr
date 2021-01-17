@@ -349,6 +349,14 @@ class Encoder extends Decoder {
 								return
 							}
 						}
+						if (value[Symbol.iterator]) {
+							target[position++] = 0x9f // indefinite length array
+							for (let entry of value) {
+								encode(entry)
+							}
+							target[position++] = 0xff // stop-code
+							return
+						}
 						// no extension found, write as object
 						writeObject(value, false)
 					}

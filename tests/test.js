@@ -306,6 +306,16 @@ suite('CBOR basic tests', function(){
 		assert.deepEqual(deserialized, data)
 	})
 
+	test('iterator/indefinite length array', function(){
+		class NotArray {
+		}
+		let data = ['a', 'b', 'c', ['d']] // iterable
+		data.constructor = NotArray
+		var serialized = encode(data)
+		var deserialized = decode(serialized)
+		assert.deepEqual(deserialized, data)
+	})
+
 	test('buffers', function() {
 		var data = {
 			buffer1: new Uint8Array([2,3,4]),

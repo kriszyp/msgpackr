@@ -10,6 +10,7 @@ let alreadySet
 const EMPTY_ARRAY = []
 const RECORD_STARTING_ID_PREFIX = 0x9d
 const RECORD_STARTING_ID = 40100
+const STOP_CODE = {}
 let strings = EMPTY_ARRAY
 let stringPosition = 0
 let currentDecoder = {}
@@ -135,6 +136,36 @@ function read() {
 				token = dataView.getBigUint64(position)
 				position += 8
 				break
+			case 0x1f: 
+				// indefinite length
+				switch(majorType) {
+					case 2: // byte string
+					case 3: // text string
+					case 4: // array
+						let array = []
+						let value, i = 0
+						while ((value = read()) != STOP_CODE) {
+							array[i++] = value
+						}
+						return majorType == 4 ? array : majorType == 3 ? array.join('') : Buffer.concat(array)
+					case 5: // map
+						let key
+						if (currentDecoder.mapsAsObjects) {
+							let object = {}
+							while ((key = readKey()) != STOP_CODE)
+								object[key] = read()
+							return object
+						} else {
+							let map = new Map()
+							while ((key = read()) != STOP_CODE)
+								map.set(key, read())
+							return map
+						}
+					case 7:
+						return STOP_CODE
+					default:
+						throw new Error('Invalid major type for indefinite length ' + majorType)
+				}
 			default:
 				throw new Error('Unknown token ' + token)
 		}
@@ -220,7 +251,7 @@ function read() {
 				case 0x15: return true
 				case 0x16: return null
 				case 0x17: return; // undefined
-				// case 0x19: // half-precision float
+				case 0x1f: 
 				default:
 					throw new Error('Unknown token ' + token)
 			}
