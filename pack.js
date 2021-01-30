@@ -369,11 +369,23 @@ class Packr extends Unpackr {
 			} else if (type === 'boolean') {
 				target[position++] = value ? 0xc3 : 0xc2
 			} else if (type === 'bigint') {
-				target[position++] = 0xd3
-				if (value < 9223372036854776000 && value > -9223372036854776000)
+				if (value < (1n<<63n) && value >= -(1n<<63n)) {
+					// use a signed int as long as it fits
+					target[position++] = 0xd3
 					targetView.setBigInt64(position, value)
-				else
-					targetView.setFloat64(position, value)
+				} else if (value < (1n<<64n) && value > 0) {
+					// if we can fit an unsigned int, use that
+					target[position++] = 0xcf
+					targetView.setBigUint64(position, value)
+				} else {
+					// overflow
+					if (this.largeBigIntToFloat) {
+						target[position++] = 0xcb
+						targetView.setFloat64(position, Number(value))
+					} else {
+						throw new RangeError(value + ' was too large to fit in MessagePack 64-bit integer format, set largeBigIntToFloat to convert to float-64')
+					}
+				}
 				position += 8
 			} else if (type === 'undefined') {
 				//target[position++] = 0xc1 // this is the "never-used" byte

@@ -339,6 +339,28 @@ suite('msgpackr basic tests', function(){
 		var deserialized = unpack(serialized)
 		assert.deepEqual(deserialized, data)
 	})
+	test('bigint', function(){
+		var data = {
+			bigintSmall: 352n,
+			bigintSmallNegative: -333335252n,
+			bigintBig: 2n**64n - 1n, // biggest possible
+			bigintBigNegative: -(2n**63n), // largest negative
+			mixedWithNormal: 44,
+		}
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.deepEqual(deserialized, data)
+		var tooBigInt = {
+			tooBig: 2n**66n
+		}
+		assert.throws(function(){ serialized = pack(tooBigInt) })
+		let packr = new Packr({
+			largeBigIntToFloat: true
+		})
+		serialized = packr.pack(tooBigInt)
+		deserialized = unpack(serialized)
+		assert.isTrue(deserialized.tooBig > 2n**65n)
+	})
 
 	test('buffers', function(){
 		var data = {
