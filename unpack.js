@@ -281,6 +281,9 @@ function read() {
 			// str 16
 				value = dataView.getUint16(position)
 				position += 2
+				if (srcStringEnd >= position) {
+					return srcString.slice(position - srcStringStart, (position += value) - srcStringStart)
+				}
 				return readString16(value)
 			case 0xdb:
 			// str 32
