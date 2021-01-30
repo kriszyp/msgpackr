@@ -17,7 +17,7 @@ msgpack_codec = msgpack_codec && msgpack_codec.msgpack;
 what_the_pack = what_the_pack && what_the_pack.initialize(2**20);
 
 var pkg = require("../package.json");
-var data = require("./example4.json");
+var data = require("./example5.json");
 var packed = msgpack_lite && msgpack_lite.encode(data);
 var expected = JSON.stringify(data);
 
@@ -42,11 +42,11 @@ console.log(rpad("", COL1, "-"), "|", lpad(":", COL2, "-"), "|", lpad(":", COL3,
 
 var buf, obj;
 
-if (JSON) {
+/*if (JSON) {
   buf = bench('buf = Buffer(JSON.stringify(obj));', JSON_stringify, data);
   obj = bench('obj = JSON.parse(buf);', JSON.parse, buf);
   test(obj);
-}
+}*/
 
 if (msgpackr) {
   let packr = new msgpackr.Packr({ useRecords: false })

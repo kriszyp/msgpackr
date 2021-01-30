@@ -1,5 +1,4 @@
-//var inspector = require('inspector')
-//inspector.open(9330, null, true)
+//var inspector = require('inspector'); inspector.open(9330, null, true); debugger
 
 function tryRequire(module) {
 	try {
@@ -33,14 +32,14 @@ try {
 
 if (typeof XMLHttpRequest === 'undefined') {
 	var fs = require('fs')
-	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/example5.json'))
+	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/example4.json'))
 } else {
 	var xhr = new XMLHttpRequest()
 	xhr.open('GET', 'example4.json', false)
 	xhr.send()
 	var sampleData = JSON.parse(xhr.responseText)
 }
-var ITERATIONS = 10000
+var ITERATIONS = 4000
 
 suite('msgpackr basic tests', function(){
 	test('pack/unpack data', function(){
@@ -111,6 +110,37 @@ suite('msgpackr basic tests', function(){
 		var serialized = packr.pack(data)
 		var deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized, data)
+	})
+	test('replace data', function(){
+		var data1 = {
+			data: [
+				{ a: 1, name: 'one', type: 'odd', isOdd: true, a: '13 characters' },
+				{ a: 2, name: 'two', type: 'even', a: '11 characte' },
+				{ a: 3, name: 'three', type: 'odd', isOdd: true, a: '12 character' },
+				{ a: 4, name: 'four', type: 'even', a: '9 charact'},
+				{ a: 5, name: 'five', type: 'odd', isOdd: true, a: '14 characters!' },
+				{ a: 6, name: 'six', type: 'even', isOdd: null }
+			],
+		}
+		var data2 = {
+			data: [
+				{ foo: 7, name: 'one', type: 'odd', isOdd: true },
+				{ foo: 8, name: 'two', type: 'even'},
+				{ foo: 9, name: 'three', type: 'odd', isOdd: true },
+				{ foo: 10, name: 'four', type: 'even'},
+				{ foo: 11, name: 'five', type: 'odd', isOdd: true },
+				{ foo: 12, name: 'six', type: 'even', isOdd: null }
+			],
+		}
+		var serialized1 = pack(data1)
+		var serialized2 = pack(data2)
+		var b = Buffer.alloc(8000)
+		serialized1.copy(b)
+		var deserialized1 = unpack(b, serialized1.length)
+		serialized2.copy(b)
+		var deserialized2 = unpack(b, serialized2.length)
+		assert.deepEqual(deserialized1, data1)
+		assert.deepEqual(deserialized2, data2)
 	})
 
 	test('extended class', function(){
@@ -410,6 +440,7 @@ suite('msgpackr performance tests', function(){
 		for (var i = 0; i < ITERATIONS; i++) {
 			var deserialized = packr.unpack(serialized)
 		}
+		debugger
 	})
 	test('performance pack', function() {
 		var data = sampleData
