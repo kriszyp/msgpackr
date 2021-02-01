@@ -760,7 +760,7 @@ let defaultPackr = new Packr({ useRecords: false })
 exports.pack = defaultPackr.pack
 exports.encode = defaultPackr.pack
 Object.assign(exports, {
-	ALWAYS:1,
+	ALWAYS: 1,
 	DECIMAL_ROUND: 3,
 	DECIMAL_FIT: 4
 })

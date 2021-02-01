@@ -25,5 +25,5 @@ export class Unpackr {
 export class Decoder extends Unpackr {}
 export function unpack(messagePack: Buffer | Uint8Array): any
 export function decode(messagePack: Buffer | Uint8Array): any
-export function addExtension(extension: Extension)
+export function addExtension(extension: Extension): void
 export const C1: {}
