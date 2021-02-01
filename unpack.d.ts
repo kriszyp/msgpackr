@@ -27,3 +27,6 @@ export function unpack(messagePack: Buffer | Uint8Array): any
 export function decode(messagePack: Buffer | Uint8Array): any
 export function addExtension(extension: Extension): void
 export const C1: {}
+export const ALWAYS = 1
+export const DECIMAL_ROUND = 3
+export const DECIMAL_FIT = 4
