@@ -1,8 +1,9 @@
-exports.Packr = require('./pack').Packr
+const packModule = require('./pack')
+exports.Packr = packModule.Packr
 exports.addExtension = require('./pack').addExtension
 exports.Encoder = exports.Packr
-let unpackModule = require('./unpack')
-let extractor = tryRequire('msgpackr-extract')
+const unpackModule = require('./unpack')
+const extractor = tryRequire('msgpackr-extract')
 if (extractor)
 	unpackModule.setExtractor(extractor.extractStrings)
 exports.Unpackr = unpackModule.Unpackr
@@ -12,11 +13,11 @@ exports.PackrStream = require('./stream').PackrStream
 exports.UnpackrStream = require('./stream').UnpackrStream
 exports.EncoderStream = exports.PackrStream
 exports.DecoderStream = exports.UnpackrStream
-let packr = new exports.Packr({ useRecords: false })
-exports.unpack = packr.unpack
-exports.pack = packr.pack
-exports.decode = packr.unpack
-exports.encode = packr.pack
+const packr = new exports.Packr({ useRecords: false })
+exports.unpack = unpackModule.unpack
+exports.pack = packModule.pack
+exports.decode = unpackModule.unpack
+exports.encode = packModule.pack
 exports.useRecords = false
 exports.mapsAsObjects = true
 Object.assign(exports, {

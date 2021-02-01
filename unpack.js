@@ -817,3 +817,6 @@ exports.useRecords = false
 exports.mapsAsObjects = true
 exports.C1 = C1
 exports.C1Type = C1Type
+let defaultUnpackr = new Unpackr({ useRecords: false })
+exports.unpack = defaultUnpackr.unpack
+exports.decode = defaultUnpackr.unpack
