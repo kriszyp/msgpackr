@@ -111,6 +111,7 @@ suite('msgpackr basic tests', function(){
 		var deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized, data)
 	})
+	if (typeof Buffer != 'undefined')
 	test('replace data', function(){
 		var data1 = {
 			data: [
@@ -219,7 +220,7 @@ suite('msgpackr basic tests', function(){
 	})
 
 	test('structured cloning: types', function() {
-		let b = Buffer.alloc(20)
+		let b = typeof Buffer != 'undefined' ? Buffer.alloc(20) : new Uint8Array(20)
 		let fa = new Float32Array(b.buffer, 8, 2)
 		fa[0] = 2.25
 		fa[1] = 6
@@ -462,14 +463,13 @@ suite('msgpackr performance tests', function(){
 		for (var i = 0; i < ITERATIONS; i++) {
 			var deserialized = packr.unpack(serialized)
 		}
-		debugger
 	})
 	test('performance pack', function() {
 		var data = sampleData
 		this.timeout(10000)
 		let structures = []
 		let packr = new Packr({ structures })
-		let buffer = Buffer.alloc(0x10000)
+		let buffer = typeof Buffer != 'undefined' ? Buffer.alloc(0x10000) : new Uint8Array(0x10000)
 
 		for (var i = 0; i < ITERATIONS; i++) {
 			//serialized = pack(data, { shared: sharedStructure })

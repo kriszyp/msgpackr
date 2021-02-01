@@ -24,15 +24,29 @@
   "module": "./index.mjs",
   "main": "./index.js",
   "exports": {
-    "import": {
-      ".": "./index.mjs",
-      "./pack": "./pack.mjs",
-      "./unpack": "./unpack.mjs"
+    ".": {
+      "import": "./index.mjs",
+      "require": "./index.js"
     },
-    "require": {
-      ".": "./index.js",
-      "./pack": "./pack.js",
-      "./unpack": "./unpack.js"
+    "./pack": {
+      "node": {
+        "import": "./index.mjs",
+        "require": "./index.js"
+      },
+      "default": {
+        "import": "./pack.mjs",
+        "require": "./pack.js"
+      }
+    },
+    "./unpack": {
+      "node": {
+        "import": "./index.mjs",
+        "require": "./index.js"
+      },
+      "default": {
+        "import": "./unpack.mjs",
+        "require": "./unpack.js"
+      }
     }
   },
   "optionalDependencies": {

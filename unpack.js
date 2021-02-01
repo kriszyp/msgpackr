@@ -90,7 +90,7 @@ class Unpackr {
 	}
 }
 let currentStructures
-exports.Unpackr = Unpackr
+exports.Decoder = exports.Unpackr = Unpackr
 exports.read = read
 exports.getPosition = () => {
 	return position
