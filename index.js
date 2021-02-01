@@ -21,7 +21,7 @@ exports.encode = packModule.pack
 exports.useRecords = false
 exports.mapsAsObjects = true
 Object.assign(exports, {
-	ALWAYS:1,
+	ALWAYS: 1,
 	DECIMAL_ROUND: 3,
 	DECIMAL_FIT: 4
 })
