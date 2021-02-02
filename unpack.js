@@ -25,6 +25,14 @@ class C1Type {}
 const C1 = new C1Type()
 C1.name = 'MessagePack 0xC1'
 
+let FLOAT32_OPTIONS;
+(function (FLOAT32_OPTIONS) {
+	FLOAT32_OPTIONS[FLOAT32_OPTIONS["NEVER"] = 0] = "NEVER";
+	FLOAT32_OPTIONS[FLOAT32_OPTIONS["ALWAYS"] = 1] = "ALWAYS";
+	FLOAT32_OPTIONS[FLOAT32_OPTIONS["DECIMAL_ROUND"] = 3] = "DECIMAL_ROUND";
+	FLOAT32_OPTIONS[FLOAT32_OPTIONS["DECIMAL_FIT"] = 4] = "DECIMAL_FIT";
+})(FLOAT32_OPTIONS = exports.FLOAT32_OPTIONS || (exports.FLOAT32_OPTIONS = {}));
+
 class Unpackr {
 	constructor(options) {
 		if (options) {

@@ -2,9 +2,8 @@ export enum FLOAT32_OPTIONS {
 	NEVER = 0,
 	ALWAYS = 1,
 	DECIMAL_ROUND = 3,
-	DECIMAL_FIT= 4
+	DECIMAL_FIT = 4
 }
-
 interface Options {
 	useFloat32?: FLOAT32_OPTIONS
 	useRecords?: boolean
