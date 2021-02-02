@@ -704,7 +704,7 @@ function writeExtensionData(result, target, position, type) {
 				target[position++] = length
 			} else if (length < 0x10000) {
 				target[position++] = 0xc8
-				target[position++] = length << 8
+				target[position++] = length >> 8
 				target[position++] = length & 0xff
 			} else {
 				target[position++] = 0xc9

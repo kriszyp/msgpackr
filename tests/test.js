@@ -180,6 +180,25 @@ suite('msgpackr basic tests', function(){
 		assert.deepEqual(data, deserialized)
 		assert.equal(deserialized.extendedInstance.getDouble(), 8)
 	})
+	test('extended class', function(){
+		function TestClass() {
+
+		}
+		addExtension({
+			Class: TestClass,
+			type: 0x01,
+			pack() {
+				return Buffer.alloc(256)
+			},
+			unpack(data) {
+				return data.length
+				// here data.length equals to 0
+				assert(data.length == 256);
+			}
+		});
+		let result = unpack(pack(new TestClass()));
+		assert.equal(result, 256)
+	})
 	test.skip('text decoder', function() {
 			let td = new TextDecoder('ISO-8859-15')
 			let b = Buffer.alloc(3)
