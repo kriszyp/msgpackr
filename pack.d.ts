@@ -1,5 +1,5 @@
 import { Unpackr } from './unpack'
-export { addExtension, ALWAYS, DECIMAL_ROUND, DECIMAL_FIT } from './unpack'
+export { addExtension, FLOAT32_OPTIONS } from './unpack'
 export class Packr extends Unpackr {
 	pack(value: any): Buffer
 	encode(value: any): Buffer
