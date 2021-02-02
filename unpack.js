@@ -289,6 +289,9 @@ function read() {
 			// str 32
 				value = dataView.getUint32(position)
 				position += 4
+				if (srcStringEnd >= position) {
+					return srcString.slice(position - srcStringStart, (position += value) - srcStringStart)
+				}
 				return readString32(value)
 			case 0xdc:
 			// array 16
