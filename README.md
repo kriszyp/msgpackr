@@ -137,7 +137,8 @@ The following options properties can be provided to the Packr or Unpackr constru
 ### 32-bit Float Options
 By default all non-integer numbers are serialized as 64-bit float (double). This is fast, and ensures maximum precision. However, often real-world data doesn't not need 64-bits of precision, and using 32-bit encoding can be much more space efficient. There are several options that provide more efficient encodings. Using the decimal rounding options for encoding and decoding provides lossless storage of common decimal representations like 7.99, in more efficient 32-bit format (rather than 64-bit). The `useFloat32` property has several possible options, available from the module as constants:
 ```
-import { ALWAYS, DECIMAL_ROUND, DECIMAL_FIT } from 'msgpackr'
+import { FLOAT32_OPTIONS } from 'msgpackr';
+const { ALWAYS, DECIMAL_ROUND, DECIMAL_FIT } = FLOAT32_OPTIONS;
 ```
 
 * `ALWAYS` (1) - Always will encode non-integers (absolute less than 2147483648) as 32-bit float.
