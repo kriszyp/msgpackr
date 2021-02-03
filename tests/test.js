@@ -15,7 +15,7 @@ var PackrStream = msgpackr.PackrStream
 var UnpackrStream = msgpackr.UnpackrStream
 var unpack = msgpackr.unpack
 var pack = msgpackr.pack
-var DECIMAL_FIT = msgpackr.DECIMAL_FIT
+var DECIMAL_FIT = msgpackr.FLOAT32_OPTIONS.DECIMAL_FIT
 
 var addExtension = msgpackr.addExtension
 
@@ -188,12 +188,10 @@ suite('msgpackr basic tests', function(){
 			Class: TestClass,
 			type: 0x01,
 			pack() {
-				return Buffer.alloc(256)
+				return typeof Buffer != 'undefined' ? Buffer.alloc(256) : new Uint8Array(256)
 			},
 			unpack(data) {
 				return data.length
-				// here data.length equals to 0
-				assert(data.length == 256);
 			}
 		});
 		let result = unpack(pack(new TestClass()));

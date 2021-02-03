@@ -20,11 +20,8 @@ exports.decode = unpackModule.unpack
 exports.encode = packModule.pack
 exports.useRecords = false
 exports.mapsAsObjects = true
-Object.assign(exports, {
-	ALWAYS: 1,
-	DECIMAL_ROUND: 3,
-	DECIMAL_FIT: 4
-})
+exports.FLOAT32_OPTIONS = unpackModule.FLOAT32_OPTIONS
+Object.assign(exports, unpackModule.FLOAT32_OPTIONS)
 
 function tryRequire(moduleId) {
 	try {

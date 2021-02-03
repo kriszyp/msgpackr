@@ -23,6 +23,7 @@ export const decode = packr.unpack
 export const encode = packr.pack
 export const useRecords = false
 export const mapsAsObjects = true
+export const FLOAT32_OPTIONS = unpackModule.FLOAT32_OPTIONS
 export const ALWAYS = 1
 export const DECIMAL_ROUND = 3
 export const DECIMAL_FIT = 4

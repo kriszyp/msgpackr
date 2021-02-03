@@ -823,3 +823,9 @@ exports.C1Type = C1Type
 let defaultUnpackr = new Unpackr({ useRecords: false })
 exports.unpack = defaultUnpackr.unpack
 exports.decode = defaultUnpackr.unpack
+exports.FLOAT32_OPTIONS = {
+	NEVER: 0,
+	ALWAYS: 1,
+	DECIMAL_ROUND: 3,
+	DECIMAL_FIT: 4
+}
