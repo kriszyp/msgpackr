@@ -49,7 +49,7 @@ receivingStream.on('data', (data) => {
 	// received data
 });
 ```
- The `PackrStream` and `UnpackrStream` instances  will have also the record structure extension enabled by default (see below).
+The `PackrStream` and `UnpackrStream` instances  will have also the record structure extension enabled by default (see below).
 
 ## Browser Usage
 Msgpackr works as standalone JavaScript as well, and runs on modern browsers. It includes a bundled script, at `dist/index.js` for ease of direct loading:
@@ -120,6 +120,21 @@ let packr = new Packr({
 });
 ```
 Msgpackr will automatically add and saves structures as it encounters any new object structures (up to a limit of 32). It will always add structures in an incremental/compatible way: Any object encoded with an earlier structure can be decoded with a later version (as long as it is persisted).
+
+### Reading Multiple Values
+If you have a buffer with multiple values sequentially encoded, you can choose to parse and read multiple values. This can be done using the `unpackMultiple` function/method, which can return an array of all the values it can sequentially parse within the provided buffer. For example:
+```
+let data = new Uint8Array([1, 2, 3]) // encodings of values 1, 2, and 3
+let values = unpackMultiple(data) // [1, 2, 3]
+```
+Alternately, you can provide a callback function that is called as the parsing occurs with each value, and can optionally terminate the parsing by returning `false`:
+```
+let data = new Uint8Array([1, 2, 3]) // encodings of values 1, 2, and 3
+unpackMultiple(data, (value) => {
+	// called for each value
+	// return false if you wish to end the parsing
+})
+```
 
 ## Options
 The following options properties can be provided to the Packr or Unpackr constructor:

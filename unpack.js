@@ -11,6 +11,7 @@ const EMPTY_ARRAY = []
 let strings = EMPTY_ARRAY
 let stringPosition = 0
 let currentUnpackr = {}
+let currentStructures
 let srcString
 let srcStringStart = 0
 let srcStringEnd = 0
@@ -39,7 +40,7 @@ class Unpackr {
 		if (src) {
 			// re-entrant execution, save the state and restore it after we do this unpack
 			return saveState(() => {
-				src = null
+				clearSource()
 				return this ? this.unpack(source, end, continueReading) : Unpackr.prototype.unpack.call(defaultOptions, source, end, continueReading)
 			})
 		}
@@ -80,16 +81,42 @@ class Unpackr {
 		try {
 			return read()
 		} finally {
-			src = null
-			if (referenceMap)
-				referenceMap = null
+			if (position >= srcEnd || !continueReading) {
+				src = null
+				if (referenceMap)
+					referenceMap = null
+			}
+		}
+	}
+	unpackMultiple(source, forEach) {
+		try {
+			let unpackr = this
+			let size = source.length
+			let value = this ? this.unpack(source, size, true) : defaultUnpackr.unpack(source, size, true)
+			let values
+			if (forEach) {
+				forEach(value)
+				while(position < size) {
+					if (forEach(read()) === false) {
+						return
+					}
+				}
+			}
+			else {
+				values = [ value ]
+				while(position < size) {
+					values.push(read())
+				}
+				return values
+			}
+		} finally {
+			clearSource()
 		}
 	}
 	decode(source, end) {
 		return this.unpack(source, end)
 	}
 }
-let currentStructures
 exports.Decoder = exports.Unpackr = Unpackr
 exports.read = read
 exports.getPosition = () => {
@@ -802,8 +829,11 @@ function saveState(callback) {
 	dataView = new DataView(src.buffer, src.byteOffset, src.byteLength)
 	return value
 }
-exports.clearSource = function() {
+exports.clearSource = clearSource
+function clearSource() {
 	src = null
+	referenceMap = null
+	currentStructures = null
 }
 
 exports.addExtension = function(extension) {
@@ -822,6 +852,7 @@ exports.C1 = C1
 exports.C1Type = C1Type
 let defaultUnpackr = new Unpackr({ useRecords: false })
 exports.unpack = defaultUnpackr.unpack
+exports.unpackMultiple = defaultUnpackr.unpackMultiple
 exports.decode = defaultUnpackr.unpack
 exports.FLOAT32_OPTIONS = {
 	NEVER: 0,

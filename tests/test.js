@@ -14,6 +14,7 @@ var Packr = msgpackr.Packr
 var PackrStream = msgpackr.PackrStream
 var UnpackrStream = msgpackr.UnpackrStream
 var unpack = msgpackr.unpack
+var unpackMultiple = msgpackr.unpackMultiple
 var pack = msgpackr.pack
 var DECIMAL_FIT = msgpackr.FLOAT32_OPTIONS.DECIMAL_FIT
 
@@ -463,6 +464,13 @@ suite('msgpackr basic tests', function(){
 			bufferStream.push(null)
 		}))
 	}
+	test('unpackMultiple', () => {
+		let values = unpackMultiple(new Uint8Array([1, 2, 3, 4]))
+		assert.deepEqual(values, [1, 2, 3, 4])
+		values = []
+		unpackMultiple(new Uint8Array([1, 2, 3, 4]), value => values.push(value))
+		assert.deepEqual(values, [1, 2, 3, 4])
+	})
 
 })
 suite('msgpackr performance tests', function(){

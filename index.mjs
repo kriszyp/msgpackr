@@ -18,6 +18,7 @@ export const EncoderStream = stream.PackrStream
 export const DecoderStream = stream.UnpackrStream
 let packr = new packModule.Packr({ useRecords: false })
 export const unpack = packr.unpack
+export const unpackMultiple = packr.unpackMultiple
 export const pack = packr.pack
 export const decode = packr.unpack
 export const encode = packr.pack
