@@ -2,7 +2,7 @@ export enum FLOAT32_OPTIONS {
 	NEVER = 0,
 	ALWAYS = 1,
 	DECIMAL_ROUND = 3,
-	DECIMAL_FIT= 4
+	DECIMAL_FIT = 4
 }
 
 interface Options {
@@ -28,11 +28,11 @@ export class Unpackr {
 	constructor(options?: Options)
 	unpack(messagePack: Buffer | Uint8Array): any
 	decode(messagePack: Buffer | Uint8Array): any
-	unpackMultiple(messagePack: Buffer | Uint8Array, forEach?: (value) => any): [] | void
+	unpackMultiple(messagePack: Buffer | Uint8Array, forEach?: (value: any) => any): [] | void
 }
 export class Decoder extends Unpackr {}
 export function unpack(messagePack: Buffer | Uint8Array): any
-export function unpackMultiple(messagePack: Buffer | Uint8Array, forEach?: (value) => any): [] | void
+export function unpackMultiple(messagePack: Buffer | Uint8Array, forEach?: (value: any) => any): [] | void
 export function decode(messagePack: Buffer | Uint8Array): any
 export function addExtension(extension: Extension): void
 export const C1: {}
