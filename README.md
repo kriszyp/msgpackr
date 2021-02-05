@@ -17,7 +17,7 @@ Install with:
 npm i msgpackr
 ```
 And `import` or `require` it for basic standard serialization/encoding (`pack`) and deserialization/decoding (`unpack`) functions:
-```
+```js
 import { unpack, pack } from 'msgpackr';
 let serializedAsBuffer = pack(value);
 let data = unpack(serializedAsBuffer);
@@ -30,14 +30,14 @@ The msgpackr package runs on any modern JS platform, but is optimized for NodeJS
 ### Streams
 We can use the including streaming functionality (which further improves performance). The `PackrStream` is a NodeJS transform stream that can be used to serialize objects to a binary stream (writing to network/socket, IPC, etc.), and the `UnpackrStream` can be used to deserialize objects from a binary sream (reading from network/socket, etc.):
 
-```
+```js
 import { PackrStream } from 'msgpackr';
 let stream = new PackrStream();
 stream.write(myData);
 
 ```
 Or for a full example of sending and receiving data on a stream:
-```
+```js
 import { PackrStream } from 'msgpackr';
 let sendingStream = new PackrStream();
 let receivingStream = new UnpackrStream();
@@ -53,20 +53,20 @@ The `PackrStream` and `UnpackrStream` instances  will have also the record struc
 
 ## Browser Usage
 Msgpackr works as standalone JavaScript as well, and runs on modern browsers. It includes a bundled script, at `dist/index.js` for ease of direct loading:
-```
+```html
 <script src="node_modules/msgpackr/dist/index.js"></script>
 ```
 
 This is UMD based, and will register as a module if possible, or create a `msgpackr` global with all the exported functions.
 
 For module-based development, it is recommended that you directly import the module of interest, to minimize dependencies that get pulled into your application:
-```
+```js
 import { unpack } from 'msgpackr/unpack' // if you only need to unpack
 ```
 
 ## Structured Cloning
 You can also use msgpackr for [structured cloning](https://html.spec.whatwg.org/multipage/structured-data.html). By enabling the `structuredClone` option, you can include references to other objects or cyclic references, and object identity will be preserved. Structured cloning also enables preserving certain typed objects like `Error`, `Set`, `RegExp` and TypedArray instances. For example:
-```
+```js
 let obj = {
 	set: new Set(['a', 'b']),
 	regular: /a\spattern/
@@ -87,7 +87,7 @@ If you prefer to use encoder/decode terminology, msgpackr exports aliases, so `d
 
 ## Record / Object Structures
 There is a critical difference between maps (or dictionaries) that hold an arbitrary set of keys and values (JavaScript `Map` is designed for these), and records or object structures that have a well-defined set of fields. Typical JS objects/records may have many instances re(use) the same structure. By using the record extension, this distinction is preserved in MessagePack and the encoding can reuse structures and not only provides better type preservation, but yield much more compact encodings and increase decoding performance by 2-3x. Msgpackr automatically generates record definitions that are reused and referenced by objects with the same structure. There are a number of ways to use this to our advantage. For large object structures with repeating nested objects with similar structures, simply serializing with the record extension can yield significant benefits. To use the record structures extension, we create a new `Packr` instance. By default a new `Packr` instance will have the record extension enabled:
-```
+```js
 import { Packr } from 'msgpackr';
 let packr = new Packr();
 packr.pack(bigDataWithLotsOfObjects);
@@ -100,14 +100,14 @@ When creating a new `Packr`, `Unpackr`, `PackrStream`, or `UnpackrStream` instan
 
 ### Shared Record Structures
 Another useful way of using msgpackr, and the record extension, is for storing data in a databases, files, or other storage systems. If a number of objects with common data structures are being stored, a shared structure can be used to greatly improve data storage and deserialization efficiency. In the simplest form, provide a `structures` array, which is updated if any new object structure is encountered:
-```
+```js
 import { Packr } from 'msgpackr';
 let packr = new Packr({
 	structures: [... structures that were last generated ...]
 });
 ```
 If you are working with persisted data, you will need to persist the `structures` data when it is updated. Msgpackr provides an API for loading and saving the `structures` on demand (which is robust and can be used in multiple-process situations where other processes may be updating this same `structures` array), we just need to provide a way to store the generated shared structure so it is available to deserialize stored data in the future:
-```
+```js
 import { Packr } from 'msgpackr';
 let packr = new Packr({
 	getStructures() {
@@ -123,12 +123,12 @@ Msgpackr will automatically add and saves structures as it encounters any new ob
 
 ### Reading Multiple Values
 If you have a buffer with multiple values sequentially encoded, you can choose to parse and read multiple values. This can be done using the `unpackMultiple` function/method, which can return an array of all the values it can sequentially parse within the provided buffer. For example:
-```
+```js
 let data = new Uint8Array([1, 2, 3]) // encodings of values 1, 2, and 3
 let values = unpackMultiple(data) // [1, 2, 3]
 ```
 Alternately, you can provide a callback function that is called as the parsing occurs with each value, and can optionally terminate the parsing by returning `false`:
-```
+```js
 let data = new Uint8Array([1, 2, 3]) // encodings of values 1, 2, and 3
 unpackMultiple(data, (value) => {
 	// called for each value
@@ -151,7 +151,7 @@ The following options properties can be provided to the Packr or Unpackr constru
 
 ### 32-bit Float Options
 By default all non-integer numbers are serialized as 64-bit float (double). This is fast, and ensures maximum precision. However, often real-world data doesn't not need 64-bits of precision, and using 32-bit encoding can be much more space efficient. There are several options that provide more efficient encodings. Using the decimal rounding options for encoding and decoding provides lossless storage of common decimal representations like 7.99, in more efficient 32-bit format (rather than 64-bit). The `useFloat32` property has several possible options, available from the module as constants:
-```
+```js
 import { FLOAT32_OPTIONS } from 'msgpackr';
 const { ALWAYS, DECIMAL_ROUND, DECIMAL_FIT } = FLOAT32_OPTIONS;
 ```
@@ -205,7 +205,7 @@ See the [benchmark.md](benchmark.md) for more benchmarks and information about b
 
 ## Custom Extensions
 You can add your own custom extensions, which can be used to encode specific types/classes in certain ways. This is done by using the `addExtension` function, and specifying the class, extension type code (should be a number from 1-100, reserving negatives for MessagePack, 101-127 for msgpackr), and your pack and unpack functions (or just the one you need). You can use msgpackr encoding and decoding within your extensions, but if you do so, you must create a separate Packr instance, otherwise you could override data in the same encoding buffer:
-```
+```js
 import { addExtension, Packr } from 'msgpackr';
 
 class MyCustomClass {...}
@@ -246,7 +246,7 @@ Once a record identifier and record field names have been defined, the parser/de
 +--------+--------+--------+~~~~~~~~~~~~~~~~~~~~~~~~~+--------+--------+--------+
 ```
 Which should generate an object that would correspond to JSON:
-```
+```js
 { "foo": 4, "bar": 2}
 ```
 
