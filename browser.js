@@ -8,6 +8,7 @@ exports.unpack = packr.unpack
 exports.pack = packr.pack
 exports.decode = packr.unpack
 exports.encode = packr.pack
+exports.FLOAT32_OPTIONS = require('./unpack').FLOAT32_OPTIONS
 Object.assign(exports, {
 	ALWAYS:1,
 	DECIMAL_ROUND: 3,

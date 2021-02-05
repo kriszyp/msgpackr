@@ -14,8 +14,9 @@ var Packr = msgpackr.Packr
 var PackrStream = msgpackr.PackrStream
 var UnpackrStream = msgpackr.UnpackrStream
 var unpack = msgpackr.unpack
+var unpackMultiple = msgpackr.unpackMultiple
 var pack = msgpackr.pack
-var DECIMAL_FIT = msgpackr.DECIMAL_FIT
+var DECIMAL_FIT = msgpackr.FLOAT32_OPTIONS.DECIMAL_FIT
 
 var addExtension = msgpackr.addExtension
 
@@ -188,12 +189,10 @@ suite('msgpackr basic tests', function(){
 			Class: TestClass,
 			type: 0x01,
 			pack() {
-				return Buffer.alloc(256)
+				return typeof Buffer != 'undefined' ? Buffer.alloc(256) : new Uint8Array(256)
 			},
 			unpack(data) {
 				return data.length
-				// here data.length equals to 0
-				assert(data.length == 256);
 			}
 		});
 		let result = unpack(pack(new TestClass()));
@@ -449,7 +448,29 @@ suite('msgpackr basic tests', function(){
 				}, 10)
 			})
 		})
+		test('stream from buffer', () => new Promise(resolve => {
+			const parseStream = new UnpackrStream()
+			let values = []
+			parseStream.on('data', (value) => {
+				values.push(value)
+			})
+			parseStream.on('end', () => {
+				assert.deepEqual(values, [1, 2])
+				resolve()
+			})
+			let bufferStream = new require('stream').Duplex()
+			bufferStream.pipe(parseStream)
+			bufferStream.push(new Uint8Array([1, 2]))
+			bufferStream.push(null)
+		}))
 	}
+	test('unpackMultiple', () => {
+		let values = unpackMultiple(new Uint8Array([1, 2, 3, 4]))
+		assert.deepEqual(values, [1, 2, 3, 4])
+		values = []
+		unpackMultiple(new Uint8Array([1, 2, 3, 4]), value => values.push(value))
+		assert.deepEqual(values, [1, 2, 3, 4])
+	})
 
 })
 suite('msgpackr performance tests', function(){

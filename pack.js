@@ -759,8 +759,4 @@ exports.addExtension = function(extension) {
 let defaultPackr = new Packr({ useRecords: false })
 exports.pack = defaultPackr.pack
 exports.encode = defaultPackr.pack
-Object.assign(exports, {
-	ALWAYS: 1,
-	DECIMAL_ROUND: 3,
-	DECIMAL_FIT: 4
-})
+Object.assign(exports, exports.FLOAT32_OPTIONS = unpackModule.FLOAT32_OPTIONS)

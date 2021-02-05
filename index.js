@@ -15,16 +15,14 @@ exports.EncoderStream = exports.PackrStream
 exports.DecoderStream = exports.UnpackrStream
 const packr = new exports.Packr({ useRecords: false })
 exports.unpack = unpackModule.unpack
+exports.unpackMultiple = unpackModule.unpackMultiple
 exports.pack = packModule.pack
 exports.decode = unpackModule.unpack
 exports.encode = packModule.pack
 exports.useRecords = false
 exports.mapsAsObjects = true
-Object.assign(exports, {
-	ALWAYS: 1,
-	DECIMAL_ROUND: 3,
-	DECIMAL_FIT: 4
-})
+exports.FLOAT32_OPTIONS = unpackModule.FLOAT32_OPTIONS
+Object.assign(exports, unpackModule.FLOAT32_OPTIONS)
 
 function tryRequire(moduleId) {
 	try {
