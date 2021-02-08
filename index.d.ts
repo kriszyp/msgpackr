@@ -5,6 +5,6 @@ export as namespace msgpackr;
 export class UnpackrStream {
 }
 export class PackrStream {
-	write(value): void
-	end(value?): void
+	write(value: any): void
+	end(value?: any): void
 }
