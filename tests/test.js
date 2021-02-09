@@ -325,6 +325,24 @@ suite('msgpackr basic tests', function(){
 		var deserialized = unpack(serialized)
 		assert.deepEqual(deserialized, data)
 	})
+	test('strings', function() {
+		var data = ['']
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.deepEqual(deserialized, data)
+		// do multiple times
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.deepEqual(deserialized, data)
+		data = 'decode this: ᾜ'
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.deepEqual(deserialized, data)
+		data = 'decode this that is longer but without any non-latin characters'
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.deepEqual(deserialized, data)
+	})
 	test('decimal float32', function() {
 		var data = {
 			a: 2.526,

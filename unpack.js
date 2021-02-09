@@ -392,9 +392,11 @@ exports.setExtractor = (extractStrings) => {
 					strings = EMPTY_ARRAY
 				} else {
 					strings = extraction
-					stringPosition = 0
+					stringPosition = 1
 					srcStringEnd = 1 // even if a utf-8 string was decoded, must indicate we are in the midst of extracted strings and can't skip strings
-					string = strings[stringPosition++]
+					string = strings[0]
+					if (string === undefined)
+						throw new Error('Unexpected end of buffer')
 				}
 			}
 			let srcStringLength = string.length

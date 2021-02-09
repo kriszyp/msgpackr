@@ -1,7 +1,7 @@
 {
   "name": "msgpackr",
   "author": "Kris Zyp",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Ultra-fast MessagePack implementation with extensions for records and structured cloning",
   "license": "MIT",
   "types": "./index.d.ts",
@@ -50,7 +50,7 @@
     }
   },
   "optionalDependencies": {
-    "msgpackr-extract": "^1.0.5"
+    "msgpackr-extract": "^1.0.6"
   },
   "devDependencies": {
     "@types/node": "latest",
