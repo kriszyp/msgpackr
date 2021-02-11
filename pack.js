@@ -325,6 +325,8 @@ class Packr extends Unpackr {
 							pack(key)
 							pack(entryValue)
 						}
+					} else if (!constructor) { // no prototype object
+						writeObject(value, true)
 					} else {	
 						for (let i = 0, l = extensions.length; i < l; i++) {
 							let extensionClass = extensionClasses[i]

@@ -265,6 +265,14 @@ suite('msgpackr basic tests', function(){
 		assert.equal(deserialized.uint16Array[1], 4)
 	})
 
+	test('object without prototype', function(){
+		var data = Object.create(null)
+		data.test = 3
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.deepEqual(deserialized, data)
+	})
+
 	test('map/date', function(){
 		var map = new Map()
 		map.set(4, 'four')
