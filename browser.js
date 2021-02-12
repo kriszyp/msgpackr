@@ -5,6 +5,7 @@ exports.Decoder = exports.Unpackr
 exports.addExtension = require('./pack').addExtension
 let packr = new exports.Packr({ useRecords: false })
 exports.unpack = packr.unpack
+exports.unpackMultiple = packr.unpackMultiple
 exports.pack = packr.pack
 exports.decode = packr.unpack
 exports.encode = packr.pack
