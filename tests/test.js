@@ -273,6 +273,20 @@ suite('msgpackr basic tests', function(){
 		assert.deepEqual(deserialized, data)
 	})
 
+	test('random strings', function(){
+		var data = []
+		for (var i = 0; i < 2000; i++) {
+			var str = 'test'
+			while (Math.random() < 0.7 && str.length < 0x100000) {
+				str = str + String.fromCharCode(90/(Math.random() + 0.01)) + str
+			}
+			data.push(str)
+		}
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.deepEqual(deserialized, data)
+	})
+
 	test('map/date', function(){
 		var map = new Map()
 		map.set(4, 'four')
