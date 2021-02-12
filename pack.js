@@ -325,8 +325,6 @@ class Packr extends Unpackr {
 							pack(key)
 							pack(entryValue)
 						}
-					} else if (!constructor) { // no prototype object
-						writeObject(value, true)
 					} else {	
 						for (let i = 0, l = extensions.length; i < l; i++) {
 							let extensionClass = extensionClasses[i]
@@ -365,7 +363,7 @@ class Packr extends Unpackr {
 							}
 						}
 						// no extension found, write as object
-						writeObject(value, false)
+						writeObject(value, !value.hasOwnProperty) // if it doesn't have hasOwnProperty, don't do hasOwnProperty checks
 					}
 				}
 			} else if (type === 'boolean') {
