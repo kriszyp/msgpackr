@@ -522,7 +522,15 @@ class Packr extends Unpackr {
 				pack(object[keys[i]])
 		}
 		const makeRoom = (end) => {
-			let newSize = ((Math.max((end - start) << 2, target.length - 1) >> 12) + 1) << 12
+			let newSize
+			if (end > 0x1000000) {
+				// special handling for really large buffers
+				if (end > 0x100000000)
+					throw new Error('Packed buffer would be larger than 4GB limit on buffer size')
+				newSize = Math.min(0x100000000,
+					Math.round(Math.max((end - start) * (end > 0x4000000 ? 1.25 : 2), 0x1000000) / 0x1000) * 0x1000)
+			} else // faster handling for smaller buffers
+				newSize = ((Math.max((end - start) << 2, target.length - 1) >> 12) + 1) << 12
 			let newBuffer = new ByteArrayAllocate(newSize)
 			targetView = new DataView(newBuffer.buffer, 0, newSize)
 			if (target.copy)

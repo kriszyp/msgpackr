@@ -273,6 +273,14 @@ suite('msgpackr basic tests', function(){
 		assert.deepEqual(deserialized, data)
 	})
 
+	test('big buffer', function() {
+		var size = 10000000
+		var data = new Uint8Array(size).fill(1)
+		var packed = pack(data)
+		var unpacked = unpack(packed)
+		assert.equal(unpacked.length, size)
+	})
+
 	test('random strings', function(){
 		var data = []
 		for (var i = 0; i < 2000; i++) {
