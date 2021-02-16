@@ -281,7 +281,7 @@ function read() {
 					return recordDefinition(src[position++])
 				} else {
 					if (currentExtensions[value])
-						return currentExtensions[value]([src[position++]])
+						return currentExtensions[value](src.subarray(position, ++position))
 					else
 						throw new Error('Unknown extension ' + value)
 				}
