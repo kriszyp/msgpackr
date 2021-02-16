@@ -537,7 +537,7 @@ class Packr extends Unpackr {
 			if (target.copy)
 				target.copy(newBuffer, 0, start, end)
 			else
-				copyBinary(target, newBuffer, 0, start, end)
+				newBuffer.set(target.slice(start, end))
 			position -= start
 			start = 0
 			safeEnd = newBuffer.length - 10
@@ -641,8 +641,6 @@ extensions = [{
 
 function writeExtBuffer(typedArray, type, allocateForWrite, encode) {
 	let length = typedArray.byteLength
-	let offset = typedArray.byteOffset || 0
-	let buffer = typedArray.buffer || typedArray
 	if (length + 1 < 0x100) {
 		var { target, position } = allocateForWrite(4 + length)
 		target[position++] = 0xc7
@@ -660,10 +658,7 @@ function writeExtBuffer(typedArray, type, allocateForWrite, encode) {
 	}
 	target[position++] = 0x74 // "t" for typed array
 	target[position++] = type
-	if (hasNodeBuffer)
-		Buffer.from(buffer, offset, length).copy(target, position)
-	else
-		copyBinary(new Uint8Array(buffer, offset, length), target, position, 0, length)
+	target.set(new Uint8Array(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength), position)
 }
 function writeBuffer(buffer, allocateForWrite) {
 	let length = buffer.byteLength
@@ -683,10 +678,7 @@ function writeBuffer(buffer, allocateForWrite) {
 		targetView.setUint32(position, length)
 		position += 4
 	}
-	if (buffer.copy)
-		buffer.copy(target, position)
-	else
-		copyBinary(buffer, target, position, 0, length)
+	target.set(buffer, position)
 }
 
 function writeExtensionData(result, target, position, type) {
@@ -724,10 +716,7 @@ function writeExtensionData(result, target, position, type) {
 			}
 	}
 	target[position++] = type
-	if (result.copy)
-		result.copy(target, position)
-	else
-		copyBinary(result, target, position, 0, length)
+	target.set(result, position)
 	position += length
 	return position
 }

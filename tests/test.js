@@ -274,7 +274,7 @@ suite('msgpackr basic tests', function(){
 	})
 
 	test('big buffer', function() {
-		var size = 10000000
+		var size = 100000000
 		var data = new Uint8Array(size).fill(1)
 		var packed = pack(data)
 		var unpacked = unpack(packed)
