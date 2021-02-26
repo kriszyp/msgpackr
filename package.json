@@ -1,5 +1,8 @@
 {
-  "name": "msgpackr",
+  "name": "@qwtel/msgpackr",
+  "publishConfig": {
+    "access": "public"
+  },
   "author": "Kris Zyp",
   "version": "1.2.6",
   "description": "Ultra-fast MessagePack implementation with extensions for records and structured cloning",
