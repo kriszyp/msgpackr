@@ -370,11 +370,11 @@ class Packr extends Unpackr {
 			} else if (type === 'boolean') {
 				target[position++] = value ? 0xc3 : 0xc2
 			} else if (type === 'bigint') {
-				if (value < (1n<<63n) && value >= -(1n<<63n)) {
+				if (value < (BigInt(1)<<BigInt(63)) && value >= -(BigInt(1)<<BigInt(63))) {
 					// use a signed int as long as it fits
 					target[position++] = 0xd3
 					targetView.setBigInt64(position, value)
-				} else if (value < (1n<<64n) && value > 0) {
+				} else if (value < (BigInt(1)<<BigInt(64)) && value > 0) {
 					// if we can fit an unsigned int, use that
 					target[position++] = 0xcf
 					targetView.setBigUint64(position, value)
