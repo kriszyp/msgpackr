@@ -1,6 +1,5 @@
 import packModule from './pack.js'
 import unpackModule from './unpack.js'
-import { createRequire } from 'module'
 
 export const Packr = packModule.Packr
 export const addExtension = packModule.addExtension
