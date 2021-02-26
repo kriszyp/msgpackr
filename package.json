@@ -23,6 +23,7 @@
   "type": "commonjs",
   "module": "./index.mjs",
   "main": "./index.js",
+  "browser": "./browser.mjs",
   "exports": {
     ".": {
       "node": {
