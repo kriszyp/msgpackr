@@ -269,7 +269,7 @@ The high-performance serialization and deserialization algorithms in the msgpack
 MIT
 
 ### Browser Consideration
-It is worth noting that while msgpackr works well in modern browsers, the MessagePack format itself is often not an ideal format for web use. If you want compact data, brotli or gzip are most effective in compressing, and MessagePack's character frequency tends to defeat Huffman encoding used by these standard compression algorithms, resulting in less compact data than compressed JSON. The modern browser architecture is heavily optimized for parsing JSON from HTTP traffic, and it is difficult to achieve the same level of overall efficiency and ease with MessagePack.
+MessagePack can be a great choice for high-performance data delivery to browsers, as reasonable data size is possible without compression. And msgpackr works very well in modern browsers. However, it is worth noting that if you want highly compact data, brotli or gzip are most effective in compressing, and MessagePack's character frequency tends to defeat Huffman encoding used by these standard compression algorithms, resulting in less compact data than compressed JSON.
 
 ### Credits
 
