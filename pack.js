@@ -1,9 +1,5 @@
 "use strict"
-let unpackModule = require('./unpack')
-let Unpackr = unpackModule.Unpackr
-let mult10 = unpackModule.mult10
-let C1Type = unpackModule.C1Type
-const typedArrays = unpackModule.typedArrays
+import { Unpackr, mult10, C1Type, typedArrays, addExtension as unpackAddExtension } from './unpack.js'
 let textEncoder
 try {
 	textEncoder = new TextEncoder()
@@ -18,7 +14,7 @@ let targetView
 let position = 0
 let safeEnd
 const RECORD_SYMBOL = Symbol('record-id')
-class Packr extends Unpackr {
+export class Packr extends Unpackr {
 	constructor(options) {
 		super(options)
 		this.offset = 0
@@ -551,7 +547,6 @@ class Packr extends Unpackr {
 		position = 0
 	}
 }
-exports.Packr = Packr
 
 function copyBinary(source, target, targetOffset, offset, endOffset) {
 	while (offset < endOffset) {
@@ -744,17 +739,20 @@ function insertIds(serialized, idsToInsert) {
 	return serialized
 }
 
-exports.addExtension = function(extension) {
+export function addExtension(extension) {
 	if (extension.Class) {
 		if (!extension.pack)
 			throw new Error('Extension has no pack function')
 		extensionClasses.unshift(extension.Class)
 		extensions.unshift(extension)
 	}
-	unpackModule.addExtension(extension)
+	unpackAddExtension(extension)
 }
 
 let defaultPackr = new Packr({ useRecords: false })
-exports.pack = defaultPackr.pack
-exports.encode = defaultPackr.pack
-Object.assign(exports, exports.FLOAT32_OPTIONS = unpackModule.FLOAT32_OPTIONS)
+export const pack = defaultPackr.pack
+export const encode = defaultPackr.pack
+export const Encoder = Packr
+export { FLOAT32_OPTIONS } from './unpack.js'
+import { FLOAT32_OPTIONS } from './unpack.js'
+export const { NEVER, ALWAYS, DECIMAL_ROUND, DECIMAL_FIT } = FLOAT32_OPTIONS

@@ -22,11 +22,11 @@ let defaultOptions = {
 	useRecords: false,
 	mapsAsObjects: true
 }
-class C1Type {}
-const C1 = new C1Type()
+export class C1Type {}
+export const C1 = new C1Type()
 C1.name = 'MessagePack 0xC1'
 
-class Unpackr {
+export class Unpackr {
 	constructor(options) {
 		if (options) {
 			if (options.useRecords === false && options.mapsAsObjects === undefined)
@@ -117,13 +117,11 @@ class Unpackr {
 		return this.unpack(source, end)
 	}
 }
-exports.Decoder = exports.Unpackr = Unpackr
-exports.read = read
-exports.getPosition = () => {
+export function getPosition() {
 	return position
 }
 
-function read() {
+export function read() {
 	let token = src[position++]
 	if (token < 0xa0) {
 		if (token < 0x80) {
@@ -377,7 +375,7 @@ let readString8 = readStringJS
 let readString16 = readStringJS
 let readString32 = readStringJS
 
-exports.setExtractor = (extractStrings) => {
+export function setExtractor(extractStrings) {
 	readFixedString = readString(1)
 	readString8 = readString(2)
 	readString16 = readString(3)
@@ -770,7 +768,7 @@ currentExtensions[0x70] = (data) => {
 
 currentExtensions[0x73] = () => new Set(read())
 
-const typedArrays = ['Int8','Uint8','Uint8Clamped','Int16','Uint16','Int32','Uint32','Float32','Float64','BigInt64','BigUint64'].map(type => type + 'Array')
+export const typedArrays = ['Int8','Uint8','Uint8Clamped','Int16','Uint16','Int32','Uint32','Float32','Float64','BigInt64','BigUint64'].map(type => type + 'Array')
 
 currentExtensions[0x74] = (data) => {
 	let typeCode = data[0]
@@ -831,32 +829,28 @@ function saveState(callback) {
 	dataView = new DataView(src.buffer, src.byteOffset, src.byteLength)
 	return value
 }
-exports.clearSource = clearSource
-function clearSource() {
+export function clearSource() {
 	src = null
 	referenceMap = null
 	currentStructures = null
 }
 
-exports.addExtension = function(extension) {
+export function addExtension(extension) {
 	currentExtensions[extension.type] = extension.unpack
 }
 
-let mult10 = new Array(147) // this is a table matching binary exponents to the multiplier to determine significant digit rounding
+export let mult10 = new Array(147) // this is a table matching binary exponents to the multiplier to determine significant digit rounding
 for (let i = 0; i < 256; i++) {
 	mult10[i] = +('1e' + Math.floor(45.15 - i * 0.30103))
 }
-exports.mult10 = mult10
-exports.typedArrays = typedArrays
-exports.useRecords = false
-exports.mapsAsObjects = true
-exports.C1 = C1
-exports.C1Type = C1Type
+export const useRecords = false
+export const mapsAsObjects = true
+export const Decoder = Unpackr
 let defaultUnpackr = new Unpackr({ useRecords: false })
-exports.unpack = defaultUnpackr.unpack
-exports.unpackMultiple = defaultUnpackr.unpackMultiple
-exports.decode = defaultUnpackr.unpack
-exports.FLOAT32_OPTIONS = {
+export const unpack = defaultUnpackr.unpack
+export const unpackMultiple = defaultUnpackr.unpackMultiple
+export const decode = defaultUnpackr.unpack
+export const FLOAT32_OPTIONS = {
 	NEVER: 0,
 	ALWAYS: 1,
 	DECIMAL_ROUND: 3,

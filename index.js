@@ -1,3 +1,7 @@
+export { Packr, Encoder, addExtension, pack, encode } from './pack.js'
+export { Unpackr, Decoder, C1, unpack, decode } from './unpack.js'
+/*
+
 const packModule = require('./pack')
 exports.Packr = packModule.Packr
 exports.addExtension = require('./pack').addExtension
@@ -33,4 +37,4 @@ function tryRequire(moduleId) {
 		else
 			console.warn('For browser usage, directly use msgpackr/unpack or msgpackr/pack modules. ' + error.message.split('\n')[0])
 	}
-}
+}*/
