@@ -358,6 +358,8 @@ class Packr extends Unpackr {
 									}
 								}
 								if (result) {
+									if (result.length + position > safeEnd)
+										makeRoom(result.length + position)
 									position = writeExtensionData(result, target, position, extension.type)
 								}
 								return
