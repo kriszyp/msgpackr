@@ -145,7 +145,7 @@ suite('msgpackr basic tests', function(){
 		assert.deepEqual(deserialized2, data2)
 	})
 
-	test('extended class', function(){
+	test('extended class pack/unpack', function(){
 		function Extended() {
 
 		}
@@ -181,7 +181,7 @@ suite('msgpackr basic tests', function(){
 		assert.deepEqual(data, deserialized)
 		assert.equal(deserialized.extendedInstance.getDouble(), 8)
 	})
-	test('extended class', function(){
+	test('extended class pack/unpack custom size', function(){
 		function TestClass() {
 
 		}
@@ -198,6 +198,43 @@ suite('msgpackr basic tests', function(){
 		let result = unpack(pack(new TestClass()));
 		assert.equal(result, 256)
 	})
+
+	test('extended class read/write', function(){
+		function Extended() {
+
+		}
+		Extended.prototype.getDouble = function() {
+			return this.value * 2
+		}
+		var instance = new Extended()
+		instance.value = 4
+		instance.string = 'decode this: ᾜ'
+		var data = {
+			prop1: 'has multi-byte: ᾜ',
+			extendedInstance: instance,
+			prop2: 'more string',
+			num: 3,
+		}
+		let packr = new Packr()
+		addExtension({
+			Class: Extended,
+			type: 12,
+			read: function(data) {
+				let e = new Extended()
+				e.value = data[0]
+				e.string = data[1]
+				return e
+			},
+			write: function(instance) {
+				return [instance.value, instance.string]
+			}
+		})
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.deepEqual(data, deserialized)
+		assert.equal(deserialized.extendedInstance.getDouble(), 8)
+	})
+
 	test.skip('text decoder', function() {
 			let td = new TextDecoder('ISO-8859-15')
 			let b = Buffer.alloc(3)

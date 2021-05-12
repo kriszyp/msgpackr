@@ -204,7 +204,7 @@ msgpack.Decoder().on("data",ondata).decode(buf); | 1000000 |  2246 | 445235
 See the [benchmark.md](benchmark.md) for more benchmarks and information about benchmarking.
 
 ## Custom Extensions
-You can add your own custom extensions, which can be used to encode specific types/classes in certain ways. This is done by using the `addExtension` function, and specifying the class, extension type code (should be a number from 1-100, reserving negatives for MessagePack, 101-127 for msgpackr), and your pack and unpack functions (or just the one you need). You can use msgpackr encoding and decoding within your extensions, but if you do so, you must create a separate Packr instance, otherwise you could override data in the same encoding buffer:
+You can add your own custom extensions, which can be used to encode specific types/classes in certain ways. This is done by using the `addExtension` function, and specifying the class, extension `type` code (should be a number from 1-100, reserving negatives for MessagePack, 101-127 for msgpackr), and your `pack` and `unpack` functions (or just the one you need).
 ```js
 import { addExtension, Packr } from 'msgpackr';
 
@@ -216,13 +216,36 @@ addExtension({
 	type: 11, // register your own extension code (a type code from 1-100)
 	pack(instance) {
 		// define how your custom class should be encoded
-		return extPackr.pack(instance.myData); // return a buffer
+		return Buffer.from([instance.myData]); // return a buffer
 	}
 	unpack(buffer) {
 		// define how your custom class should be decoded
 		let instance = new MyCustomClass();
-		instance.myData = extPackr.unpack(buffer);
+		instance.myData = buffer[0];
 		return instance; // decoded value from buffer
+	}
+});
+```
+If you want to use msgpackr to encode and decode the data within your extensions, you can use the `read` and `write` functions and read and write data/objects that will be encoded and decoded by msgpackr, which can be easier and faster than creating and receiving separate buffers (note that you can't just return the instance from `write` or msgpackr will recursively try to use extension infinitely):
+```js
+import { addExtension, Packr } from 'msgpackr';
+
+class MyCustomClass {...}
+
+let extPackr = new Packr();
+addExtension({
+	Class: MyCustomClass,
+	type: 11, // register your own extension code (a type code from 1-100)
+	write(instance) {
+		// define how your custom class should be encoded
+		return instance.myData; // return some data to be encoded
+	}
+	read(data) {
+		// define how your custom class should be decoded,
+		// data will already be unpacked/decoded
+		let instance = new MyCustomClass();
+		instance.myData = data;
+		return instance; // return decoded value
 	}
 });
 ```

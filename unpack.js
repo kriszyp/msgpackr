@@ -280,9 +280,14 @@ function read() {
 				if (value == 0x72) {
 					return recordDefinition(src[position++])
 				} else {
-					if (currentExtensions[value])
-						return currentExtensions[value](src.subarray(position, ++position))
-					else
+					let extension = currentExtensions[value]
+					if (extension) {
+						if (extension.read) {
+							position++ // skip filler byte
+							return extension.read(read())
+						} else
+							return extension(src.subarray(position, ++position))
+					} else
 						throw new Error('Unknown extension ' + value)
 				}
 			case 0xd5:
@@ -839,7 +844,10 @@ function clearSource() {
 }
 
 exports.addExtension = function(extension) {
-	currentExtensions[extension.type] = extension.unpack
+	if (extension.unpack)
+		currentExtensions[extension.type] = extension.unpack
+	else
+		currentExtensions[extension.type] = extension
 }
 
 let mult10 = new Array(147) // this is a table matching binary exponents to the multiplier to determine significant digit rounding

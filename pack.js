@@ -331,6 +331,13 @@ class Packr extends Unpackr {
 							let extensionClass = extensionClasses[i]
 							if (value instanceof extensionClass) {
 								let extension = extensions[i]
+								if (extension.write) {
+									target[position++] = 0xd4 // one byte "tag" extension
+									target[position++] = extension.type
+									target[position++] = 0
+									pack(extension.write.call(this, value))
+									return
+								}
 								let currentTarget = target
 								let currentTargetView = targetView
 								let currentPosition = position
@@ -748,8 +755,8 @@ function insertIds(serialized, idsToInsert) {
 
 exports.addExtension = function(extension) {
 	if (extension.Class) {
-		if (!extension.pack)
-			throw new Error('Extension has no pack function')
+		if (!extension.pack && !extension.write)
+			throw new Error('Extension has no pack or write function')
 		extensionClasses.unshift(extension.Class)
 		extensions.unshift(extension)
 	}
