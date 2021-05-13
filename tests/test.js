@@ -1,5 +1,6 @@
 //var inspector = require('inspector'); inspector.open(9330, null, true); debugger
-
+import * as msgpackr from '..'
+import * as chai from 'chai'
 function tryRequire(module) {
 	try {
 		return require(module)
@@ -7,9 +8,9 @@ function tryRequire(module) {
 		return {}
 	}
 }
-if (typeof chai === 'undefined') { chai = require('chai') }
+//if (typeof chai === 'undefined') { chai = require('chai') }
 assert = chai.assert
-if (typeof msgpackr === 'undefined') { msgpackr = require('..') }
+//if (typeof msgpackr === 'undefined') { msgpackr = require('..') }
 var Packr = msgpackr.Packr
 var PackrStream = msgpackr.PackrStream
 var UnpackrStream = msgpackr.UnpackrStream
