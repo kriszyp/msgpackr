@@ -1,6 +1,8 @@
 //var inspector = require('inspector'); inspector.open(9330, null, true); debugger
-import * as msgpackr from '..'
-import * as chai from 'chai'
+import * as msgpackr from '../node.js'
+import chai from 'chai'
+import('./test.mjs')
+import sampleData from './example4.json'
 function tryRequire(module) {
 	try {
 		return require(module)
@@ -9,7 +11,7 @@ function tryRequire(module) {
 	}
 }
 //if (typeof chai === 'undefined') { chai = require('chai') }
-assert = chai.assert
+var assert = chai.assert
 //if (typeof msgpackr === 'undefined') { msgpackr = require('..') }
 var Packr = msgpackr.Packr
 var PackrStream = msgpackr.PackrStream
@@ -27,20 +29,10 @@ var inflateSync = zlib.inflateSync
 var deflateSync = zlib.brotliCompressSync
 var inflateSync = zlib.brotliDecompressSync
 var constants = zlib.constants
-import('./test.mjs')
 try {
 //	var { decode, encode } = require('msgpack-lite')
 } catch (error) {}
 
-if (typeof XMLHttpRequest === 'undefined') {
-	var fs = require('fs')
-	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/example4.json'))
-} else {
-	var xhr = new XMLHttpRequest()
-	xhr.open('GET', 'example4.json', false)
-	xhr.send()
-	var sampleData = JSON.parse(xhr.responseText)
-}
 var ITERATIONS = 4000
 
 suite('msgpackr basic tests', function(){
@@ -465,7 +457,7 @@ suite('msgpackr basic tests', function(){
 		this.timeout(10000)
 		let data = {fixstr: 'ᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝ', str8:'ᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝ'}
 		var serialized = pack(data)
-		deserialized = unpack(serialized)
+		var deserialized = unpack(serialized)
 		assert.deepEqual(deserialized, data)
 	})
 	if (PackrStream) {
@@ -497,7 +489,7 @@ suite('msgpackr basic tests', function(){
 				}, 10)
 			})
 		})
-		test('stream from buffer', () => new Promise(resolve => {
+		test('stream from buffer', () => new Promise(async resolve => {
 			const parseStream = new UnpackrStream()
 			let values = []
 			parseStream.on('data', (value) => {
@@ -507,7 +499,7 @@ suite('msgpackr basic tests', function(){
 				assert.deepEqual(values, [1, 2])
 				resolve()
 			})
-			let bufferStream = new require('stream').Duplex()
+			let bufferStream = new (await import('stream')).Duplex()
 			bufferStream.pipe(parseStream)
 			bufferStream.push(new Uint8Array([1, 2]))
 			bufferStream.push(null)

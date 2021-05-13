@@ -2,29 +2,21 @@ import minify from "rollup-plugin-babel-minify";
 
 export default [
     {
-        input: "src/env.js",
+        input: "node.js",
         output: [
             {
-                file: "dist/env.cjs.js",
+                file: "dist/node.cjs",
                 format: "cjs"
-            },
-            {
-                file: "dist/env.mjs",
-                format: "esm"
-            },
-            {
-                file: "dist/env.js",
-                format: "esm"
             }
         ]
     },
     {
-        input: "src/env.js",
+        input: "unpack.js",
         plugins: [minify({
             comments: false
         })],
         output: {
-            file: "dist/env.min.js",
+            file: "dist/unpack.min.js",
             format: "esm"
         }
     }    

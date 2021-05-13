@@ -18,12 +18,12 @@
   },
   "scripts": {
     "benchmark": "node ./tests/benchmark.js",
-    "build": "rollup -c && tsc",
+    "build": "rollup -c",
     "prepare": "npm run build",
-    "test": "mocha -u tdd -r esm tests/test.js"
+    "test": "./node_modules/.bin/mocha --experimental-json-modules tests/test.js -u tdd"
   },
   "type": "module",
-  "main": "./index.js",
+  "main": "./dist/node.cjs",
   "browser": {
     "./index.mjs": "./browser.mjs",
     "./index.js": "./browser.js"
@@ -31,7 +31,8 @@
   "exports": {
     ".": {
       "node": {
-        "import": "./index.js"
+        "require": "./dist/node.cjs",
+        "import": "./node.js"
       },
       "default": {
         "import": "./browser.js"
