@@ -1,5 +1,8 @@
 //var inspector = require('inspector'); inspector.open(9330, null, true); debugger
-
+import * as msgpackr from '../index.js'
+import chai from 'chai'
+//import('./test.mjs')
+import sampleData from './example4.json'
 function tryRequire(module) {
 	try {
 		return require(module)
@@ -7,12 +10,10 @@ function tryRequire(module) {
 		return {}
 	}
 }
-if (typeof chai === 'undefined') { chai = require('chai') }
-assert = chai.assert
-if (typeof msgpackr === 'undefined') { msgpackr = require('..') }
+//if (typeof chai === 'undefined') { chai = require('chai') }
+var assert = chai.assert
+//if (typeof msgpackr === 'undefined') { msgpackr = require('..') }
 var Packr = msgpackr.Packr
-var PackrStream = msgpackr.PackrStream
-var UnpackrStream = msgpackr.UnpackrStream
 var unpack = msgpackr.unpack
 var unpackMultiple = msgpackr.unpackMultiple
 var pack = msgpackr.pack
@@ -26,20 +27,10 @@ var inflateSync = zlib.inflateSync
 var deflateSync = zlib.brotliCompressSync
 var inflateSync = zlib.brotliDecompressSync
 var constants = zlib.constants
-import('./test.mjs')
 try {
 //	var { decode, encode } = require('msgpack-lite')
 } catch (error) {}
 
-if (typeof XMLHttpRequest === 'undefined') {
-	var fs = require('fs')
-	var sampleData = JSON.parse(fs.readFileSync(__dirname + '/example4.json'))
-} else {
-	var xhr = new XMLHttpRequest()
-	xhr.open('GET', 'example4.json', false)
-	xhr.send()
-	var sampleData = JSON.parse(xhr.responseText)
-}
 var ITERATIONS = 4000
 
 suite('msgpackr basic tests', function(){
@@ -501,54 +492,9 @@ suite('msgpackr basic tests', function(){
 		this.timeout(10000)
 		let data = {fixstr: 'ᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝ', str8:'ᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝ'}
 		var serialized = pack(data)
-		deserialized = unpack(serialized)
+		var deserialized = unpack(serialized)
 		assert.deepEqual(deserialized, data)
 	})
-	if (PackrStream) {
-		test('serialize/parse stream', () => {
-			const serializeStream = new PackrStream({
-			})
-			const parseStream = new UnpackrStream()
-			serializeStream.pipe(parseStream)
-			const received = []
-			parseStream.on('data', data => {
-				received.push(data)
-			})
-			const messages = [{
-				name: 'first'
-			}, {
-				name: 'second'
-			}, {
-				name: 'third'
-			}, {
-				name: 'third',
-				extra: [1, 3, { foo: 'hi'}, 'bye']
-			}]
-			for (const message of messages)
-				serializeStream.write(message)
-			return new Promise((resolve, reject) => {
-				setTimeout(() => {
-					assert.deepEqual(received, messages)
-					resolve()
-				}, 10)
-			})
-		})
-		test('stream from buffer', () => new Promise(resolve => {
-			const parseStream = new UnpackrStream()
-			let values = []
-			parseStream.on('data', (value) => {
-				values.push(value)
-			})
-			parseStream.on('end', () => {
-				assert.deepEqual(values, [1, 2])
-				resolve()
-			})
-			let bufferStream = new require('stream').Duplex()
-			bufferStream.pipe(parseStream)
-			bufferStream.push(new Uint8Array([1, 2]))
-			bufferStream.push(null)
-		}))
-	}
 	test('unpackMultiple', () => {
 		let values = unpackMultiple(new Uint8Array([1, 2, 3, 4]))
 		assert.deepEqual(values, [1, 2, 3, 4])

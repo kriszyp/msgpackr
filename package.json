@@ -1,7 +1,7 @@
 {
   "name": "msgpackr",
   "author": "Kris Zyp",
-  "version": "1.2.11",
+  "version": "1.3.0",
   "description": "Ultra-fast MessagePack implementation with extensions for records and structured cloning",
   "license": "MIT",
   "types": "./index.d.ts",
@@ -18,11 +18,12 @@
   },
   "scripts": {
     "benchmark": "node ./tests/benchmark.js",
-    "test": "./node_modules/.bin/mocha tests/test*.js -u tdd"
+    "build": "rollup -c",
+    "prepare": "npm run build",
+    "test": "./node_modules/.bin/mocha --experimental-json-modules tests/test.js -u tdd"
   },
-  "type": "commonjs",
-  "module": "./index.mjs",
-  "main": "./index.js",
+  "type": "module",
+  "main": "./dist/node.cjs",
   "browser": {
     "./index.mjs": "./browser.mjs",
     "./index.js": "./browser.js"
@@ -30,22 +31,19 @@
   "exports": {
     ".": {
       "node": {
-        "import": "./index.mjs",
-        "require": "./index.js"
+        "require": "./dist/node.cjs",
+        "import": "./node.js"
       },
       "default": {
-        "import": "./browser.mjs",
-        "require": "./browser.js"
+        "import": "./browser.js"
       }
     },
     "./pack": {
       "node": {
-        "import": "./index.mjs",
-        "require": "./index.js"
+        "import": "./index.js"
       },
       "default": {
-        "import": "./pack.mjs",
-        "require": "./pack.js"
+        "import": "./pack.js"
       }
     },
     "./unpack": {
@@ -60,14 +58,15 @@
     }
   },
   "optionalDependencies": {
-    "msgpackr-extract": "^1.0.8"
+    "msgpackr-extract": "^1.0.9"
   },
   "devDependencies": {
     "@types/node": "latest",
     "chai": "^4",
-    "mocha": "^4",
-    "webpack": "^4.44.1",
-    "webpack-cli": "^3.3.2",
-    "webpack-command": "^0.4.1"
+    "esm": "^3.2.25",
+    "mocha": "^8.1.3",
+    "rollup": "^1.20.3",
+    "rollup-plugin-babel-minify": "^9.0.0",
+    "@rollup/plugin-json": "^4.1.0"
   }
 }

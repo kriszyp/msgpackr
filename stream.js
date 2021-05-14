@@ -1,10 +1,10 @@
 "use strict"
-var Transform = require('stream').Transform
-var Packr = require('./pack').Packr
-const { read, getPosition, Unpackr, clearSource } = require('./unpack')
+import { Transform } from 'stream'
+import { Packr } from './pack.js'
+import { read, getPosition, Unpackr, clearSource } from './unpack.js'
 var DEFAULT_OPTIONS = {objectMode: true}
 
-class PackrStream extends Transform {
+export class PackrStream extends Transform {
 	constructor(options) {
 		if (!options)
 			options = {}
@@ -23,7 +23,7 @@ class PackrStream extends Transform {
 	}
 }
 
-class UnpackrStream extends Transform {
+export class UnpackrStream extends Transform {
 	constructor(options) {
 		if (!options)
 			options = {}
@@ -58,6 +58,3 @@ class UnpackrStream extends Transform {
 		if (callback) callback()
 	}
 }
-
-exports.PackrStream = PackrStream
-exports.UnpackrStream = UnpackrStream
