@@ -1,7 +1,7 @@
-export { Packr, Encoder, addExtension, pack, encode, NEVER, ALWAYS, DECIMAL_ROUND, DECIMAL_FIT } from './pack.js'
-export { Unpackr, Decoder, C1, unpack, unpackMultiple, decode, FLOAT32_OPTIONS } from './unpack.js'
-export { PackrStream, UnpackrStream, PackrStream as EncoderStream, UnpackrStream as DecoderStream } from './stream.js'
-import { setExtractor } from './unpack.js'
+export { Encoder, addExtension, encode } from './encode.js'
+export { Tag, Decoder, decodeMultiple, decode, FLOAT32_OPTIONS } from './decode.js'
+export { EncoderStream, DecoderStream } from './stream.js'
+import { setExtractor } from './decode.js'
 import { createRequire } from 'module'
 
 const extractor = tryRequire('msgpackr-extract')

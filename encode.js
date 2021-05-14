@@ -705,3 +705,8 @@ export function addExtension(extension) {
 	}
 	decoderModule.addExtension(extension)
 }
+let defaultEncoder = new Encoder({ useRecords: false })
+export const encode = defaultEncoder.encode
+export { FLOAT32_OPTIONS } from './decode.js'
+import { FLOAT32_OPTIONS } from './decode.js'
+export const { NEVER, ALWAYS, DECIMAL_ROUND, DECIMAL_FIT } = FLOAT32_OPTIONS

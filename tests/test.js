@@ -1,5 +1,5 @@
 //var inspector = require('inspector'); inspector.open(9330, null, true); debugger
-import * as msgpackr from '../index.js'
+import * as CBOR from '../index.js'
 import chai from 'chai'
 //import('./test.mjs')
 import sampleData from './example4.json'
@@ -10,6 +10,8 @@ function tryRequire(module) {
 		return {}
 	}
 }
+var assert = chai.assert
+
 var Encoder = CBOR.Encoder
 var EncoderStream = CBOR.EncoderStream
 var DecoderStream = CBOR.DecoderStream
@@ -495,54 +497,17 @@ suite('CBOR basic tests', function(){
 	test('utf16 causing expansion', function() {
 		this.timeout(10000)
 		let data = {fixstr: 'ᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝ', str8:'ᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝ'}
-<<<<<<< HEAD
 		var serialized = encode(data)
-		deserialized = decode(serialized)
+		var deserialized = decode(serialized)
 		assert.deepEqual(deserialized, data)
 	})
-	if (EncoderStream) {
-		test('serialize/parse stream', () => {
-			const serializeStream = new EncoderStream({
-			})
-			const parseStream = new DecoderStream()
-			serializeStream.pipe(parseStream)
-			const received = []
-			parseStream.on('data', data => {
-				received.push(data)
-			})
-			const messages = [{
-				name: 'first'
-			}, {
-				name: 'second'
-			}, {
-				name: 'third'
-			}, {
-				name: 'third',
-				extra: [1, 3, { foo: 'hi'}, 'bye']
-			}]
-			for (const message of messages)
-				serializeStream.write(message)
-			return new Promise((resolve, reject) => {
-				setTimeout(() => {
-					assert.deepEqual(received, messages)
-					resolve()
-				}, 10)
-			})
-		})
-	}
-=======
-		var serialized = pack(data)
-		var deserialized = unpack(serialized)
-		assert.deepEqual(deserialized, data)
-	})
-	test('unpackMultiple', () => {
-		let values = unpackMultiple(new Uint8Array([1, 2, 3, 4]))
+	test('decodeMultiple', () => {
+		let values = decodeMultiple(new Uint8Array([1, 2, 3, 4]))
 		assert.deepEqual(values, [1, 2, 3, 4])
 		values = []
-		unpackMultiple(new Uint8Array([1, 2, 3, 4]), value => values.push(value))
+		decodeMultiple(new Uint8Array([1, 2, 3, 4]), value => values.push(value))
 		assert.deepEqual(values, [1, 2, 3, 4])
 	})
->>>>>>> msgpackr/master
 
 })
 suite('CBOR performance tests', function(){
@@ -580,13 +545,8 @@ suite('CBOR performance tests', function(){
 		var data = sampleData
 		this.timeout(10000)
 		let structures = []
-<<<<<<< HEAD
 		let encoder = new Encoder({ structures })
-		let buffer = Buffer.alloc(0x10000)
-=======
-		let packr = new Packr({ structures })
 		let buffer = typeof Buffer != 'undefined' ? Buffer.alloc(0x10000) : new Uint8Array(0x10000)
->>>>>>> msgpackr/master
 
 		for (var i = 0; i < ITERATIONS; i++) {
 			//serialized = encode(data, { shared: sharedStructure })

@@ -1,6 +1,6 @@
 import { Transform } from 'stream'
-import { Packr } from './pack.js'
-import { read, getPosition, Unpackr, clearSource } from './unpack.js'
+import { Encoder } from './encode.js'
+import { read, getPosition, Decoder, clearSource } from './decode.js'
 var DEFAULT_OPTIONS = {objectMode: true}
 
 export class EncoderStream extends Transform {
