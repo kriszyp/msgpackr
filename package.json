@@ -24,10 +24,6 @@
   },
   "type": "module",
   "main": "./dist/node.cjs",
-  "browser": {
-    "./index.mjs": "./browser.mjs",
-    "./index.js": "./browser.js"
-  },
   "exports": {
     ".": {
       "node": {
@@ -35,12 +31,13 @@
         "import": "./node.js"
       },
       "default": {
-        "import": "./browser.js"
+        "import": "./index.js"
       }
     },
     "./pack": {
       "node": {
-        "import": "./index.js"
+        "import": "./index.js",
+        "require": "./dist/node.cjs"
       },
       "default": {
         "import": "./pack.js"
@@ -48,12 +45,11 @@
     },
     "./unpack": {
       "node": {
-        "import": "./index.mjs",
-        "require": "./index.js"
+        "import": "./index.js",
+        "require": "./dist/node.cjs"
       },
       "default": {
-        "import": "./unpack.mjs",
-        "require": "./unpack.js"
+        "import": "./unpack.js"
       }
     }
   },

@@ -51,6 +51,9 @@ receivingStream.on('data', (data) => {
 ```
 The `PackrStream` and `UnpackrStream` instances  will have also the record structure extension enabled by default (see below).
 
+## Deno Usage
+Msgpackr modules are standard ESM modules and can be loaded directly from github (https://raw.githubusercontent.com/kriszyp/msgpackr/master/index.js) or downloaded and used directly in Deno. The standard pack/encode and unpack/decode functionality is available on Deno, like other platforms.
+
 ## Browser Usage
 Msgpackr works as standalone JavaScript as well, and runs on modern browsers. It includes a bundled script, at `dist/index.js` for ease of direct loading:
 ```html
