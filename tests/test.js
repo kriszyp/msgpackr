@@ -283,7 +283,7 @@ suite('CBOR basic tests', function(){
 			useFloat32: DECIMAL_FIT
 		})
 		var serialized = encoder.encode(data)
-		assert.equal(serialized.length, 37)
+		assert.equal(serialized.length, 35)
 		var deserialized = encoder.decode(serialized)
 		assert.deepEqual(deserialized, data)
 	})

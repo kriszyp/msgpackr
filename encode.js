@@ -11,7 +11,7 @@ let extensions, extensionClasses
 const hasNodeBuffer = typeof Buffer !== 'undefined'
 const ByteArrayAllocate = hasNodeBuffer ? Buffer.allocUnsafeSlow : Uint8Array
 const ByteArray = hasNodeBuffer ? Buffer : Uint8Array
-const RECORD_STARTING_ID_PREFIX = 0x9d
+const RECORD_STARTING_ID_PREFIX = 0x69 // tag 105/0x69
 const MAX_STRUCTURES = 0x100
 let target
 let targetView
@@ -494,20 +494,26 @@ class Encoder extends Decoder {
 					target[position++] = recordId // tag number
 					hasSharedUpdate = true
 				} else {
-					target[position++] = 0xd9
-					target[position++] = 40006 >> 8
-					target[position++] = 40006 & 0xff
+					target[position++] = 0xd8
+					target[position++] = RECORD_STARTING_ID_PREFIX
 					if (newTransitions)
 						transitionsCount += serializationsSinceTransitionRebuild * newTransitions
 					// record the removal of the id, we can maintain our shared structure
 					if (recordIdsToRemove.length >= MAX_STRUCTURES - maxSharedStructures)
 						recordIdsToRemove.shift()[RECORD_SYMBOL] = 0 // we are cycling back through, and have to remove old ones
 					recordIdsToRemove.push(transition)
-					target[position++] = 0x83 // array header, length 3
+					if (length < 0x16)
+						target[position++] = 0x82 + length // array header, length of values + 2
+					else
+						writeArrayHeader(length + 2)
+					encode(keys)
 					target[position++] = 0x19 // uint16
 					target[position++] = RECORD_STARTING_ID_PREFIX
 					target[position++] = recordId
-					encode(keys)
+					// now write the values
+					for (let i =0; i < length; i++)
+						encode(object[keys[i]])
+					return
 				}
 			}
 			if (length < 0x18) { // write the array header
@@ -515,7 +521,6 @@ class Encoder extends Decoder {
 			} else {
 				writeArrayHeader(length)
 			}
-			// now write the values
 			for (let i =0; i < length; i++)
 				encode(object[keys[i]])
 		}

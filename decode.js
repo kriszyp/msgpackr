@@ -8,8 +8,7 @@ let srcEnd
 let position = 0
 let alreadySet
 const EMPTY_ARRAY = []
-const RECORD_STARTING_ID_PREFIX = 0x9d
-const RECORD_STARTING_ID = 40100
+const RECORD_TAG_ID = 0x69
 const STOP_CODE = {}
 let strings = EMPTY_ARRAY
 let stringPosition = 0
@@ -209,7 +208,7 @@ function read() {
 				return map
 			}
 		case 6: // extension
-			if ((token >> 8) == RECORD_STARTING_ID_PREFIX) { // record structures
+			if ((token >> 8) == RECORD_TAG_ID) { // record structures
 				let structure = currentStructures[token & 0xff]
 				if (structure) {
 					if (!structure.read)
@@ -660,18 +659,23 @@ currentExtensions[3] = (buffer) => {
 	return BigInt(-1) - (new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength).getBigUint64(0))
 }
 
-// the registration of the record definition extension (tag 6)
+// the registration of the record definition extension (tag 105)
 const recordDefinition = () => {
-	readArrayHeader(3)
-	let id = read()
-	let structure = read()
+	let definition = read()
+	let structure = definition[0]
+	let id = definition[1]
 	currentStructures[id & 0xff] = structure
 	structure.read = createStructureReader(structure)
-	return structure.read()
+	let object = {}
+	for (let i = 2,l = definition.length; i < l; i++) {
+		let key = structure[i - 2]
+		object[key] = definition[i]
+	}
+	return object
 }
 
 recordDefinition.handlesRead = true
-currentExtensions[40006] = recordDefinition
+currentExtensions[RECORD_TAG_ID] = recordDefinition
 
 currentExtensions[27] = (data) => { // http://cbor.schmorp.de/generic-object
 	return (glbl[data[0]] || Error)(data[1], data[2])
