@@ -40,7 +40,7 @@ Or for a full example of sending and receiving data on a stream:
 import { EncoderStream } from 'cbor-x';
 let sendingStream = new EncoderStream();
 let receivingStream = new DecoderStream();
-// we just piping to our own stream, but normally you would send and
+// we are just piping to our own stream, but normally you would send and
 // receive over some type of inter-process or network connection.
 sendingStream.pipe(receivingStream);
 sendingStream.write(myData);
@@ -49,6 +49,9 @@ receivingStream.on('data', (data) => {
 });
 ```
  The `EncoderStream` and `DecoderStream` instances  will have also the record structure extension enabled by default (see below).
+
+## Deno Usage
+Msgpackr modules are standard ESM modules and can be loaded directly from github (https://raw.githubusercontent.com/kriszyp/msgpackr/master/index.js) or downloaded and used directly in Deno. The standard pack/encode and unpack/decode functionality is available on Deno, like other platforms.
 
 ## Browser Usage
 Cbor-x  works as standalone JavaScript as well, and runs on modern browsers. It includes a bundled script, at `dist/index.js` for ease of direct loading:
@@ -87,7 +90,6 @@ There is a critical difference between maps (or dictionaries) that hold an arbit
 import { Encoder } from 'cbor-x';
 let encoder = new Encoder();
 encoder.encode(myBigData);
-
 ```
 
 Another way to further leverage the benefits of the cbor-x record structures is to use streams that naturally allow for data to reuse based on previous record structures. The stream classes have the record structure extension enabled by default and provide excellent out-of-the-box performance.
@@ -95,7 +97,7 @@ Another way to further leverage the benefits of the cbor-x record structures is 
 When creating a new `Encoder`, `EncoderStream`, or `DecoderStream` instance, we can enable or disable the record structure extension with the `objectsAsMaps` property. When this is `true`, the record structure extension will be disabled, and all objects will revert to being serialized using MessageMap `map`s, and all `map`s will be deserialized to JS `Object`s as properties (like the standalone `encode` and `decode` functions).
 
 ### Shared Record Structures
-Another useful way of using cbor-x, and the record extension, is for storing data in a databases, files, or other storage systems. If a number of objects with common data structures are being stored, a shared structure can be used to greatly improve data storage and deserialization efficiency. We just need to provide a way to store the generated shared structure so it is available to deserialize stored data in the future:
+Another useful way of using cbor-x, and the record extension, is for storing data in a databases, files, or other storage systems. If a number of objects with common data structures are being stored, a shared structure can be used to greatly improve data storage and deserialization efficiency. In the simplest form, provide a `structures` array, which is updated if any new object structure is encountered:
 
 ```
 import { Encoder } from 'cbor-x';
@@ -119,6 +121,21 @@ let encoder = new Encoder({
 ```
 Cbor-x will automatically add and saves structures as it encounters any new object structures (up to a limit of 32). It will always add structures in incremental/compatible way: Any object encoded with an earlier structure can be decoded with a later version (as long as it is persisted).
 
+### Reading Multiple Values
+If you have a buffer with multiple values sequentially encoded, you can choose to parse and read multiple values. This can be done using the `unpackMultiple` function/method, which can return an array of all the values it can sequentially parse within the provided buffer. For example:
+```js
+let data = new Uint8Array([1, 2, 3]) // encodings of values 1, 2, and 3
+let values = unpackMultiple(data) // [1, 2, 3]
+```
+Alternately, you can provide a callback function that is called as the parsing occurs with each value, and can optionally terminate the parsing by returning `false`:
+```js
+let data = new Uint8Array([1, 2, 3]) // encodings of values 1, 2, and 3
+unpackMultiple(data, (value) => {
+	// called for each value
+	// return false if you wish to end the parsing
+})
+```
+
 ## Options
 The following options properties can be provided to the Encoder or Decoder constructor:
 
@@ -130,6 +147,7 @@ The following options properties can be provided to the Encoder or Decoder const
 * `variableMapSize` - This will use varying map size definition (fixmap, map16, map32) based on the number of keys when encoding objects, which yields slightly more compact encodings (for small objects), but is typically 5-10% slower during encoding. This is only relevant when record extension is disabled.
 * `copyBuffers` - When decoding a CBOR with binary data (Buffers are encoded as binary data), copy the buffer rather than providing a slice/view of the buffer. If you want your input data to be collected or modified while the decoded embedded buffer continues to live on, you can use this option (there is extra overhead to copying).
 * `useTimestamp32` - Encode JS `Date`s in 32-bit format when possible by dropping the milliseconds. This is a more efficient encoding of dates. You can also cause dates to use 32-bit format by manually setting the milliseconds to zero (`date.setMilliseconds(0)`).
+* `largeBigIntToFloat` - If a bigint needs to be encoded that is larger than will fit in 64-bit integers, it will be encoded as a float-64 (otherwise will throw a RangeError).
 
 ### 32-bit Float Options
 By default all non-integer numbers are serialized as 64-bit float (double). This is fast, and ensures maximum precision. However, often real-world data doesn't not need 64-bits of precision, and using 32-bit encoding can be much more space efficient. There are several options that provide more efficient encodings. Using the decimal rounding options for encoding and decoding provides lossless storage of common decimal representations like 7.99, in more efficient 32-bit format (rather than 64-bit). The `useFloat32` property has several possible options, available from the module as constants:
@@ -208,6 +226,29 @@ addExtension({
 	}
 });
 ```
+If you want to use msgpackr to encode and decode the data within your extensions, you can use the `read` and `write` functions and read and write data/objects that will be encoded and decoded by msgpackr, which can be easier and faster than creating and receiving separate buffers (note that you can't just return the instance from `write` or msgpackr will recursively try to use extension infinitely):
+```js
+import { addExtension, Packr } from 'msgpackr';
+
+class MyCustomClass {...}
+
+let extPackr = new Packr();
+addExtension({
+	Class: MyCustomClass,
+	type: 11, // register your own extension code (a type code from 1-100)
+	write(instance) {
+		// define how your custom class should be encoded
+		return instance.myData; // return some data to be encoded
+	}
+	read(data) {
+		// define how your custom class should be decoded,
+		// data will already be unpacked/decoded
+		let instance = new MyCustomClass();
+		instance.myData = data;
+		return instance; // return decoded value
+	}
+});
+```
 
 ## Unknown Tags
 If no extension is registered for a tag, the decoder will return an instance of the `Tag` class, where the value provided for the tag will be available in the `value` property of the `Tag` instance. The `Tag` class is an export of the package and decode module.
@@ -243,7 +284,7 @@ The high-performance serialization and deserialization algorithms in this packag
 MIT
 
 ### Browser Consideration
-It is worth noting that while cbor-x works well in modern browsers, the CBOR format itself is often not an ideal format for web use. If you want compact data, brotli or gzip are most effective in compressing, and CBOR's character frequency tends to defeat Huffman encoding used by these standard compression algorithms, resulting in less compact data than compressed JSON. The modern browser architecture is heavily optimized for parsing JSON from HTTP traffic, and it is difficult to achieve the same level of overall efficiency and ease with CBOR.
+CBOR can be a great choice for high-performance data delivery to browsers, as reasonable data size is possible without compression. And msgpackr works very well in modern browsers. However, it is worth noting that if you want highly compact data, brotli or gzip are most effective in compressing, and CBOR's character frequency tends to defeat Huffman encoding used by these standard compression algorithms, resulting in less compact data than compressed JSON.
 
 ### Credits
 

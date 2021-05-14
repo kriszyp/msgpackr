@@ -13,6 +13,7 @@ const STOP_CODE = {}
 let strings = EMPTY_ARRAY
 let stringPosition = 0
 let currentDecoder = {}
+let currentStructures
 let srcString
 let srcStringStart = 0
 let srcStringEnd = 0
@@ -24,7 +25,7 @@ let defaultOptions = {
 	mapsAsObjects: true
 }
 
-class Decoder {
+export class Decoder {
 	constructor(options) {
 		if (options) {
 			if (options.useRecords === false && options.mapsAsObjects === undefined)
@@ -38,7 +39,7 @@ class Decoder {
 		if (src) {
 			// re-entrant execution, save the state and restore it after we do this decode
 			return saveState(() => {
-				src = null
+				clearSource()
 				return this ? this.decode(source, end, continueReading) : Decoder.prototype.decode.call(defaultOptions, source, end, continueReading)
 			})
 		}
@@ -79,20 +80,44 @@ class Decoder {
 		try {
 			return read()
 		} finally {
-			src = null
-			if (referenceMap)
-				referenceMap = null
+			if (position >= srcEnd || !continueReading) {
+				src = null
+				if (referenceMap)
+					referenceMap = null
+			}
+		}
+	}
+	decodeMultiple(source, forEach) {
+		try {
+			let decoder = this
+			let size = source.length
+			let value = this ? this.unpack(source, size, true) : defaultDecoder.unpack(source, size, true)
+			let values
+			if (forEach) {
+				forEach(value)
+				while(position < size) {
+					if (forEach(read()) === false) {
+						return
+					}
+				}
+			}
+			else {
+				values = [ value ]
+				while(position < size) {
+					values.push(read())
+				}
+				return values
+			}
+		} finally {
+			clearSource()
 		}
 	}
 }
-let currentStructures
-exports.Decoder = Decoder
-exports.read = read
-exports.getPosition = () => {
+export function getPosition() {
 	return position
 }
 
-function read() {
+export function read() {
 	let token = src[position++]
 	let majorType = token >> 5
 	token = token & 0x1f
@@ -305,7 +330,7 @@ let readString8 = readStringJS
 let readString16 = readStringJS
 let readString32 = readStringJS
 
-exports.setExtractor = (extractStrings) => {
+export function setExtractor(extractStrings) {
 	readFixedString = readString(1)
 	readString8 = readString(2)
 	readString16 = readString(3)
@@ -631,7 +656,7 @@ function readKey() {
 	return entry.string = readFixedString(length)
 }
 
-class Tag {
+export class Tag {
 	constructor(value) {
 		this.value = value
 	}
@@ -712,7 +737,7 @@ currentExtensions[40010] = (id) => {
 
 currentExtensions[258] = (array) => new Set(array) // https://github.com/input-output-hk/cbor-sets-spec/blob/master/CBOR_SETS.md
 
-const typedArrays = ['Uint8', 'Uint8Clamped', 'Uint16', 'Uint32', 'BigUint64','Int8', 'Int16', 'Int32', 'BigInt64', 'Float32', 'Float64'].map(type => type + 'Array')
+export const typedArrays = ['Uint8', 'Uint8Clamped', 'Uint16', 'Uint32', 'BigUint64','Int8', 'Int16', 'Int32', 'BigInt64', 'Float32', 'Float64'].map(type => type + 'Array')
 const typedArrayTags = [64, 68, 69, 70, 71, 72, 77, 78, 79, 81, 82]
 for (let i = 0; i < typedArrays.length; i++) {
 	registerTypedArray(typedArrays[i], typedArrayTags[i])
@@ -754,20 +779,28 @@ function saveState(callback) {
 	dataView = new DataView(src.buffer, src.byteOffset, src.byteLength)
 	return value
 }
-exports.clearSource = function() {
+export function clearSource() {
 	src = null
+	referenceMap = null
+	currentStructures = null
 }
 
-exports.addExtension = function(extension) {
+export function addExtension(extension) {
 	currentExtensions[extension.tag] = extension.decode
 }
 
-let mult10 = new Array(147) // this is a table matching binary exponents to the multiplier to determine significant digit rounding
+export let mult10 = new Array(147) // this is a table matching binary exponents to the multiplier to determine significant digit rounding
 for (let i = 0; i < 256; i++) {
 	mult10[i] = +('1e' + Math.floor(45.15 - i * 0.30103))
 }
-exports.mult10 = mult10
-exports.typedArrays = typedArrays
-exports.useRecords = false
-exports.mapsAsObjects = true
-exports.Tag = Tag
+export const useRecords = false
+export const mapsAsObjects = true
+let defaultDecoder = new Decoder({ useRecords: false })
+export const decode = defaultDecoder.decode
+export const decodeMultiple = defaultDecoder.decodeMultiple
+export const FLOAT32_OPTIONS = {
+	NEVER: 0,
+	ALWAYS: 1,
+	DECIMAL_ROUND: 3,
+	DECIMAL_FIT: 4
+}

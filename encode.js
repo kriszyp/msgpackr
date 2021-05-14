@@ -1,8 +1,4 @@
-"use strict"
-let decoderModule = require('./decode')
-let Decoder = decoderModule.Decoder
-let mult10 = decoderModule.mult10
-const typedArrays = decoderModule.typedArrays
+import { Decoder, mult10, Tag, typedArrays, addExtension as decodeAddExtension } from './decode.js'
 let textEncoder
 try {
 	textEncoder = new TextEncoder()
@@ -13,12 +9,13 @@ const ByteArrayAllocate = hasNodeBuffer ? Buffer.allocUnsafeSlow : Uint8Array
 const ByteArray = hasNodeBuffer ? Buffer : Uint8Array
 const RECORD_STARTING_ID_PREFIX = 0x69 // tag 105/0x69
 const MAX_STRUCTURES = 0x100
+const MAX_BUFFER_SIZE = hasNodeBuffer ? 0x100000000 : 0x7fd00000
 let target
 let targetView
 let position = 0
 let safeEnd
 const RECORD_SYMBOL = Symbol('record-id')
-class Encoder extends Decoder {
+export class Encoder extends Decoder {
 	constructor(options) {
 		super(options)
 		this.offset = 0
@@ -358,17 +355,29 @@ class Encoder extends Decoder {
 							return
 						}
 						// no extension found, write as object
-						writeObject(value, false)
+						writeObject(value, !value.hasOwnProperty) // if it doesn't have hasOwnProperty, don't do hasOwnProperty checks
 					}
 				}
 			} else if (type === 'boolean') {
 				target[position++] = value ? 0xf5 : 0xf4
 			} else if (type === 'bigint') {
-				target[position++] = 0xfb
-				/*if (value < 9223372036854776000 && value > -9223372036854776000) 
-					targetView.setBigInt64(position, value)
-				else*/
-					targetView.setFloat64(position, value)
+				if (value < (BigInt(1)<<BigInt(64)) && value >= 0) {
+					// use an unsigned int as long as it fits
+					target[position++] = 0x1b
+					targetView.setBigUint64(position, value)
+				} else if (value > -(BigInt(1)<<BigInt(64)) && value < 0) {
+					// if we can fit an unsigned int, use that
+					target[position++] = 0x3b
+					targetView.setBigUint64(-position, value)
+				} else {
+					// overflow
+					if (this.largeBigIntToFloat) {
+						target[position++] = 0xfb
+						targetView.setFloat64(position, Number(value))
+					} else {
+						throw new RangeError(value + ' was too large to fit in CBOR 64-bit integer format, set largeBigIntToFloat to convert to float-64')
+					}
+				}
 				position += 8
 			} else if (type === 'undefined') {
 				//target[position++] = 0xc1 // this is the "never-used" byte
@@ -525,13 +534,21 @@ class Encoder extends Decoder {
 				encode(object[keys[i]])
 		}
 		const makeRoom = (end) => {
-			let newSize = ((Math.max((end - start) << 2, target.length - 1) >> 12) + 1) << 12
+			let newSize
+			if (end > 0x1000000) {
+				// special handling for really large buffers
+				if ((end - start) > MAX_BUFFER_SIZE)
+					throw new Error('Packed buffer would be larger than maximum buffer size')
+				newSize = Math.min(MAX_BUFFER_SIZE,
+					Math.round(Math.max((end - start) * (end > 0x4000000 ? 1.25 : 2), 0x1000000) / 0x1000) * 0x1000)
+			} else // faster handling for smaller buffers
+				newSize = ((Math.max((end - start) << 2, target.length - 1) >> 12) + 1) << 12
 			let newBuffer = new ByteArrayAllocate(newSize)
 			targetView = new DataView(newBuffer.buffer, 0, newSize)
 			if (target.copy)
 				target.copy(newBuffer, 0, start, end)
 			else
-				copyBinary(target, newBuffer, 0, start, end)
+				newBuffer.set(target.slice(start, end))
 			position -= start
 			start = 0
 			safeEnd = newBuffer.length - 10
@@ -545,7 +562,6 @@ class Encoder extends Decoder {
 		position = 0
 	}
 }
-exports.Encoder = Encoder
 
 function copyBinary(source, target, targetOffset, offset, endOffset) {
 	while (offset < endOffset) {
@@ -651,10 +667,7 @@ function writeBuffer(buffer) {
 		targetView.setUint32(position, length)
 		position += 4
 	}
-	if (buffer.copy)
-		buffer.copy(target, position)
-	else
-		copyBinary(buffer, target, position, 0, length)
+	target.set(buffer, position)
 	position += length
 }
 
@@ -683,7 +696,7 @@ function insertIds(serialized, idsToInsert) {
 	return serialized
 }
 
-exports.addExtension = function(extension) {
+export function addExtension(extension) {
 	if (extension.Class) {
 		if (!extension.encode)
 			throw new Error('Extension has no encode function')

@@ -1,10 +1,9 @@
-"use strict"
-var Transform = require('stream').Transform
-var Encoder = require('./encode').Encoder
-const { read, getPosition, Decoder, clearSource } = require('./decode')
+import { Transform } from 'stream'
+import { Packr } from './pack.js'
+import { read, getPosition, Unpackr, clearSource } from './unpack.js'
 var DEFAULT_OPTIONS = {objectMode: true}
 
-class EncoderStream extends Transform {
+export class EncoderStream extends Transform {
 	constructor(options) {
 		if (!options)
 			options = {}
@@ -23,7 +22,7 @@ class EncoderStream extends Transform {
 	}
 }
 
-class DecoderStream extends Transform {
+export class DecoderStream extends Transform {
 	constructor(options) {
 		if (!options)
 			options = {}
@@ -58,6 +57,3 @@ class DecoderStream extends Transform {
 		if (callback) callback()
 	}
 }
-
-exports.EncoderStream = EncoderStream
-exports.DecoderStream = DecoderStream
