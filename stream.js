@@ -1,4 +1,3 @@
-"use strict"
 import { Transform } from 'stream'
 import { Packr } from './pack.js'
 import { Unpackr } from './unpack.js'
