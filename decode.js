@@ -339,10 +339,18 @@ export function setExtractor(extractStrings) {
 		return function readString(length) {
 			let string = strings[stringPosition++]
 			if (string == null) {
-				strings = extractStrings(position, srcEnd, length, src)
-				stringPosition = 0
-				srcStringEnd = 1 // even if a utf-8 string was decoded, must indicate we are in the midst of extracted strings and can't skip strings
-				string = strings[stringPosition++]
+				let extraction = extractStrings(position, srcEnd, length, src)
+				if (typeof extraction == 'string') {
+					string = extraction
+					strings = EMPTY_ARRAY
+				} else {
+					strings = extraction
+					stringPosition = 1
+					srcStringEnd = 1 // even if a utf-8 string was decoded, must indicate we are in the midst of extracted strings and can't skip strings
+					string = strings[0]
+					if (string === undefined)
+						throw new Error('Unexpected end of buffer')
+				}
 			}
 			let srcStringLength = string.length
 			if (srcStringLength <= length) {

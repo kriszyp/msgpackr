@@ -9,9 +9,7 @@ import { createRequire } from 'module'
 const extractor = tryRequire('cbor-extract')
 if (extractor)
 	setExtractor(extractor.extractStrings)
-/*
-Object.assign(exports, unpackModule.FLOAT32_OPTIONS)
-*/
+
 function tryRequire(moduleId) {
 	try {
 		let require = createRequire(import.meta.url)

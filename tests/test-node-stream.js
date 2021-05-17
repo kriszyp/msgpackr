@@ -1,11 +1,13 @@
-import { PackrStream, UnpackrStream } from '../node.js'
+import { EncoderStream, DecoderStream } from '../node.js'
 import stream from 'stream'
+import chai from 'chai'
+var assert = chai.assert
 
-suite('msgpackr node stream tests', function(){
+suite('cbor-x node stream tests', function(){
 	test('serialize/parse stream', () => {
-		const serializeStream = new PackrStream({
+		const serializeStream = new EncoderStream({
 		})
-		const parseStream = new UnpackrStream()
+		const parseStream = new DecoderStream()
 		serializeStream.pipe(parseStream)
 		const received = []
 		parseStream.on('data', data => {
@@ -31,7 +33,7 @@ suite('msgpackr node stream tests', function(){
 		})
 	})
 	test('stream from buffer', () => new Promise(async resolve => {
-		const parseStream = new UnpackrStream()
+		const parseStream = new DecoderStream()
 		let values = []
 		parseStream.on('data', (value) => {
 			values.push(value)
