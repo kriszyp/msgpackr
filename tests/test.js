@@ -1,7 +1,6 @@
-//var inspector = require('inspector'); inspector.open(9330, null, true); debugger
 import * as msgpackr from '../index.js'
 import chai from 'chai'
-//import('./test.mjs')
+//import inspector  from 'inspector'; inspector.open(9330, null, true); debugger
 import sampleData from './example4.json'
 function tryRequire(module) {
 	try {
@@ -20,7 +19,6 @@ var pack = msgpackr.pack
 var DECIMAL_FIT = msgpackr.FLOAT32_OPTIONS.DECIMAL_FIT
 
 var addExtension = msgpackr.addExtension
-
 var zlib = tryRequire('zlib')
 var deflateSync = zlib.deflateSync
 var inflateSync = zlib.inflateSync
