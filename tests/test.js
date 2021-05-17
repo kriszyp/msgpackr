@@ -1,8 +1,8 @@
-//var inspector = require('inspector'); inspector.open(9330, null, true); debugger
 import * as CBOR from '../index.js'
 import chai from 'chai'
 //import('./test.mjs')
 import sampleData from './example4.json'
+//import inspector from 'inspector'; inspector.open(9330, null, true); debugger
 function tryRequire(module) {
 	try {
 		return require(module)
@@ -124,18 +124,18 @@ suite('CBOR basic tests', function(){
 				{ foo: 12, name: 'six', type: 'even', isOdd: null }
 			],
 		}
-		var serialized1 = pack(data1)
-		var serialized2 = pack(data2)
+		var serialized1 = encode(data1)
+		var serialized2 = encode(data2)
 		var b = Buffer.alloc(8000)
 		serialized1.copy(b)
-		var deserialized1 = unpack(b, serialized1.length)
+		var deserialized1 = decode(b, serialized1.length)
 		serialized2.copy(b)
-		var deserialized2 = unpack(b, serialized2.length)
+		var deserialized2 = decode(b, serialized2.length)
 		assert.deepEqual(deserialized1, data1)
 		assert.deepEqual(deserialized2, data2)
 	})
 
-	test('extended class pack/unpack', function(){
+	test('extended class encode/decode', function(){
 		function Extended() {
 
 		}
@@ -167,59 +167,6 @@ suite('CBOR basic tests', function(){
 		})
 		var serialized = encode(data)
 		var deserialized = decode(serialized)
-		assert.deepEqual(data, deserialized)
-		assert.equal(deserialized.extendedInstance.getDouble(), 8)
-	})
-	test('extended class pack/unpack custom size', function(){
-		function TestClass() {
-
-		}
-		addExtension({
-			Class: TestClass,
-			type: 0x01,
-			pack() {
-				return typeof Buffer != 'undefined' ? Buffer.alloc(256) : new Uint8Array(256)
-			},
-			unpack(data) {
-				return data.length
-			}
-		});
-		let result = unpack(pack(new TestClass()));
-		assert.equal(result, 256)
-	})
-
-	test('extended class read/write', function(){
-		function Extended() {
-
-		}
-		Extended.prototype.getDouble = function() {
-			return this.value * 2
-		}
-		var instance = new Extended()
-		instance.value = 4
-		instance.string = 'decode this: ᾜ'
-		var data = {
-			prop1: 'has multi-byte: ᾜ',
-			extendedInstance: instance,
-			prop2: 'more string',
-			num: 3,
-		}
-		let packr = new Packr()
-		addExtension({
-			Class: Extended,
-			type: 12,
-			read: function(data) {
-				let e = new Extended()
-				e.value = data[0]
-				e.string = data[1]
-				return e
-			},
-			write: function(instance) {
-				return [instance.value, instance.string]
-			}
-		})
-		var serialized = pack(data)
-		var deserialized = unpack(serialized)
 		assert.deepEqual(data, deserialized)
 		assert.equal(deserialized.extendedInstance.getDouble(), 8)
 	})
@@ -294,17 +241,17 @@ suite('CBOR basic tests', function(){
 	test('object without prototype', function(){
 		var data = Object.create(null)
 		data.test = 3
-		var serialized = pack(data)
-		var deserialized = unpack(serialized)
+		var serialized = encode(data)
+		var deserialized = decode(serialized)
 		assert.deepEqual(deserialized, data)
 	})
 
 	test('big buffer', function() {
 		var size = 100000000
 		var data = new Uint8Array(size).fill(1)
-		var packed = pack(data)
-		var unpacked = unpack(packed)
-		assert.equal(unpacked.length, size)
+		var encoded = encode(data)
+		var decoded = decode(encoded)
+		assert.equal(decoded.length, size)
 	})
 
 	test('random strings', function(){
@@ -316,8 +263,8 @@ suite('CBOR basic tests', function(){
 			}
 			data.push(str)
 		}
-		var serialized = pack(data)
-		var deserialized = unpack(serialized)
+		var serialized = encode(data)
+		var deserialized = decode(serialized)
 		assert.deepEqual(deserialized, data)
 	})
 
@@ -381,20 +328,20 @@ suite('CBOR basic tests', function(){
 	})
 	test('strings', function() {
 		var data = ['']
-		var serialized = pack(data)
-		var deserialized = unpack(serialized)
+		var serialized = encode(data)
+		var deserialized = decode(serialized)
 		assert.deepEqual(deserialized, data)
 		// do multiple times
-		var serialized = pack(data)
-		var deserialized = unpack(serialized)
+		var serialized = encode(data)
+		var deserialized = decode(serialized)
 		assert.deepEqual(deserialized, data)
 		data = 'decode this: ᾜ'
-		var serialized = pack(data)
-		var deserialized = unpack(serialized)
+		var serialized = encode(data)
+		var deserialized = decode(serialized)
 		assert.deepEqual(deserialized, data)
 		data = 'decode this that is longer but without any non-latin characters'
-		var serialized = pack(data)
-		var deserialized = unpack(serialized)
+		var serialized = encode(data)
+		var deserialized = decode(serialized)
 		assert.deepEqual(deserialized, data)
 	})
 	test('decimal float32', function() {
@@ -448,18 +395,18 @@ suite('CBOR basic tests', function(){
 			bigintBigNegative: -(2n**63n), // largest negative
 			mixedWithNormal: 44,
 		}
-		var serialized = pack(data)
-		var deserialized = unpack(serialized)
+		var serialized = encode(data)
+		var deserialized = decode(serialized)
 		assert.deepEqual(deserialized, data)
 		var tooBigInt = {
 			tooBig: 2n**66n
 		}
-		assert.throws(function(){ serialized = pack(tooBigInt) })
-		let packr = new Packr({
+		assert.throws(function(){ serialized = encode(tooBigInt) })
+		let encoder = new Encoder({
 			largeBigIntToFloat: true
 		})
-		serialized = packr.pack(tooBigInt)
-		deserialized = unpack(serialized)
+		serialized = encoder.encode(tooBigInt)
+		deserialized = decode(serialized)
 		assert.isTrue(deserialized.tooBig > 2n**65n)
 	})
 
@@ -502,10 +449,10 @@ suite('CBOR basic tests', function(){
 		assert.deepEqual(deserialized, data)
 	})
 	test('decodeMultiple', () => {
-		let values = decodeMultiple(new Uint8Array([1, 2, 3, 4]))
+		let values = CBOR.decodeMultiple(new Uint8Array([1, 2, 3, 4]))
 		assert.deepEqual(values, [1, 2, 3, 4])
 		values = []
-		decodeMultiple(new Uint8Array([1, 2, 3, 4]), value => values.push(value))
+		CBOR.decodeMultiple(new Uint8Array([1, 2, 3, 4]), value => values.push(value))
 		assert.deepEqual(values, [1, 2, 3, 4])
 	})
 

@@ -91,7 +91,7 @@ export class Decoder {
 		try {
 			let decoder = this
 			let size = source.length
-			let value = this ? this.unpack(source, size, true) : defaultDecoder.unpack(source, size, true)
+			let value = this ? this.decode(source, size, true) : defaultDecoder.decode(source, size, true)
 			let values
 			if (forEach) {
 				forEach(value)

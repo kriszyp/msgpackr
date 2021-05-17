@@ -342,7 +342,7 @@ export class Encoder extends Decoder {
 									targetView.setUint32(position, tag)
 									position += 4
 								} // else undefined, don't write tag
-								extension.encode.call(this, value, encode)
+								extension.encode.call(this, value, encode, makeRoom)
 								return
 							}
 						}
@@ -368,7 +368,7 @@ export class Encoder extends Decoder {
 				} else if (value > -(BigInt(1)<<BigInt(64)) && value < 0) {
 					// if we can fit an unsigned int, use that
 					target[position++] = 0x3b
-					targetView.setBigUint64(-position, value)
+					targetView.setBigUint64(position, -value - BigInt(1))
 				} else {
 					// overflow
 					if (this.largeBigIntToFloat) {
@@ -538,7 +538,7 @@ export class Encoder extends Decoder {
 			if (end > 0x1000000) {
 				// special handling for really large buffers
 				if ((end - start) > MAX_BUFFER_SIZE)
-					throw new Error('Packed buffer would be larger than maximum buffer size')
+					throw new Error('Encoded buffer would be larger than maximum buffer size')
 				newSize = Math.min(MAX_BUFFER_SIZE,
 					Math.round(Math.max((end - start) * (end > 0x4000000 ? 1.25 : 2), 0x1000000) / 0x1000) * 0x1000)
 			} else // faster handling for smaller buffers
@@ -622,12 +622,12 @@ extensions = [{
 		encode([ 'RegExp', regex.source, regex.flags ])
 	}
 }, {
-	encode(arrayBuffer, encode) {
-		writeBuffer(arrayBuffer)
+	encode(arrayBuffer, encode, makeRoom) {
+		writeBuffer(arrayBuffer, makeRoom)
 	}
 }, {
-	encode(arrayBuffer, encode) {
-		writeBuffer(arrayBuffer)
+	encode(arrayBuffer, encode, makeRoom) {
+		writeBuffer(arrayBuffer, makeRoom)
 	}
 }, typedArrayEncoder(64),
 	typedArrayEncoder(68),
@@ -653,7 +653,7 @@ function typedArrayEncoder(tag) {
 		}
 	}
 }
-function writeBuffer(buffer) {
+function writeBuffer(buffer, makeRoom) {
 	let length = buffer.byteLength
 	if (length < 0x100) {
 		target[position++] = 0x58
@@ -666,6 +666,9 @@ function writeBuffer(buffer) {
 		target[position++] = 0x5a
 		targetView.setUint32(position, length)
 		position += 4
+	}
+	if (position + length >= target.length) {
+		makeRoom(position + length)
 	}
 	target.set(buffer, position)
 	position += length
@@ -703,7 +706,7 @@ export function addExtension(extension) {
 		extensionClasses.unshift(extension.Class)
 		extensions.unshift(extension)
 	}
-	decoderModule.addExtension(extension)
+	decodeAddExtension(extension)
 }
 let defaultEncoder = new Encoder({ useRecords: false })
 export const encode = defaultEncoder.encode
