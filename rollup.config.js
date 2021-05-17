@@ -16,7 +16,7 @@ export default [
         output: {
             file: "dist/index.js",
             format: "umd",
-            name: "msgpackr"
+            name: "CBOR"
         }
     },    
     {
@@ -26,7 +26,7 @@ export default [
         output: {
             file: "dist/index.min.js",
             format: "umd",
-            name: "msgpackr"
+            name: "CBOR"
         }
     },
     {
@@ -38,7 +38,7 @@ export default [
             format: "iife",
             globals: {
                 chai: 'chai',
-                './index.js': 'msgpackr',
+                './index.js': 'CBOR',
             },
         }
     }

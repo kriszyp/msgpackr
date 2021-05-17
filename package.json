@@ -1,7 +1,7 @@
 {
   "name": "cbor-x",
   "author": "Kris Zyp",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Ultra-fast CBOR implementation with tag extensions for records and structured cloning",
   "license": "MIT",
   "types": "./index.d.ts",
