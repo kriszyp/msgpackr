@@ -300,6 +300,9 @@ export function read() {
 						if (extension.read) {
 							position++ // skip filler byte
 							return extension.read(read())
+						} else if (extension.noBuffer) {
+							position++ // skip filler byte
+							return extension()
 						} else
 							return extension(src.subarray(position, ++position))
 					} else
@@ -750,7 +753,8 @@ const recordDefinition = (id) => {
 	return structure.read()
 }
 let glbl = typeof window == 'object' ? window : global
-currentExtensions[0] = (data) => {} // notepack defines extension 0 to mean undefined, so use that as the default here
+currentExtensions[0] = () => {} // notepack defines extension 0 to mean undefined, so use that as the default here
+currentExtensions[0].noBuffer = true
 
 currentExtensions[0x65] = () => {
 	let data = read()
