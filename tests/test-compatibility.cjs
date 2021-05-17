@@ -1,22 +1,22 @@
-import * as data from './example4.json';
-import * as msgpackr from '..'
-import * as chai from 'chai'
+const data = require('./example4.json');
+const msgpackr = require('..');
+const chai = require('chai');
 
-/*function tryRequire(module) {
+function tryRequire(module) {
 	try {
 		return require(module)
 	} catch(error) {
 	}
 }
 //if (typeof chai === 'undefined') { chai = require('chai') }
-assert = chai.assert
+const assert = chai.assert
 //if (typeof msgpackr === 'undefined') { msgpackr = require('..') }
 var msgpack_msgpack = tryRequire('@msgpack/msgpack');
-var msgpack_lite = tryRequire('msgpack-lite');*/
+var msgpack_lite = tryRequire('msgpack-lite');
 var unpack = msgpackr.unpack
 var pack = msgpackr.pack
 
-addCompatibilitySuite = (data) => () => {
+const addCompatibilitySuite = (data) => () => {
 	if (msgpack_msgpack) {
 		test('from @msgpack/msgpack', function(){
 			var serialized = msgpack_msgpack.encode(data)
@@ -45,6 +45,6 @@ addCompatibilitySuite = (data) => () => {
 	}
 }
 
-/*suite('msgpackr compatibility tests (example)', addCompatibilitySuite(require('./example.json')))
+suite('msgpackr compatibility tests (example)', addCompatibilitySuite(require('./example.json')))
 suite('msgpackr compatibility tests (example4)', addCompatibilitySuite(require('./example4.json')))
-suite('msgpackr compatibility tests (example5)', addCompatibilitySuite(require('./example5.json')))*/
+suite('msgpackr compatibility tests (example5)', addCompatibilitySuite(require('./example5.json')))

@@ -20,7 +20,7 @@
     "benchmark": "node ./tests/benchmark.js",
     "build": "rollup -c",
     "prepare": "npm run build",
-    "test": "./node_modules/.bin/mocha --experimental-json-modules tests/test.js -u tdd"
+    "test": "./node_modules/.bin/mocha --experimental-json-modules tests/test**.*js -u tdd"
   },
   "type": "module",
   "main": "./dist/node.cjs",

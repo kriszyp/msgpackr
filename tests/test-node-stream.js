@@ -1,5 +1,7 @@
 import { PackrStream, UnpackrStream } from '../node.js'
 import stream from 'stream'
+import chai from 'chai'
+var assert = chai.assert
 
 suite('msgpackr node stream tests', function(){
 	test('serialize/parse stream', () => {
