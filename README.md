@@ -51,7 +51,7 @@ receivingStream.on('data', (data) => {
  The `EncoderStream` and `DecoderStream` instances  will have also the record structure extension enabled by default (see below).
 
 ## Deno Usage
-Msgpackr modules are standard ESM modules and can be loaded directly from github (https://raw.githubusercontent.com/kriszyp/msgpackr/master/index.js) or downloaded and used directly in Deno. The standard pack/encode and unpack/decode functionality is available on Deno, like other platforms.
+CBOR modules are standard ESM modules and can be loaded directly from github (https://raw.githubusercontent.com/kriszyp/cbor-x/master/index.js) or downloaded and used directly in Deno. The standard encode and decode functionality is available on Deno, like other platforms.
 
 ## Browser Usage
 Cbor-x  works as standalone JavaScript as well, and runs on modern browsers. It includes a bundled script, at `dist/index.js` for ease of direct loading:
@@ -226,29 +226,6 @@ addExtension({
 	}
 });
 ```
-If you want to use msgpackr to encode and decode the data within your extensions, you can use the `read` and `write` functions and read and write data/objects that will be encoded and decoded by msgpackr, which can be easier and faster than creating and receiving separate buffers (note that you can't just return the instance from `write` or msgpackr will recursively try to use extension infinitely):
-```js
-import { addExtension, Packr } from 'msgpackr';
-
-class MyCustomClass {...}
-
-let extPackr = new Packr();
-addExtension({
-	Class: MyCustomClass,
-	type: 11, // register your own extension code (a type code from 1-100)
-	write(instance) {
-		// define how your custom class should be encoded
-		return instance.myData; // return some data to be encoded
-	}
-	read(data) {
-		// define how your custom class should be decoded,
-		// data will already be unpacked/decoded
-		let instance = new MyCustomClass();
-		instance.myData = data;
-		return instance; // return decoded value
-	}
-});
-```
 
 ## Unknown Tags
 If no extension is registered for a tag, the decoder will return an instance of the `Tag` class, where the value provided for the tag will be available in the `value` property of the `Tag` instance. The `Tag` class is an export of the package and decode module.
@@ -263,10 +240,7 @@ Cbor-x is already fast, but here are some tips for making it faster.
 During the serialization process, data is written to buffers. Again, allocating new buffers is a relatively expensive process, and the `useBuffer` method can help allow reuse of buffers that will further improve performance. With `useBuffer` method, you can provide a buffer, serialize data into it, and when it is known that you are done using that buffer, you can call `useBuffer` again to reuse it. The use of `useBuffer` is never required, buffers will still be handled and cleaned up through GC if not used, it just provides a small performance boost.
 
 ## Extensions
-Cbor-x currently uses tag ids 40000 to 40500 for its proposed extensions (until accepted).
-
-## Record Structure Extension Definition
-The record struction extension uses tag 40006 to declare a new record structure. This is followed by an array where the first element indicates the tag id of the record structure to declare and the next element is an array of the field names, and the third element is array of the property values. The extension declaration must be immediately follow by the field names of the record structure.
+Cbor-x currently uses tag id 105 and 26880-27135 for its [proposed extension for records](https://github.com/kriszyp/cbor-records).
 
 ### Dates
 cbor-x saves all JavaScript `Date`s using the standard CBOR date extension (tag 1).
@@ -276,7 +250,7 @@ With structured cloning enabled, cbor-x will also use tags/extensions to store S
 
 ## Alternate Encoding/Package
 The high-performance serialization and deserialization algorithms in this package are also available in the [msgpackr](https://github.com/kriszyp/msgpackr) for the MessagePack format, with the same API and design. A quick summary of the pros and cons of using MessagePack vs CBOR are:
-* MessagePack has wider adoption, and, at least with this implementation is slightly more efficient (by roughly 2-4%).
+* MessagePack has wider adoption, and, at least with this implementation is slightly more efficient (by roughly 2-4%, but YMMV).
 * CBOR has an [official IETF standardization track](https://www.rfc-editor.org/rfc/rfc8949.html), and the record extensions is conceptually/philosophically a better fit for CBOR tags.
 
 ## License
@@ -284,7 +258,7 @@ The high-performance serialization and deserialization algorithms in this packag
 MIT
 
 ### Browser Consideration
-CBOR can be a great choice for high-performance data delivery to browsers, as reasonable data size is possible without compression. And msgpackr works very well in modern browsers. However, it is worth noting that if you want highly compact data, brotli or gzip are most effective in compressing, and CBOR's character frequency tends to defeat Huffman encoding used by these standard compression algorithms, resulting in less compact data than compressed JSON.
+CBOR can be a great choice for high-performance data delivery to browsers, as reasonable data size is possible without compression. And CBOR  works very well in modern browsers. However, it is worth noting that if you want highly compact data, brotli or gzip are most effective in compressing, and CBOR's character frequency tends to defeat Huffman encoding used by these standard compression algorithms, resulting in less compact data than compressed JSON.
 
 ### Credits
 
