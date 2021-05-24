@@ -1,4 +1,4 @@
-export { Unpackr, Decoder, unpack, decode, addExtension, FLOAT32_OPTIONS } from './unpack'
+export { Unpackr, Decoder, unpack, decode, addExtension, FLOAT32_OPTIONS, clearSource } from './unpack'
 export { Packr, Encoder, pack, encode } from './pack'
 
 export as namespace msgpackr;
