@@ -380,7 +380,6 @@ export class Encoder extends Decoder {
 				}
 				position += 8
 			} else if (type === 'undefined') {
-				//target[position++] = 0xc1 // this is the "never-used" byte
 				target[position++] = 0xf7
 			} else {
 				throw new Error('Unknown type ' + type)
@@ -655,7 +654,9 @@ function typedArrayEncoder(tag) {
 }
 function writeBuffer(buffer, makeRoom) {
 	let length = buffer.byteLength
-	if (length < 0x100) {
+	if (length < 0x18) {
+		target[position++] = 0x40 + length
+	} else if (length < 0x100) {
 		target[position++] = 0x58
 		target[position++] = length
 	} else if (length < 0x10000) {

@@ -253,6 +253,13 @@ suite('CBOR basic tests', function(){
 		var decoded = decode(encoded)
 		assert.equal(decoded.length, size)
 	})
+	test('little buffer', function() {
+		var data = new Uint8Array(0)
+		var encoded = encode(data)
+		assert.equal(encoded.length, 1) // make sure to use canonical form
+		var decoded = decode(encoded)
+		assert.equal(decoded.length, size)
+	})
 
 	test('random strings', function(){
 		var data = []
