@@ -214,10 +214,13 @@ suite('CBOR basic tests', function(){
 		let fa = new Float32Array(b.buffer, 8, 2)
 		fa[0] = 2.25
 		fa[1] = 6
+		let map = new Map()
+		map.set('key', 'value')
 		let object = {
 			error: new Error('test'),
 			set: new Set(['a', 'b']),
 			regexp: /test/gi,
+			map,
 			float32Array: fa,
 			uint16Array: new Uint16Array([3,4])
 		}
@@ -227,6 +230,7 @@ suite('CBOR basic tests', function(){
 		var serialized = encoder.encode(object)
 		var deserialized = encoder.decode(serialized)
 		assert.deepEqual(Array.from(deserialized.set), Array.from(object.set))
+		assert.equal(deserialized.map.get('key'), 'value')
 		assert.equal(deserialized.error.message, object.error.message)
 		assert.equal(deserialized.regexp.test('TEST'), true)
 		assert.equal(deserialized.float32Array.constructor.name, 'Float32Array')
