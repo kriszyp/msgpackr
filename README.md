@@ -6,7 +6,7 @@
 [![types](https://img.shields.io/npm/types/cbor-x)](README.md)
 [![module](https://img.shields.io/badge/module-ESM%2FCJS-blue)](README.md)
 
-The cbor-x package is an extremely fast CBOR NodeJS/JavaScript implementation. Currently, it is significantly faster than any other known implementations, faster than Avro (for JS), and generally faster than native V8 JSON.stringify/parse. It implements the CBOR format as specificed in [RFC-8949](https://www.rfc-editor.org/rfc/rfc8949.html), numerous [registered IANA tag extensions](https://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml) (the `x` in cbor-x), [RFC-8746](https://tools.ietf.org/html/rfc8746) and proposed optional record extension, for defining record structures that makes CBOR even faster and more compact, often over twice as fast as even native JSON functions, several times faster than other JS implementations, and 15-50% more compact. See the performance section for more details. Structured cloning (with support for cyclical references) is supported through these tag extensions.
+The cbor-x package is an extremely fast CBOR NodeJS/JavaScript implementation. Currently, it is significantly faster than any other known implementations, faster than Avro (for JS), and generally faster than native V8 JSON.stringify/parse, on NodeJS. It implements the CBOR format as specificed in [RFC-8949](https://www.rfc-editor.org/rfc/rfc8949.html), numerous [registered IANA tag extensions](https://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml) (the `x` in cbor-x), [RFC-8746](https://tools.ietf.org/html/rfc8746) and proposed optional [record extension](https://github.com/kriszyp/cbor-records), for defining record structures that makes CBOR even faster and more compact, often over twice as fast as even native JSON functions, several times faster than other JS implementations, and 15-50% more compact. See the performance section for more details. Structured cloning (with support for cyclical references) is supported through these tag extensions.
 
 ## Basic Usage
 
@@ -48,7 +48,7 @@ receivingStream.on('data', (data) => {
 	// received data
 });
 ```
- The `EncoderStream` and `DecoderStream` instances  will have also the record structure extension enabled by default (see below).
+The `EncoderStream` and `DecoderStream` instances  will have also the record structure extension enabled by default (see below).
 
 ## Deno Usage
 CBOR modules are standard ESM modules and can be loaded directly from github (https://raw.githubusercontent.com/kriszyp/cbor-x/master/index.js) or downloaded and used directly in Deno. The standard encode and decode functionality is available on Deno, like other platforms.
@@ -82,10 +82,10 @@ copy.set.has('a') // true
 
 ```
 
-This option is disabled by default because it uses extensions and reference checking degrades performance (by about 25-30%). (Note this implementation doesn't serialize every class/type specified in the HTML specification since not all of them make sense for storing across platforms.)
+This option is disabled by default because reference checking degrades performance (by about 25-30%). (Note this implementation doesn't serialize every class/type specified in the HTML specification since not all of them make sense for storing across platforms.)
 
 ## Record / Object Structures
-There is a critical difference between maps (or dictionaries) that hold an arbitrary set of keys and values (JavaScript `Map` is designed for these), and records or object structures that have a well-defined set of fields. Typical JS objects/records may have many instances re(use) the same structure. By using the record extension, this distinction is preserved in CBOR and the encoding can reuse structures and not only provides better type preservation, but yield much more compact encodings and increase decoding performance by 2-3x. cbor-x automatically generates record definitions that are reused and referenced by objects with the same structure. Records use CBOR's tags to align well CBOR's tag/extension mechanism. There are a number of ways to use this to our advantage. For large object structures with repeating nested objects with similar structures, simply serializing with the record extension can yield significant benefits. To use the record structures extension, we create a new `Encoder` instance. By default a new `Encoder` instance will have the record extension enabled:
+There is a critical difference between maps (or dictionaries) that hold an arbitrary set of keys and values (JavaScript `Map` is designed for these), and records or object structures that have a well-defined set of fields. Typical JS objects/records may have many instances re(use) the same structure. By using the record extension, this distinction is preserved in CBOR and the encoding can reuse structures and not only provides better type preservation, but yield much more compact encodings and increase decoding performance by 2-3x. Cbor-x automatically generates record definitions that are reused and referenced by objects with the same structure. Records use CBOR's tags to align well CBOR's tag/extension mechanism. There are a number of ways to use this to our advantage. For large object structures with repeating nested objects with similar structures, simply serializing with the record extension can yield significant benefits. To use the record structures extension, we create a new `Encoder` instance. By default a new `Encoder` instance will have the record extension enabled:
 ```
 import { Encoder } from 'cbor-x';
 let encoder = new Encoder();
@@ -125,12 +125,12 @@ Cbor-x will automatically add and saves structures as it encounters any new obje
 If you have a buffer with multiple values sequentially encoded, you can choose to parse and read multiple values. This can be done using the `unpackMultiple` function/method, which can return an array of all the values it can sequentially parse within the provided buffer. For example:
 ```js
 let data = new Uint8Array([1, 2, 3]) // encodings of values 1, 2, and 3
-let values = unpackMultiple(data) // [1, 2, 3]
+let values = decodeMultiple(data) // [1, 2, 3]
 ```
 Alternately, you can provide a callback function that is called as the parsing occurs with each value, and can optionally terminate the parsing by returning `false`:
 ```js
 let data = new Uint8Array([1, 2, 3]) // encodings of values 1, 2, and 3
-unpackMultiple(data, (value) => {
+decodeMultiple(data, (value) => {
 	// called for each value
 	// return false if you wish to end the parsing
 })
@@ -139,13 +139,13 @@ unpackMultiple(data, (value) => {
 ## Options
 The following options properties can be provided to the Encoder or Decoder constructor:
 
-* `useRecords` - Setting this to `false` disables the record extension and stores JavaScript objects as CBOR maps, and decodes maps as JavaScript `Object`s, which ensures compatibilty with other decoders.
-* `structures` - Provides the array of structures that is to be used for record extension, if you want the structures saved and used again. This array will be modified in place with new record structures that are serialized (if less than 32 structures are in the array).
+* `useRecords` - Setting this to `false` disables the record extension and stores JavaScript objects as CBOR maps (with tag 259), and decodes maps as JavaScript `Object`s, which ensures compatibilty with other decoders.
+* `structures` - Provides the array of structures that is to be used for record extension, if you want the structures saved and used again. This array will be modified in place with new record structures that are serialized (if less than 64 structures are in the array).
 * `structuredClone` - This enables the structured cloning extensions that will encode object/cyclic references and additional built-in types/classes.
-* `mapsAsObjects` - If `true`, this will decode CBOR maps and JS `Object`s with the map entries decoded to object properties. If `false`, maps are decoded as JavaScript `Map`s. This is disabled by default if `useRecords` is enabled (which allows `Map`s to be preserved), and is enabled by default if `useRecords` is disabled.
+* `mapsAsObjects` - If `true`, this will decode CBOR maps and JS `Object`s with the map entries decoded to object properties. If `false`, maps are decoded as JavaScript `Map`s. This is disabled by default if `useRecords` is enabled (`Map`s are preserved since they are distinct from records), and is enabled by default if `useRecords` is disabled.
 * `useFloat32` - This will enable cbor-x to encode non-integer numbers as 32-bit (4 byte) floating point numbers. See next section for possible values.
-* `variableMapSize` - This will use varying map size definition (fixmap, map16, map32) based on the number of keys when encoding objects, which yields slightly more compact encodings (for small objects), but is typically 5-10% slower during encoding. This is only relevant when record extension is disabled.
-* `copyBuffers` - When decoding a CBOR with binary data (Buffers are encoded as binary data), copy the buffer rather than providing a slice/view of the buffer. If you want your input data to be collected or modified while the decoded embedded buffer continues to live on, you can use this option (there is extra overhead to copying).
+* `variableMapSize` - This will use varying map size definition (from single-byte to full 32-bit representation) based on the number of keys when encoding objects, which yields slightly more compact encodings (for small objects), but is typically 5-10% slower during encoding. This is only relevant when record extension is disabled.
+* `copyBuffers` - When decoding a CBOR message with binary data (Buffers are encoded as binary data), copy the buffer rather than providing a slice/view of the buffer. If you want your input data to be collected or modified while the decoded embedded buffer continues to live on, you can use this option (there is extra overhead to copying).
 * `useTimestamp32` - Encode JS `Date`s in 32-bit format when possible by dropping the milliseconds. This is a more efficient encoding of dates. You can also cause dates to use 32-bit format by manually setting the milliseconds to zero (`date.setMilliseconds(0)`).
 * `largeBigIntToFloat` - If a bigint needs to be encoded that is larger than will fit in 64-bit integers, it will be encoded as a float-64 (otherwise will throw a RangeError).
 * `useTag259ForMaps` - This flag indicates if [tag 259 (explicit maps)](https://github.com/shanewholloway/js-cbor-codec/blob/master/docs/CBOR-259-spec--explicit-maps.md) should be used to encode JS `Map`s. When using records is enabled, this is disabled by default, since plain objects are encoded with record structures and unambigiously differentiated from `Map`s, which are encoded as CBOR maps. Without using records, this enabled by default and is necessary to distinguish plain objects from `Map`s (but can be disabled by setting this to `false`).
