@@ -1,9 +1,7 @@
-<<<<<<< HEAD
 import * as CBOR from '../index.js'
 import chai from 'chai'
-//import inspector  from 'inspector'; inspector.open(9330, null, true); debugger
 import sampleData from './example4.json'
-//import inspector from 'inspector'; inspector.open(9330, null, true); debugger
+//import inspector from 'inspector'; inspector.open(9229, null, true); debugger
 function tryRequire(module) {
 	try {
 		return require(module)
@@ -255,11 +253,11 @@ suite('CBOR basic tests', function(){
 		assert.equal(decoded.length, size)
 	})
 	test('little buffer', function() {
-		var data = new Uint8Array(0)
+		var data = typeof Buffer == 'undefined' ? new Uint8Array(0) : Buffer.alloc(0)
 		var encoded = encode(data)
 		assert.equal(encoded.length, 1) // make sure to use canonical form
 		var decoded = decode(encoded)
-		assert.equal(decoded.length, size)
+		assert.equal(decoded.length, 0)
 	})
 
 	test('random strings', function(){
