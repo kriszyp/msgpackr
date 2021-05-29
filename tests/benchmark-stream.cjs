@@ -13,7 +13,7 @@ var pkg = require("../package.json");
 
 // a sample fluentd message
 var data = ["tag", [[1440949922, {"message": "hi there"}]]];
-var packed = msgpack.encode(data); // 30 bytes per message
+var packed = pack(data); // 30 bytes per message
 var packsize = packed.length;
 var opcount = 1000000;
 var joincount = 100;
@@ -38,9 +38,15 @@ if (argv[0] === "-v") {
 if (argv[0] - 0) limit = argv.shift() - 0;
 
 var list = [
+<<<<<<< HEAD
   ['new EncoderStream().write(obj);', encode5],
   ['new DecoderStream().write(buf);', decode5],
   ['stream.write(msgpack.encode(obj));', encode1],
+=======
+  ['new PackrStream().write(obj);', encode5],
+  ['new UnpackrStream().write(buf);', decode5],
+  /*['stream.write(msgpack.encode(obj));', encode1],
+>>>>>>> msgpackr/master
   ['stream.write(msgpack.decode(buf));', decode1],
   ['stream.write(notepack.encode(obj));', encode4],
   ['stream.write(notepack.decode(buf));', decode4],
@@ -49,7 +55,7 @@ var list = [
   ['msgpack.createEncodeStream().write(obj);', encode3],
   ['msgpack.Decoder().on("data",ondata).decode(buf);', decode2],
 //  ['stream.write(Buffer.from(JSON.stringify(obj)));', stringify],
-//  ['stream.write(JSON.parse(buf));', parse]
+//  ['stream.write(JSON.parse(buf));', parse]*/
 ];
 
 function encode5(callback) {

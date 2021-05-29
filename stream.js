@@ -39,10 +39,15 @@ export class DecoderStream extends Transform {
 		let position = 0
 		let size = chunk.length
 		try {
-			this.push(this.decoder.decode(chunk, size, true))
+			let value = this.decoder.decode(chunk, size, true)
+			if (value === null)
+				value = this.getNullValue()
+			this.push(value)
 			position = getPosition()
 			while (position < size) {
-				let value = read()
+				value = read()
+				if (value === null)
+						value = this.getNullValue()
 				this.push(value)
 				position = getPosition()
 			}
@@ -55,5 +60,8 @@ export class DecoderStream extends Transform {
 			clearSource()
 		}
 		if (callback) callback()
+	}
+	getNullValue() {
+		return Symbol.for(null)
 	}
 }

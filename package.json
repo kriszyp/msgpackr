@@ -60,6 +60,7 @@
     "cbor": "^5",
     "cbor-sync": "^1.0.4",
     "@types/node": "latest",
+    "async": "^3",
     "chai": "^4",
     "esm": "^3.2.25",
     "mocha": "^8.1.3",
