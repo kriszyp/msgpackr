@@ -20,6 +20,7 @@ let srcStringEnd = 0
 let referenceMap
 let currentExtensions = []
 let dataView
+let restoreMapsAsObject
 let defaultOptions = {
 	useRecords: false,
 	mapsAsObjects: true
@@ -180,6 +181,10 @@ export function read() {
 								object[key] = read()
 							return object
 						} else {
+							if (restoreMapsAsObject) {
+								currentDecoder.mapsAsObjects = true
+								restoreMapsAsObject = false
+							}
 							let map = new Map()
 							while ((key = read()) != STOP_CODE)
 								map.set(key, read())
@@ -226,6 +231,10 @@ export function read() {
 				}
 				return object
 			} else {
+				if (restoreMapsAsObject) {
+					currentDecoder.mapsAsObjects = true
+					restoreMapsAsObject = false
+				}
 				let map = new Map()
 				for (let i = 0; i < token; i++) {
 					map.set(read(), read())
@@ -743,7 +752,17 @@ currentExtensions[40010] = (id) => {
 	return refEntry.target
 }
 
-currentExtensions[258] = (array) => new Set(array) // https://github.com/input-output-hk/cbor-sets-spec/blob/master/CBOR_SETS.md
+currentExtensions[258] = (array) => new Set(array); // https://github.com/input-output-hk/cbor-sets-spec/blob/master/CBOR_SETS.md
+(currentExtensions[259] = (read) => {
+	// https://github.com/shanewholloway/js-cbor-codec/blob/master/docs/CBOR-259-spec
+	// for decoding as a standard Map
+	if (currentDecoder.mapsAsObjects) {
+		currentDecoder.mapsAsObjects = false
+		restoreMapsAsObject = true
+	}
+	return read()
+}).handlesRead = true
+
 
 export const typedArrays = ['Uint8', 'Uint8Clamped', 'Uint16', 'Uint32', 'BigUint64','Int8', 'Int16', 'Int32', 'BigInt64', 'Float32', 'Float64'].map(type => type + 'Array')
 const typedArrayTags = [64, 68, 69, 70, 71, 72, 77, 78, 79, 81, 82]

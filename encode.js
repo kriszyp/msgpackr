@@ -303,6 +303,12 @@ export class Encoder extends Decoder {
 							encode(value[i])
 						}
 					} else if (constructor === Map) {
+						if (this.mapsAsObjects ? this.useTag259ForMaps !== false : this.useTag259ForMaps) {
+							// use Tag 259 (https://github.com/shanewholloway/js-cbor-codec/blob/master/docs/CBOR-259-spec--explicit-maps.md) for maps if the user wants it that way
+							target[position++] = 0xd9
+							target[position++] = 1
+							target[position++] = 3
+						}
 						length = value.size
 						if (length < 0x18) {
 							target[position++] = 0xa0 | length

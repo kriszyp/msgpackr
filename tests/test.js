@@ -241,6 +241,19 @@ suite('CBOR basic tests', function(){
 		assert.equal(deserialized.uint16Array[1], 4)
 	})
 
+	test('explicit maps and sets', function () {
+		let map = new Map()
+		map.set('key', { inside: 'value'})
+		let object = {
+			set: new Set(['a', 'b']),
+			map,
+		}
+		var serialized = encode(object) // default encoder
+		var deserialized = decode(serialized)
+		assert.deepEqual(Array.from(deserialized.set), Array.from(object.set))
+		assert.equal(deserialized.map.get('key').inside, 'value')
+	})
+
 	test('object without prototype', function(){
 		var data = Object.create(null)
 		data.test = 3
@@ -310,6 +323,7 @@ suite('CBOR basic tests', function(){
 		let encoder = new Encoder({
 			mapsAsObjects: true,
 			useTimestamp32: true,
+			useTag259ForMaps: false,
 		})
 		var serialized = encoder.encode(data)
 		var deserialized = encoder.decode(serialized)
