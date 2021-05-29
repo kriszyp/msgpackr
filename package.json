@@ -20,7 +20,7 @@
     "benchmark": "node ./tests/benchmark.js",
     "build": "rollup -c",
     "prepare": "npm run build",
-    "test": "./node_modules/.bin/mocha --experimental-json-modules tests/test**.*js -u tdd"
+    "test": "mocha tests/test**.*js -u tdd --experimental-json-modules"
   },
   "type": "module",
   "main": "./dist/node.cjs",
@@ -28,7 +28,7 @@
     ".": {
       "node": {
         "require": "./dist/node.cjs",
-        "import": "./node.js"
+        "import": "./node-index.js"
       },
       "default": {
         "import": "./index.js"
@@ -57,12 +57,12 @@
     "msgpackr-extract": "^1.0.11"
   },
   "devDependencies": {
+    "@rollup/plugin-json": "^4.1.0",
     "@types/node": "latest",
     "chai": "^4",
     "esm": "^3.2.25",
     "mocha": "^8.1.3",
     "rollup": "^1.20.3",
-    "rollup-plugin-babel-minify": "^9.0.0",
-    "@rollup/plugin-json": "^4.1.0"
+    "rollup-plugin-babel-minify": "^9.0.0"
   }
 }

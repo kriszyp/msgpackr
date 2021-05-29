@@ -1,4 +1,4 @@
-import { PackrStream, UnpackrStream } from '../node.js'
+import { PackrStream, UnpackrStream } from '../node-index.js'
 import stream from 'stream'
 import chai from 'chai'
 var assert = chai.assert
