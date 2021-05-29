@@ -1,6 +1,7 @@
+<<<<<<< HEAD
 import * as CBOR from '../index.js'
 import chai from 'chai'
-//import('./test.mjs')
+//import inspector  from 'inspector'; inspector.open(9330, null, true); debugger
 import sampleData from './example4.json'
 //import inspector from 'inspector'; inspector.open(9330, null, true); debugger
 function tryRequire(module) {

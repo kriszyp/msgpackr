@@ -3,7 +3,7 @@ import json  from "@rollup/plugin-json";
 
 export default [
     {
-        input: "node.js",
+        input: "node-index.js",
         output: [
             {
                 file: "dist/node.cjs",

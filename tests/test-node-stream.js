@@ -1,4 +1,4 @@
-import { EncoderStream, DecoderStream } from '../node.js'
+import { EncoderStream, DecoderStream } from '../node-index.js'
 import stream from 'stream'
 import chai from 'chai'
 var assert = chai.assert
