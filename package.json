@@ -59,6 +59,7 @@
   "devDependencies": {
     "@rollup/plugin-json": "^4.1.0",
     "@types/node": "latest",
+    "async": "^3",
     "chai": "^4",
     "esm": "^3.2.25",
     "mocha": "^8.1.3",

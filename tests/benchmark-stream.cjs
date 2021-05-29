@@ -3,17 +3,17 @@
 var PassThrough = require("stream").PassThrough;
 var async = require("async");
 
-let { PackrStream, UnpackrStream } = require("..");
-var msgpack = require("msgpack-lite");
+let { PackrStream, UnpackrStream, pack } = require("..");
+/*var msgpack = require("msgpack-lite");
 var Encoder = require("msgpack-lite/lib/encoder").Encoder;
 var Decoder = require("msgpack-lite/lib/decoder").Decoder;
-var notepack = require("notepack");
+var notepack = require("notepack");*/
 
 var pkg = require("../package.json");
 
 // a sample fluentd message
 var data = ["tag", [[1440949922, {"message": "hi there"}]]];
-var packed = msgpack.encode(data); // 30 bytes per message
+var packed = pack(data); // 30 bytes per message
 var packsize = packed.length;
 var opcount = 1000000;
 var joincount = 100;
@@ -40,7 +40,7 @@ if (argv[0] - 0) limit = argv.shift() - 0;
 var list = [
   ['new PackrStream().write(obj);', encode5],
   ['new UnpackrStream().write(buf);', decode5],
-  ['stream.write(msgpack.encode(obj));', encode1],
+  /*['stream.write(msgpack.encode(obj));', encode1],
   ['stream.write(msgpack.decode(buf));', decode1],
   ['stream.write(notepack.encode(obj));', encode4],
   ['stream.write(notepack.decode(buf));', decode4],
@@ -49,7 +49,7 @@ var list = [
   ['msgpack.createEncodeStream().write(obj);', encode3],
   ['msgpack.Decoder().on("data",ondata).decode(buf);', decode2],
 //  ['stream.write(Buffer.from(JSON.stringify(obj)));', stringify],
-//  ['stream.write(JSON.parse(buf));', parse]
+//  ['stream.write(JSON.parse(buf));', parse]*/
 ];
 
 function encode5(callback) {
