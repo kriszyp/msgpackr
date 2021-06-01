@@ -47,7 +47,7 @@ export class DecoderStream extends Transform {
 			while (position < size) {
 				value = read()
 				if (value === null)
-						value = this.getNullValue()
+					value = this.getNullValue()
 				this.push(value)
 				position = getPosition()
 			}
