@@ -394,10 +394,13 @@ export class Packr extends Unpackr {
 				}
 				position += 8
 			} else if (type === 'undefined') {
-				//target[position++] = 0xc1 // this is the "never-used" byte
-				target[position++] = 0xd4 // a number of implementations use fixext1 with type 0, data 0 to denote undefined, so we follow suite
-				target[position++] = 0
-				target[position++] = 0
+				if (this.encodeUndefinedAsNil)
+					target[position++] = 0xc0
+				else {
+					target[position++] = 0xd4 // a number of implementations use fixext1 with type 0, data 0 to denote undefined, so we follow suite
+					target[position++] = 0
+					target[position++] = 0
+				}
 			} else {
 				throw new Error('Unknown type ' + type)
 			}

@@ -15,6 +15,7 @@ interface Options {
 	copyBuffers?: boolean
 	useTimestamp32?: boolean
 	largeBigIntToFloat?: boolean
+	encodeUndefinedAsNil?: boolean
 	getStructures?(): {}[]
 	saveStructures?(structures: {}[]): boolean | void
 }
