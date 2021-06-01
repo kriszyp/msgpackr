@@ -47,6 +47,8 @@ export class UnpackrStream extends Transform {
 			position = getPosition()
 			while (position < size) {
 				value = read()
+				if (value === null)
+					value = this.getNullValue()
 				this.push(value)
 				position = getPosition()
 			}
