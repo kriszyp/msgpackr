@@ -1,6 +1,7 @@
 import { encode } from '../index.js'
-import { assert } from 'chai'
-import { Decoder } from '../decode.js'
+import chai from 'chai'
+import { Encoder } from '../encode.js'
+var assert = chai.assert
 
 const tests = {
   string: 'interesting string',
@@ -8,22 +9,26 @@ const tests = {
   buffer: Buffer.from('hello world'),
   bigint: 12345678910n,
   array: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  'many-strings': [],
   set: new Set('abcdefghijklmnopqrstuvwxyz'.split('')),
   object: { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6 }
 }
+for (let i = 0; i < 100; i++) {
+  tests['many-strings'].push('test-data-' + i)
+}
 
 suite('encode and decode tests with partial values', function () {
-  const decoder = new Decoder({ objectMode: true, structures: [] })
+  const encoder = new Encoder({ objectMode: true, structures: [] })
 
   for (const [label, testData] of Object.entries(tests)) {
     test(label, () => {
-      const encoded = encode(testData)
+      const encoded = encoder.encode(testData)
       assert.isTrue(Buffer.isBuffer(encoded), 'encode returns a Buffer')
-      assert.deepStrictEqual(decoder.decode(encoded, encoded.length, true), testData, 'full buffer decodes well')
+      assert.deepStrictEqual(encoder.decode(encoded, encoded.length, true), testData, 'full buffer decodes well')
       const firstHalf = encoded.slice(0, Math.floor(encoded.length / 2))
       let value
       try {
-        value = decoder.decode(firstHalf, firstHalf.length, true)
+        value = encoder.decode(firstHalf, firstHalf.length, true)
       } catch (err) {
         if (err.incomplete !== true) {
           assert.fail(`Should throw an error with .incomplete set to true, instead threw error <${err}>`)

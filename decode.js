@@ -25,6 +25,7 @@ let defaultOptions = {
 	useRecords: false,
 	mapsAsObjects: true
 }
+let sequentialMode = false
 
 export class Decoder {
 	constructor(options) {
@@ -36,12 +37,12 @@ export class Decoder {
 		}
 		Object.assign(this, options)
 	}
-	decode(source, end, continueReading) {
+	decode(source, end) {
 		if (src) {
 			// re-entrant execution, save the state and restore it after we do this decode
 			return saveState(() => {
 				clearSource()
-				return this ? this.decode(source, end, continueReading) : Decoder.prototype.decode.call(defaultOptions, source, end, continueReading)
+				return this ? this.decode(source, end) : Decoder.prototype.decode.call(defaultOptions, source, end)
 			})
 		}
 		srcEnd = end > -1 ? end : source.length
@@ -59,17 +60,7 @@ export class Decoder {
 			currentDecoder = this
 			if (this.structures) {
 				currentStructures = this.structures
-				try {
-					return read()
-				} finally {
-					if (position >= srcEnd || !continueReading) {
-						// finished reading this source, cleanup references
-						currentStructures = null
-						src = null
-						if (referenceMap)
-							referenceMap = null
-					}
-				}
+				return checkedRead()
 			} else if (!currentStructures || currentStructures.length > 0) {
 				currentStructures = []
 			}
@@ -78,26 +69,19 @@ export class Decoder {
 			if (!currentStructures || currentStructures.length > 0)
 				currentStructures = []
 		}
-		try {
-			return read()
-		} finally {
-			if (position >= srcEnd || !continueReading) {
-				src = null
-				if (referenceMap)
-					referenceMap = null
-			}
-		}
+		return checkedRead()
 	}
 	decodeMultiple(source, forEach) {
+		let values, lastPosition = 0
 		try {
-			let decoder = this
 			let size = source.length
-			let value = this ? this.decode(source, size, true) : defaultDecoder.decode(source, size, true)
-			let values
+			sequentialMode = true
+			let value = this ? this.decode(source, size) : defaultDecoder.decode(source, size)
 			if (forEach) {
 				forEach(value)
 				while(position < size) {
-					if (forEach(read()) === false) {
+					lastPosition = position
+					if (forEach(checkedRead()) === false) {
 						return
 					}
 				}
@@ -105,17 +89,50 @@ export class Decoder {
 			else {
 				values = [ value ]
 				while(position < size) {
-					values.push(read())
+					lastPosition = position
+					values.push(checkedRead())
 				}
 				return values
 			}
+		} catch(error) {
+			error.lastPosition = lastPosition
+			error.values = values
+			throw error
 		} finally {
+			sequentialMode = false
 			clearSource()
 		}
 	}
 }
 export function getPosition() {
 	return position
+}
+export function checkedRead() {
+	try {
+		let result = read()
+		if (position == srcEnd) {
+			// finished reading this source, cleanup references
+			currentStructures = null
+			src = null
+			if (referenceMap)
+				referenceMap = null
+		} else if (position > srcEnd) {
+			// over read
+			let error = new Error('Unexpected end of CBOR data')
+			error.incomplete = true
+			throw error
+		} else if (!sequentialMode) {
+			throw new Error('Data read, but end of buffer not reached')
+		}
+		// else more to read, but we are reading sequentially, so don't clear source yet
+		return result
+	} catch(error) {
+		clearSource()
+		if (error instanceof RangeError || error.message.startsWith('Unexpected end of buffer')) {
+			error.incomplete = true
+		}
+		throw error
+	}
 }
 
 export function read() {
@@ -791,6 +808,7 @@ function saveState(callback) {
 	let savedSrc = new Uint8Array(src.slice(0, srcEnd)) // we copy the data in case it changes while external data is processed
 	let savedStructures = currentStructures
 	let savedDecoder = currentDecoder
+	let savedSequentialMode = sequentialMode
 	let value = callback()
 	srcEnd = savedSrcEnd
 	position = savedPosition
@@ -801,6 +819,7 @@ function saveState(callback) {
 	strings = savedStrings
 	referenceMap = savedReferenceMap
 	src = savedSrc
+	sequentialMode = savedSequentialMode
 	currentStructures = savedStructures
 	currentDecoder = savedDecoder
 	dataView = new DataView(src.buffer, src.byteOffset, src.byteLength)
