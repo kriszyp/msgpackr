@@ -1,7 +1,6 @@
 import { encode } from '../index.js'
-import chai from 'chai'
+import { assert } from 'chai'
 import { Encoder } from '../encode.js'
-var assert = chai.assert
 
 const tests = {
   string: 'interesting string',
