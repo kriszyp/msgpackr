@@ -1,7 +1,7 @@
 "use strict"
 import { Transform } from 'stream'
 import { Packr } from './pack.js'
-import { read, getPosition, Unpackr, clearSource } from './unpack.js'
+import { Unpackr } from './unpack.js'
 var DEFAULT_OPTIONS = {objectMode: true}
 
 export class PackrStream extends Transform {
@@ -37,28 +37,22 @@ export class UnpackrStream extends Transform {
 			chunk = Buffer.concat([this.incompleteBuffer, chunk])
 			this.incompleteBuffer = null
 		}
-		let position = 0
-		let size = chunk.length
+		let values
 		try {
-			let value = this.unpackr.unpack(chunk, size, true)
-			if (value === null)
-				value = this.getNullValue()
-			this.push(value)
-			position = getPosition()
-			while (position < size) {
-				value = read()
-				if (value === null)
-					value = this.getNullValue()
-				this.push(value)
-				position = getPosition()
-			}
+			values = this.unpackr.unpackMultiple(chunk)
 		} catch(error) {
-			if (error.incomplete)
-				this.incompleteBuffer = chunk.slice(position)
+			if (error.incomplete) {
+				this.incompleteBuffer = chunk.slice(error.lastPosition)
+				values = error.values
+			}
 			else
 				throw error
 		} finally {
-			clearSource()
+			for (let value of values || []) {
+				if (value === null)
+					value = this.getNullValue()
+				this.push(value)
+			}
 		}
 		if (callback) callback()
 	}

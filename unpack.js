@@ -25,6 +25,7 @@ let defaultOptions = {
 export class C1Type {}
 export const C1 = new C1Type()
 C1.name = 'MessagePack 0xC1'
+let sequentialMode = false
 
 export class Unpackr {
 	constructor(options) {
@@ -36,12 +37,12 @@ export class Unpackr {
 		}
 		Object.assign(this, options)
 	}
-	unpack(source, end, continueReading) {
+	unpack(source, end) {
 		if (src) {
 			// re-entrant execution, save the state and restore it after we do this unpack
 			return saveState(() => {
 				clearSource()
-				return this ? this.unpack(source, end, continueReading) : Unpackr.prototype.unpack.call(defaultOptions, source, end, continueReading)
+				return this ? this.unpack(source, end) : Unpackr.prototype.unpack.call(defaultOptions, source, end)
 			})
 		}
 		srcEnd = end > -1 ? end : source.length
@@ -59,17 +60,7 @@ export class Unpackr {
 			currentUnpackr = this
 			if (this.structures) {
 				currentStructures = this.structures
-				try {
-					return read()
-				} finally {
-					if (position >= srcEnd || !continueReading) {
-						// finished reading this source, cleanup references
-						currentStructures = null
-						src = null
-						if (referenceMap)
-							referenceMap = null
-					}
-				}
+				return checkedRead()
 			} else if (!currentStructures || currentStructures.length > 0) {
 				currentStructures = []
 			}
@@ -78,26 +69,19 @@ export class Unpackr {
 			if (!currentStructures || currentStructures.length > 0)
 				currentStructures = []
 		}
-		try {
-			return read()
-		} finally {
-			if (position >= srcEnd || !continueReading) {
-				src = null
-				if (referenceMap)
-					referenceMap = null
-			}
-		}
+		return checkedRead()
 	}
 	unpackMultiple(source, forEach) {
+		let values, lastPosition = 0
 		try {
-			let unpackr = this
+			sequentialMode = true
 			let size = source.length
-			let value = this ? this.unpack(source, size, true) : defaultUnpackr.unpack(source, size, true)
-			let values
+			let value = this ? this.unpack(source, size) : defaultUnpackr.unpack(source, size)
 			if (forEach) {
 				forEach(value)
 				while(position < size) {
-					if (forEach(read()) === false) {
+					lastPosition = position
+					if (forEach(checkedRead()) === false) {
 						return
 					}
 				}
@@ -105,11 +89,17 @@ export class Unpackr {
 			else {
 				values = [ value ]
 				while(position < size) {
-					values.push(read())
+					lastPosition = position
+					values.push(checkedRead())
 				}
 				return values
 			}
+		} catch(error) {
+			error.lastPosition = lastPosition
+			error.values = values
+			throw error
 		} finally {
+			sequentialMode = false
 			clearSource()
 		}
 	}
@@ -119,6 +109,33 @@ export class Unpackr {
 }
 export function getPosition() {
 	return position
+}
+export function checkedRead() {
+	try {
+		let result = read()
+		if (position == srcEnd) {
+			// finished reading this source, cleanup references
+			currentStructures = null
+			src = null
+			if (referenceMap)
+				referenceMap = null
+		} else if (position > srcEnd) {
+			// over read
+			let error = new Error('Unexpected end of MessagePack data')
+			error.incomplete = true
+			throw error
+		} else if (!sequentialMode) {
+			throw new Error('Data read, but end of buffer not reached')
+		}
+		// else more to read, but we are reading sequentially, so don't clear source yet
+		return result
+	} catch(error) {
+		clearSource()
+		if (error instanceof RangeError || error.message.startsWith('Unexpected end of buffer')) {
+			error.incomplete = true
+		}
+		throw error
+	}
 }
 
 export function read() {
@@ -819,6 +836,7 @@ function saveState(callback) {
 	let savedSrc = new Uint8Array(src.slice(0, srcEnd)) // we copy the data in case it changes while external data is processed
 	let savedStructures = currentStructures
 	let savedPackr = currentUnpackr
+	let savedSequentialMode = sequentialMode
 	let value = callback()
 	srcEnd = savedSrcEnd
 	position = savedPosition
@@ -829,6 +847,7 @@ function saveState(callback) {
 	strings = savedStrings
 	referenceMap = savedReferenceMap
 	src = savedSrc
+	sequentialMode = savedSequentialMode
 	currentStructures = savedStructures
 	currentUnpackr = savedPackr
 	dataView = new DataView(src.buffer, src.byteOffset, src.byteLength)

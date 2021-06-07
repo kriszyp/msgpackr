@@ -1,6 +1,6 @@
 import * as msgpackr from '../index.js'
 import chai from 'chai'
-//import inspector  from 'inspector'; inspector.open(9330, null, true); debugger
+import inspector  from 'inspector'; inspector.open(9330, null, true); debugger
 import sampleData from './example4.json'
 function tryRequire(module) {
 	try {
