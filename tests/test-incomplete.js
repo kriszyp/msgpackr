@@ -17,12 +17,10 @@ for (let i = 0; i < 100; i++) {
 }
 
 suite('encode and decode tests with partial values', function () {
-  const encoder = new Encoder({ objectMode: true, structures: [] })
+  const encoder = new Encoder({ objectMode: true, structures: [], structuredClone: true })
 
   for (const [label, testData] of Object.entries(tests)) {
     test(label, () => {
-        if (label == 'set')
-          debugger
       const encoded = encoder.encode(testData)
       assert.isTrue(Buffer.isBuffer(encoded), 'encode returns a Buffer')
       assert.deepStrictEqual(encoder.decode(encoded, encoded.length, true), testData, 'full buffer decodes well')

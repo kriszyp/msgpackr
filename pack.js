@@ -596,8 +596,8 @@ extensions = [{
 }, {
 	pack(set, allocateForWrite, pack) {
 		let array = Array.from(set)
+		let { target, position} = allocateForWrite(this.structuredClone ? 3 : 0)
 		if (this.structuredClone) {
-			let { target, position} = allocateForWrite(3)
 			target[position++] = 0xd4
 			target[position++] = 0x73 // 's' for Set
 			target[position++] = 0
@@ -606,8 +606,8 @@ extensions = [{
 	}
 }, {
 	pack(error, allocateForWrite, pack) {
+		let { target, position} = allocateForWrite(this.structuredClone ? 3 : 0)
 		if (this.structuredClone) {
-			let { target, position} = allocateForWrite(3)
 			target[position++] = 0xd4
 			target[position++] = 0x65 // 'e' for error
 			target[position++] = 0
@@ -616,8 +616,8 @@ extensions = [{
 	}
 }, {
 	pack(regex, allocateForWrite, pack) {
+		let { target, position} = allocateForWrite(this.structuredClone ? 3 : 0)
 		if (this.structuredClone) {
-			let { target, position} = allocateForWrite(3)
 			target[position++] = 0xd4
 			target[position++] = 0x78 // 'x' for regeXp
 			target[position++] = 0
