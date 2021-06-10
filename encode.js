@@ -122,7 +122,7 @@ export class Encoder extends Decoder {
 							recordIdsToRemove = []
 					} else if (recordIdsToRemove.length > 0 && !isSequential) {
 						for (let i = 0, l = recordIdsToRemove.length; i < l; i++) {
-							recordIdsToRemove[i][RECORD_SYMBOL] = 0
+							recordIdsToRemove[i][RECORD_SYMBOL] = undefined
 						}
 						recordIdsToRemove = []
 					}
@@ -487,7 +487,7 @@ export class Encoder extends Decoder {
 				transition = nextTransition
 			}
 			let recordId = transition[RECORD_SYMBOL]
-			if (recordId) {
+			if (recordId !== undefined) {
 				target[position++] = 0xd9 // tag two byte
 				target[position++] = RECORD_STARTING_ID_PREFIX
 				target[position++] = recordId
@@ -514,7 +514,7 @@ export class Encoder extends Decoder {
 						transitionsCount += serializationsSinceTransitionRebuild * newTransitions
 					// record the removal of the id, we can maintain our shared structure
 					if (recordIdsToRemove.length >= MAX_STRUCTURES - maxSharedStructures)
-						recordIdsToRemove.shift()[RECORD_SYMBOL] = 0 // we are cycling back through, and have to remove old ones
+						recordIdsToRemove.shift()[RECORD_SYMBOL] = undefined // we are cycling back through, and have to remove old ones
 					recordIdsToRemove.push(transition)
 					if (length < 0x16)
 						target[position++] = 0x82 + length // array header, length of values + 2
