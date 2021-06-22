@@ -328,9 +328,11 @@ export class Packr extends Unpackr {
 							if (value instanceof extensionClass) {
 								let extension = extensions[i]
 								if (extension.write) {
-									target[position++] = 0xd4 // one byte "tag" extension
-									target[position++] = extension.type
-									target[position++] = 0
+									if (extension.type) {
+										target[position++] = 0xd4 // one byte "tag" extension
+										target[position++] = extension.type
+										target[position++] = 0
+									}
 									pack(extension.write.call(this, value))
 									return
 								}
@@ -401,8 +403,10 @@ export class Packr extends Unpackr {
 					target[position++] = 0
 					target[position++] = 0
 				}
+			} else if (type === 'function') {
+				pack(this.writeFunction && this.writeFunction()) // if there is a writeFunction, use it, otherwise just encode as undefined
 			} else {
-				throw new Error('Unknown type ' + type)
+				throw new Error('Unknown type: ' + type)
 			}
 		}
 
@@ -755,6 +759,8 @@ export function addExtension(extension) {
 	if (extension.Class) {
 		if (!extension.pack && !extension.write)
 			throw new Error('Extension has no pack or write function')
+		if (extension.pack && !extension.type)
+			throw new Error('Extension has no type (numeric code to identify the extension)')
 		extensionClasses.unshift(extension.Class)
 		extensions.unshift(extension)
 	}

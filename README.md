@@ -253,6 +253,7 @@ addExtension({
 	}
 });
 ```
+You can also create an extension with `Class` and `write` methods, but no `type` (or `read`), if you just want to customize how a class is serialized without using MessagePack extension encoding.
 
 ### Additional Performance Optimizations
 Msgpackr is already fast, but here are some tips for making it faster:
