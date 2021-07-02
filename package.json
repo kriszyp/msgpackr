@@ -53,7 +53,7 @@
     }
   },
   "optionalDependencies": {
-    "cbor-extract": "^0.3.0"
+    "cbor-extract": "^0.3.1"
   },
   "devDependencies": {
     "@types/node": "latest",
