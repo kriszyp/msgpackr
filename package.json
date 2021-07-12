@@ -23,7 +23,6 @@
     "test": "mocha tests/test**.*js -u tdd --experimental-json-modules"
   },
   "type": "module",
-  "main": "./dist/node.cjs",
   "exports": {
     ".": {
       "node": {
