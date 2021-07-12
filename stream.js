@@ -16,6 +16,8 @@ export class PackrStream extends Transform {
 		this.push(this.packr.pack(value))
 		callback()
 	}
+	_read() {
+	}
 /*
 	end(value) {
 		if (value != null)
