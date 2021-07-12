@@ -1,5 +1,5 @@
 const data = require('./example4.json');
-const msgpackr = require('..');
+const { pack, unpack } = require('msgpackr/pack');
 const chai = require('chai');
 
 function tryRequire(module) {
@@ -13,8 +13,6 @@ const assert = chai.assert
 //if (typeof msgpackr === 'undefined') { msgpackr = require('..') }
 var msgpack_msgpack = tryRequire('@msgpack/msgpack');
 var msgpack_lite = tryRequire('msgpack-lite');
-var unpack = msgpackr.unpack
-var pack = msgpackr.pack
 
 const addCompatibilitySuite = (data) => () => {
 	if (msgpack_msgpack) {
