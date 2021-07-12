@@ -7,19 +7,21 @@ export class PackrStream extends Transform {
 	constructor(options) {
 		if (!options)
 			options = {}
+		options.writableObjectMode = true
 		super(options)
 		options.sequential = true
 		this.packr = new Packr(options)
 	}
-	write(value) {
+	_transform(value, encoding, callback) {
 		this.push(this.packr.pack(value))
+		callback()
 	}
-
+/*
 	end(value) {
 		if (value != null)
 			this.push(this.packr.pack(value))
 		this.push(null)
-	}
+	}*/
 }
 
 export class UnpackrStream extends Transform {
