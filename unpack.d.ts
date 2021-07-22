@@ -5,7 +5,7 @@ export enum FLOAT32_OPTIONS {
 	DECIMAL_FIT = 4
 }
 
-interface Options {
+export interface Options {
 	useFloat32?: FLOAT32_OPTIONS
 	useRecords?: boolean
 	structures?: {}[]
