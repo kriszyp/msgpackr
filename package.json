@@ -17,7 +17,7 @@
     "url": "http://github.com/kriszyp/msgpackr"
   },
   "scripts": {
-    "benchmark": "node ./tests/benchmark.js",
+    "benchmark": "node ./tests/benchmark.cjs",
     "build": "rollup -c",
     "prepare": "npm run build",
     "test": "mocha tests/test**.*js -u tdd --experimental-json-modules"

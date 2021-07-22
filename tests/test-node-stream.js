@@ -73,3 +73,4 @@ suite('msgpackr node stream tests', function(){
 		}catch(error){}
 	})
 })
+
