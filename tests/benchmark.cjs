@@ -1,4 +1,4 @@
-var msgpackr = tryRequire("..");
+var msgpackr = tryRequire("../dist/node.cjs");
 var msgpack_node = tryRequire("msgpack");
 var msgpack_msgpack = tryRequire("@msgpack/msgpack");
 var msgpack_lite = tryRequire("msgpack-lite");
