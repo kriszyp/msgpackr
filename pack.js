@@ -59,7 +59,8 @@ export class Packr extends Unpackr {
 				targetView = new DataView(target.buffer, 0, target.length)
 				safeEnd = target.length - 10
 				position = 0
-			}
+			} else
+				position = (position + 7) & 0x7ffffff8 // Word align to make any future copying of this buffer faster
 			start = position
 			referenceMap = packr.structuredClone ? new Map() : null
 			sharedStructures = packr.structures
