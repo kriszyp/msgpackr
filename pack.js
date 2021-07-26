@@ -35,7 +35,7 @@ export class Packr extends Unpackr {
 		let packr = this
 		let maxSharedStructures = 32
 		let isSequential = options && options.sequential
-		if (isSequential) {
+		if (isSequential && !options.saveStructures) {
 			maxSharedStructures = 0
 			this.structures = []
 		}
@@ -66,7 +66,7 @@ export class Packr extends Unpackr {
 			sharedStructures = packr.structures
 			if (sharedStructures) {
 				if (sharedStructures.uninitialized)
-					packr.structures = sharedStructures = packr.getStructures()
+					packr.structures = sharedStructures = packr.getStructures() || []
 				let sharedStructuresLength = sharedStructures.length
 				if (sharedStructuresLength >  maxSharedStructures && !isSequential)
 					sharedStructuresLength = maxSharedStructures
