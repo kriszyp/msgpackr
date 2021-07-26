@@ -1,31 +1,31 @@
 "use strict"
-let decoder
+var decoder
 try {
 	decoder = new TextDecoder()
 } catch(error) {}
-let src
-let srcEnd
-let position = 0
-let alreadySet
+var src
+var srcEnd
+var position = 0
+var alreadySet
 const EMPTY_ARRAY = []
-let strings = EMPTY_ARRAY
-let stringPosition = 0
-let currentUnpackr = {}
-let currentStructures
-let srcString
-let srcStringStart = 0
-let srcStringEnd = 0
-let referenceMap
-let currentExtensions = []
-let dataView
-let defaultOptions = {
+var strings = EMPTY_ARRAY
+var stringPosition = 0
+var currentUnpackr = {}
+var currentStructures
+var srcString
+var srcStringStart = 0
+var srcStringEnd = 0
+var referenceMap
+var currentExtensions = []
+var dataView
+var defaultOptions = {
 	useRecords: false,
 	mapsAsObjects: true
 }
 export class C1Type {}
 export const C1 = new C1Type()
 C1.name = 'MessagePack 0xC1'
-let sequentialMode = false
+var sequentialMode = false
 
 export class Unpackr {
 	constructor(options) {
@@ -395,10 +395,10 @@ function createStructureReader(structure) {
 	return readObject
 }
 
-let readFixedString = readStringJS
-let readString8 = readStringJS
-let readString16 = readStringJS
-let readString32 = readStringJS
+var readFixedString = readStringJS
+var readString8 = readStringJS
+var readString16 = readStringJS
+var readString32 = readStringJS
 
 export function setExtractor(extractStrings) {
 	readFixedString = readString(1)
@@ -513,7 +513,7 @@ function readMap(length) {
 	}
 }
 
-let fromCharCode = String.fromCharCode
+var fromCharCode = String.fromCharCode
 function longStringInJS(length) {
 	let start = position
 	let bytes = new Array(length)
@@ -682,7 +682,7 @@ function readExt(length) {
 		throw new Error('Unknown extension type ' + type)
 }
 
-let keyCache = new Array(4096)
+var keyCache = new Array(4096)
 function readKey() {
 	let length = src[position++]
 	if (length >= 0xa0 && length < 0xc0) {
@@ -752,7 +752,7 @@ const recordDefinition = (id) => {
 	structure.read = createStructureReader(structure)
 	return structure.read()
 }
-let glbl = typeof window == 'object' ? window : global
+var glbl = typeof window == 'object' ? window : global
 currentExtensions[0] = () => {} // notepack defines extension 0 to mean undefined, so use that as the default here
 currentExtensions[0].noBuffer = true
 
@@ -870,14 +870,14 @@ export function addExtension(extension) {
 		currentExtensions[extension.type] = extension
 }
 
-export let mult10 = new Array(147) // this is a table matching binary exponents to the multiplier to determine significant digit rounding
+export const mult10 = new Array(147) // this is a table matching binary exponents to the multiplier to determine significant digit rounding
 for (let i = 0; i < 256; i++) {
 	mult10[i] = +('1e' + Math.floor(45.15 - i * 0.30103))
 }
 export const useRecords = false
 export const mapsAsObjects = true
 export const Decoder = Unpackr
-let defaultUnpackr = new Unpackr({ useRecords: false })
+var defaultUnpackr = new Unpackr({ useRecords: false })
 export const unpack = defaultUnpackr.unpack
 export const unpackMultiple = defaultUnpackr.unpackMultiple
 export const decode = defaultUnpackr.unpack
