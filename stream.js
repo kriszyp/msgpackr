@@ -10,7 +10,7 @@ export class PackrStream extends Transform {
 		options.writableObjectMode = true
 		super(options)
 		options.sequential = true
-		this.packr = new Packr(options)
+		this.packr = options.packr || new Packr(options)
 	}
 	_transform(value, encoding, callback) {
 		this.push(this.packr.pack(value))
@@ -25,7 +25,7 @@ export class UnpackrStream extends Transform {
 		options.objectMode = true
 		super(options)
 		options.structures = []
-		this.unpackr = new Unpackr(options)
+		this.unpackr = options.unpackr || new Unpackr(options)
 	}
 	_transform(chunk, encoding, callback) {
 		if (this.incompleteBuffer) {
