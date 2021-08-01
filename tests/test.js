@@ -1,6 +1,6 @@
 import * as msgpackr from '../index.js'
 import chai from 'chai'
-//import inspector  from 'inspector'; inspector.open(9330, null, true); debugger
+import inspector  from 'inspector'; inspector.open(9330, null, true); debugger
 import sampleData from './example4.json'
 function tryRequire(module) {
 	try {
@@ -296,6 +296,47 @@ suite('msgpackr basic tests', function(){
 		data.test = 3
 		var serialized = pack(data)
 		var deserialized = unpack(serialized)
+		assert.deepEqual(deserialized, data)
+	})
+
+	test.only('many shared structures', function() {
+		let data = []
+		for (let i = 0; i < 200; i++) {
+			data.push({['a' + i]: i})
+		}
+		let structures = []
+		let savedStructures
+		let packr = new Packr({
+			structures,
+			saveStructures(structures) {
+				savedStructures = structures
+			}
+		})
+		var serialized = packr.pack(data)
+		assert.equal(savedStructures.length, 32)
+		var deserialized = packr.unpack(serialized)
+		assert.deepEqual(deserialized, data)
+		structures = structures.slice(0, 32)
+		packr = new Packr({
+			structures,
+			maxSharedStructures: 100,
+			saveStructures(structures) {
+				savedStructures = structures
+			}
+		})
+		deserialized = packr.unpack(serialized)
+		assert.deepEqual(deserialized, data)
+		structures = structures.slice(0, 32)
+		packr = new Packr({
+			structures,
+			maxSharedStructures: 100,
+			saveStructures(structures) {
+				savedStructures = structures
+			}
+		})
+		serialized = packr.pack(data)
+		assert.equal(savedStructures.length, 100)
+		deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized, data)
 	})
 

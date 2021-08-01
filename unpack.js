@@ -32,8 +32,12 @@ export class Unpackr {
 		if (options) {
 			if (options.useRecords === false && options.mapsAsObjects === undefined)
 				options.mapsAsObjects = true
-			if (options.getStructures && !options.structures)
+			if (options.structures)
+				options.structures.sharedLength = options.length
+			else if (options.getStructures) {
 				(options.structures = []).uninitialized = true // this is what we use to denote an uninitialized structures
+				options.structures.sharedLength = 0
+			}
 		}
 		Object.assign(this, options)
 	}
@@ -115,6 +119,7 @@ export function checkedRead() {
 		let result = read()
 		if (position == srcEnd) {
 			// finished reading this source, cleanup references
+			if (currentStructures.restoreStructures) restoreStructures()
 			currentStructures = null
 			src = null
 			if (referenceMap)
@@ -130,12 +135,20 @@ export function checkedRead() {
 		// else more to read, but we are reading sequentially, so don't clear source yet
 		return result
 	} catch(error) {
+		if (currentStructures.restoreStructures) restoreStructures()
 		clearSource()
 		if (error instanceof RangeError || error.message.startsWith('Unexpected end of buffer')) {
 			error.incomplete = true
 		}
 		throw error
 	}
+}
+
+function restoreStructures() {
+	for (let id in currentStructures.restoreStructures) {
+		currentStructures[id] = currentStructures.restoreStructures[id]
+	}
+	currentStructures.restoreStructures = null
 }
 
 export function read() {
@@ -147,8 +160,9 @@ export function read() {
 			else {
 				let structure = currentStructures[token & 0x3f]
 				if (structure) {
-					if (!structure.read)
-						structure.read = createStructureReader(structure)
+					if (!structure.read) {
+						structure.read = token < 0x60 ? createStructureReader(structure) : createParentReader(token)
+					}
 					return structure.read()
 				} else if (currentUnpackr.getStructures) {
 					let updatedStructures = saveState(() => {
@@ -160,10 +174,11 @@ export function read() {
 						currentUnpackr.structures = currentStructures = updatedStructures
 					else
 						currentStructures.splice.apply(currentStructures, [0, updatedStructures.length].concat(updatedStructures))
+					currentStructures.sharedLength = updatedStructures.length
 					structure = currentStructures[token & 0x3f]
 					if (structure) {
 						if (!structure.read)
-							structure.read = createStructureReader(structure)
+							structure.read = token < 0x60 ? createStructureReader(structure) : createParentReader(token)
 						return structure.read()
 					} else
 						return token
@@ -310,7 +325,12 @@ export function read() {
 				}
 			case 0xd5:
 				// fixext 2
-				return readExt(2)
+				value = src[position]
+				if (value == 0x72) {
+					position++
+					return recordDefinition(src[position++], src[position++])
+				} else
+					return readExt(2)
 			case 0xd6:
 				// fixext 4
 				return readExt(4)
@@ -747,10 +767,28 @@ function readKey() {
 }
 
 // the registration of the record definition extension (as "r")
-const recordDefinition = (id) => {
-	let structure = currentStructures[id & 0x3f] = read()
+const recordDefinition = (id, byte2) => {
+	var structure = read()
+	if (byte2 === undefined)
+		currentStructures[id & 0x3f] = structure
+	else {
+		if (!currentStructures[id & 0x3f])
+			currentStructures[id & 0x3f] = { read: createParentReader(id) }
+		id = ((id - 0x60) << 8) + byte2
+		if (id < currentStructures.sharedLength)
+			(currentStructures.restoreStructures || (currentStructures.restoreStructures = []))[id] = currentStructures[id]
+		currentStructures[id] = structure
+	}
 	structure.read = createStructureReader(structure)
 	return structure.read()
+}
+const createParentReader = (id) => {
+	return function() {
+		let structure = currentStructures[src[position++] + ((id - 0x60) << 8)]
+		if (!structure.read)
+			structure.read = createStructureReader(structure)
+		return structure.read()
+	}
 }
 var glbl = typeof window == 'object' ? window : global
 currentExtensions[0] = () => {} // notepack defines extension 0 to mean undefined, so use that as the default here
@@ -836,6 +874,7 @@ function saveState(callback) {
 	let savedSrcString = srcString
 	let savedStrings = strings
 	let savedReferenceMap = referenceMap
+
 	// TODO: We may need to revisit this if we do more external calls to user code (since it could be slow)
 	let savedSrc = new Uint8Array(src.slice(0, srcEnd)) // we copy the data in case it changes while external data is processed
 	let savedStructures = currentStructures

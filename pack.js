@@ -33,18 +33,21 @@ export class Packr extends Unpackr {
 			} : false
 
 		let packr = this
-		let maxSharedStructures = 32
+		if (!options)
+			options = {}
 		let isSequential = options && options.sequential
-		if (isSequential && !options.saveStructures) {
-			maxSharedStructures = 0
+		let maxSharedStructures = options.maxSharedStructures ?? (isSequential ? 0 : 32)
+		let maxOwnStructures = options.maxOwnStructures ?? (isSequential ? 64 : 32)
+		if (isSequential && !options.saveStructures)
 			this.structures = []
-		}
+		let maxStructureId = maxSharedStructures + maxOwnStructures + 0x40;
 		let recordIdsToRemove = []
 		let transitionsCount = 0
 		let serializationsSinceTransitionRebuild = 0
 		if (this.structures && this.structures.length > maxSharedStructures) {
-			throw new Error('Too many shared structures')
+			maxSharedStructures = this.structures.length
 		}
+		let useTwoByteRecordIds = maxSharedStructures > 32 || maxOwnStructures > 32
 
 		this.pack = this.encode = function(value) {
 			if (!target) {
@@ -70,6 +73,7 @@ export class Packr extends Unpackr {
 				let sharedStructuresLength = sharedStructures.length
 				if (sharedStructuresLength >  maxSharedStructures && !isSequential)
 					sharedStructuresLength = maxSharedStructures
+				sharedStructures.sharedLength = maxSharedStructures
 				if (!sharedStructures.transitions) {
 					// rebuild our structure transitions
 					sharedStructures.transitions = Object.create(null)
@@ -503,36 +507,52 @@ export class Packr extends Unpackr {
 			}
 			let recordId = transition[RECORD_SYMBOL]
 			if (recordId) {
-				target[position++] = recordId
+				if (recordId >= 0x60 && useTwoByteRecordIds) {
+					target[position++] = ((recordId -= 0x40) >> 8) + 0x60
+					target[position++] = recordId & 0xff
+				} else
+					target[position++] = recordId
 			} else {
 				recordId = structures.nextId++
 				if (!recordId) {
 					recordId = 0x40
 					structures.nextId = 0x41
 				}
-				if (recordId >= 0x80) {// cycle back around
+				if (recordId >= maxStructureId) {// cycle back around
 					structures.nextId = (recordId = maxSharedStructures + 0x40) + 1
 				}
 				transition[RECORD_SYMBOL] = recordId
-				structures[0x3f & recordId] = keys
+				structures[recordId - 0x40] = keys
 				if (sharedStructures && sharedStructures.length <= maxSharedStructures) {
-					target[position++] = recordId
+					if (recordId >= 0x60 && useTwoByteRecordIds) {
+						target[position++] = ((recordId -= 0x40) >> 8) + 0x60
+						target[position++] = recordId & 0xff
+					} else
+						target[position++] = recordId
 					hasSharedUpdate = true
 				} else {
-					target[position++] = 0xd4 // fixext 1
-					target[position++] = 0x72 // "r" record defintion extension type
-					target[position++] = recordId
+					if (recordId >= 0x60 && useTwoByteRecordIds) {
+						target[position++] = 0xd5 // fixext 2
+						target[position++] = 0x72 // "r" record defintion extension type
+						target[position++] = ((recordId -= 0x40) >> 8) + 0x60
+						target[position++] = recordId & 0xff
+					} else {
+						target[position++] = 0xd4 // fixext 1
+						target[position++] = 0x72 // "r" record defintion extension type
+						target[position++] = recordId
+					}
+
 					if (newTransitions)
 						transitionsCount += serializationsSinceTransitionRebuild * newTransitions
 					// record the removal of the id, we can maintain our shared structure
-					if (recordIdsToRemove.length >= 0x40 - maxSharedStructures)
+					if (recordIdsToRemove.length >= maxOwnStructures)
 						recordIdsToRemove.shift()[RECORD_SYMBOL] = 0 // we are cycling back through, and have to remove old ones
 					recordIdsToRemove.push(transition)
 					pack(keys)
 				}
 			}
 			// now write the values
-			for (let i =0, l = keys.length; i < l; i++)
+			for (let i = 0, l = keys.length; i < l; i++)
 				pack(object[keys[i]])
 		}
 		const makeRoom = (end) => {
