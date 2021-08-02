@@ -36,18 +36,27 @@ export class Packr extends Unpackr {
 		if (!options)
 			options = {}
 		let isSequential = options && options.sequential
-		let maxSharedStructures = options.maxSharedStructures ?? (isSequential ? 0 : 32)
-		let maxOwnStructures = options.maxOwnStructures ?? (isSequential ? 64 : 32)
+		let hasSharedStructures = options.structures || options.saveStructures
+		let maxSharedStructures = options.maxSharedStructures ?? (hasSharedStructures ? 32 : 0)
+		let maxOwnStructures = options.maxOwnStructures ?? (hasSharedStructures ? 32 : 64)
 		if (isSequential && !options.saveStructures)
 			this.structures = []
-		let maxStructureId = maxSharedStructures + maxOwnStructures + 0x40;
+		let sharedLimitId, maxStructureId
+		if (maxSharedStructures > 32) {
+			// two byte record ids for shared structures
+			sharedLimitId = maxSharedStructures + 0x5fe0
+			maxStructureId = ((sharedLimitId + 0xff) & 0xfff00) + maxOwnStructures
+		} else {
+			// one byte record ids for shared structures
+			sharedLimitId = maxSharedStructures + 0x40
+			maxStructureId = ((maxOwnStructures + maxSharedStructures) > 64 ? 0x5fe0 : 0x40) + maxSharedStructures + maxOwnStructures;
+		}
 		let recordIdsToRemove = []
 		let transitionsCount = 0
 		let serializationsSinceTransitionRebuild = 0
 		if (this.structures && this.structures.length > maxSharedStructures) {
 			maxSharedStructures = this.structures.length
 		}
-		let useTwoByteRecordIds = maxSharedStructures > 32 || maxOwnStructures > 32
 
 		this.pack = this.encode = function(value) {
 			if (!target) {
@@ -69,33 +78,42 @@ export class Packr extends Unpackr {
 			sharedStructures = packr.structures
 			if (sharedStructures) {
 				if (sharedStructures.uninitialized)
-					packr.structures = sharedStructures = packr.getStructures() || []
-				let sharedStructuresLength = sharedStructures.length
-				if (sharedStructuresLength >  maxSharedStructures && !isSequential)
-					sharedStructuresLength = maxSharedStructures
-				sharedStructures.sharedLength = maxSharedStructures
+					sharedStructures = packr._mergeStructures(packr.getStructures())
+				let sharedLength = sharedStructures.sharedLength
+				if (sharedLength > maxSharedStructures) {
+					//if (maxSharedStructures <= 32 && sharedStructures.sharedLength > 32) // TODO: could support this, but would need to update the limit ids
+					throw new Error('Shared structures is larger than maximum shared structures, try increasing maxSharedStructures to ' + sharedStructures.sharedLength)
+				}
 				if (!sharedStructures.transitions) {
 					// rebuild our structure transitions
 					sharedStructures.transitions = Object.create(null)
-					for (let i = 0; i < sharedStructuresLength; i++) {
-						let keys = sharedStructures[i]
-						if (!keys)
-							continue
-						let nextTransition, transition = sharedStructures.transitions
-						for (let i =0, l = keys.length; i < l; i++) {
-							let key = keys[i]
-							nextTransition = transition[key]
-							if (!nextTransition) {
-								nextTransition = transition[key] = Object.create(null)
+					for (let i = 0; i < sharedLength; i++) {
+						let structures = sharedStructures[i]
+						if (i < 32)
+							structures = [structures]
+						for (let j = 0, l = structures.length; j < l; j++) {
+							let keys = structures[j]
+							if (!keys)
+								continue
+							let nextTransition, transition = sharedStructures.transitions
+							for (let i =0, l = keys.length; i < l; i++) {
+								let key = keys[i]
+								nextTransition = transition[key]
+								if (!nextTransition) {
+									nextTransition = transition[key] = Object.create(null)
+								}
+								transition = nextTransition
 							}
-							transition = nextTransition
+							transition[RECORD_SYMBOL] = i < 32 ? i + 0x40 : (((i + 0x40) << 8) + j)
 						}
-						transition[RECORD_SYMBOL] = i + 0x40
 					}
 					lastSharedStructuresLength = sharedStructures.length
 				}
-				if (!isSequential)
-					sharedStructures.nextId = sharedStructuresLength + 0x40
+				if (!isSequential) {
+					sharedStructures.nextId = sharedLength > 32 ?
+						sharedStructures[sharedLength - 1].length + ((sharedLength + 0x3f) << 8) :
+						sharedLength + 0x40
+				}
 			}
 			if (hasSharedUpdate)
 				hasSharedUpdate = false
@@ -507,8 +525,8 @@ export class Packr extends Unpackr {
 			}
 			let recordId = transition[RECORD_SYMBOL]
 			if (recordId) {
-				if (recordId >= 0x60 && useTwoByteRecordIds) {
-					target[position++] = ((recordId -= 0x40) >> 8) + 0x60
+				if (recordId >= 0x6000) {
+					target[position++] = recordId >> 8
 					target[position++] = recordId & 0xff
 				} else
 					target[position++] = recordId
@@ -518,23 +536,32 @@ export class Packr extends Unpackr {
 					recordId = 0x40
 					structures.nextId = 0x41
 				}
-				if (recordId >= maxStructureId) {// cycle back around
-					structures.nextId = (recordId = maxSharedStructures + 0x40) + 1
+				else {
+					if (recordId == 0x60 && maxStructureId >= 0x6000) // using two-byte record ids
+						structures.nextId = (recordId = 0x6000) + 1
+					else if (recordId === sharedLimitId ||// make sure we move to the next whole block of structures (next parent structure)
+							recordId >= maxStructureId)// cycle back around
+						structures.nextId = (recordId = sharedLimitId > 0x6000 ? (sharedLimitId + 0xff) & 0xfff00 : sharedLimitId) + 1
 				}
 				transition[RECORD_SYMBOL] = recordId
-				structures[recordId - 0x40] = keys
-				if (sharedStructures && sharedStructures.length <= maxSharedStructures) {
-					if (recordId >= 0x60 && useTwoByteRecordIds) {
-						target[position++] = ((recordId -= 0x40) >> 8) + 0x60
+				if (recordId >= 0x6000) {
+					let parentId = (recordId >> 8) - 0x40;
+					(structures[parentId] || (structures[parentId] = []))[recordId & 0xff] = keys
+				}
+				else
+					structures[recordId - 0x40] = keys
+				if (recordId < sharedLimitId) {
+					if (recordId >= 0x6000) {
+						target[position++] = recordId >> 8
 						target[position++] = recordId & 0xff
 					} else
 						target[position++] = recordId
 					hasSharedUpdate = true
 				} else {
-					if (recordId >= 0x60 && useTwoByteRecordIds) {
+					if (recordId >= 0x6000) {
 						target[position++] = 0xd5 // fixext 2
 						target[position++] = 0x72 // "r" record defintion extension type
-						target[position++] = ((recordId -= 0x40) >> 8) + 0x60
+						target[position++] = recordId >> 8
 						target[position++] = recordId & 0xff
 					} else {
 						target[position++] = 0xd4 // fixext 1

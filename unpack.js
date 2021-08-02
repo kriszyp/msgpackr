@@ -64,6 +64,7 @@ export class Unpackr {
 			currentUnpackr = this
 			if (this.structures) {
 				currentStructures = this.structures
+				currentStructures.length = this.structures.sharedLength || (this.structures.sharedLength = this.structures.length) 
 				return checkedRead()
 			} else if (!currentStructures || currentStructures.length > 0) {
 				currentStructures = []
@@ -107,6 +108,23 @@ export class Unpackr {
 			clearSource()
 		}
 	}
+	_mergeStructures(loadedStructures, existingStructures) {
+		loadedStructures = loadedStructures || []
+		for (let i = 0, l = loadedStructures.length; i < l; i++) {
+			let structure = loadedStructures[i]
+			structure.isShared = true
+			//if (structures[0])
+		}
+		loadedStructures.sharedLength = loadedStructures.length
+		for (let id in existingStructures || []) {
+			let structure = loadedStructures[id]
+			if (structure) {
+				(loadedStructures.restoreStructures || (loadedStructures.restoreStructures = []))[id] = structure
+				loadedStructures[id] = existingStructures[id]
+			}
+		}
+		return this.structures = loadedStructures
+	}
 	decode(source, end) {
 		return this.unpack(source, end)
 	}
@@ -116,6 +134,11 @@ export function getPosition() {
 }
 export function checkedRead() {
 	try {
+		if (!currentUnpackr.trusted) {
+			let sharedLength = currentStructures.sharedLength || 0
+			if (sharedLength < currentStructures.length)
+				currentStructures.length = sharedLength
+		}
 		let result = read()
 		if (position == srcEnd) {
 			// finished reading this source, cleanup references
@@ -161,24 +184,20 @@ export function read() {
 				let structure = currentStructures[token & 0x3f]
 				if (structure) {
 					if (!structure.read) {
-						structure.read = token < 0x60 ? createStructureReader(structure) : createParentReader(token)
+						structure.read = createStructureReader(structure)
 					}
 					return structure.read()
 				} else if (currentUnpackr.getStructures) {
-					let updatedStructures = saveState(() => {
+					let loadedStructures = saveState(() => {
 						// save the state in case getStructures modifies our buffer
 						src = null
 						return currentUnpackr.getStructures()
 					})
-					if (currentStructures === true)
-						currentUnpackr.structures = currentStructures = updatedStructures
-					else
-						currentStructures.splice.apply(currentStructures, [0, updatedStructures.length].concat(updatedStructures))
-					currentStructures.sharedLength = updatedStructures.length
+					currentStructures = currentUnpackr._mergeStructures(loadedStructures, currentStructures)
 					structure = currentStructures[token & 0x3f]
 					if (structure) {
 						if (!structure.read)
-							structure.read = token < 0x60 ? createStructureReader(structure) : createParentReader(token)
+							structure.read = createStructureReader(structure)
 						return structure.read()
 					} else
 						return token
@@ -308,7 +327,7 @@ export function read() {
 				// fixext 1
 				value = src[position++]
 				if (value == 0x72) {
-					return recordDefinition(src[position++])
+					return recordDefinition(src[position++] & 0x3f)
 				} else {
 					let extension = currentExtensions[value]
 					if (extension) {
@@ -328,7 +347,7 @@ export function read() {
 				value = src[position]
 				if (value == 0x72) {
 					position++
-					return recordDefinition(src[position++], src[position++])
+					return recordDefinition(src[position++] & 0x3f, src[position++])
 				} else
 					return readExt(2)
 			case 0xd6:
@@ -398,6 +417,9 @@ export function read() {
 }
 const validName = /^[a-zA-Z_$][a-zA-Z\d_$]*$/
 function createStructureReader(structure) {
+	//if (structure.isTwoByte)
+	if (typeof structure[0] === 'object')
+		return createParentReader(structure)
 	function readObject() {
 		// This initial function is quick to instantiate, but runs slower. After several iterations pay the cost to build the faster function
 		if (readObject.count++ > 2) {
@@ -414,6 +436,16 @@ function createStructureReader(structure) {
 	readObject.count = 0
 	return readObject
 }
+
+const createParentReader = (parentStructure) => {
+	return function() {
+		let structure = parentStructure[src[position++]]
+		if (!structure.read)
+			structure.read = createStructureReader(structure)
+		return structure.read()
+	}
+}
+
 
 var readFixedString = readStringJS
 var readString8 = readStringJS
@@ -767,28 +799,24 @@ function readKey() {
 }
 
 // the registration of the record definition extension (as "r")
-const recordDefinition = (id, byte2) => {
+const recordDefinition = (id, childId) => {
 	var structure = read()
-	if (byte2 === undefined)
-		currentStructures[id & 0x3f] = structure
-	else {
-		if (!currentStructures[id & 0x3f])
-			currentStructures[id & 0x3f] = { read: createParentReader(id) }
-		id = ((id - 0x60) << 8) + byte2
-		if (id < currentStructures.sharedLength)
-			(currentStructures.restoreStructures || (currentStructures.restoreStructures = []))[id] = currentStructures[id]
+	if (childId === undefined)
 		currentStructures[id] = structure
+	else {
+		let parentStructure = currentStructures[id] 
+		if (parentStructure && parentStructure.isShared) {
+			(currentStructures.restoreStructures || (currentStructures.restoreStructures = []))[id] = currentStructures[id]
+			parentStructure = null
+		}
+		if (!parentStructure) {
+			currentStructures[id] = parentStructure = [[]] // initialize with at least the first entry as an array/object since we use that as the indicator of two-byte structures
+			parentStructure.read = createParentReader(id)
+		}
+		parentStructure[id] = structure
 	}
 	structure.read = createStructureReader(structure)
 	return structure.read()
-}
-const createParentReader = (id) => {
-	return function() {
-		let structure = currentStructures[src[position++] + ((id - 0x60) << 8)]
-		if (!structure.read)
-			structure.read = createStructureReader(structure)
-		return structure.read()
-	}
 }
 var glbl = typeof window == 'object' ? window : global
 currentExtensions[0] = () => {} // notepack defines extension 0 to mean undefined, so use that as the default here
