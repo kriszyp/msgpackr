@@ -335,7 +335,8 @@ suite('msgpackr basic tests', function(){
 			}
 		})
 		serialized = packr.pack(data)
-		assert.equal(savedStructures.length, 100)
+		assert.equal(savedStructures.sharedLength, 33)
+		assert.equal(savedStructures[32].length, 68)
 		deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized, data)
 	})
