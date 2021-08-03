@@ -312,9 +312,9 @@ suite('msgpackr basic tests', function(){
 				savedStructures = structures
 			}
 		})
-		var serialized = packr.pack(data)
+		var serializedWith32 = packr.pack(data)
 		assert.equal(savedStructures.length, 32)
-		var deserialized = packr.unpack(serialized)
+		var deserialized = packr.unpack(serializedWith32)
 		assert.deepEqual(deserialized, data)
 		structures = structures.slice(0, 32)
 		packr = new Packr({
@@ -324,7 +324,7 @@ suite('msgpackr basic tests', function(){
 				savedStructures = structures
 			}
 		})
-		deserialized = packr.unpack(serialized)
+		deserialized = packr.unpack(serializedWith32)
 		assert.deepEqual(deserialized, data)
 		structures = structures.slice(0, 32)
 		packr = new Packr({
@@ -334,11 +334,21 @@ suite('msgpackr basic tests', function(){
 				savedStructures = structures
 			}
 		})
-		serialized = packr.pack(data)
+		let serialized = packr.pack(data)
 		assert.equal(savedStructures.sharedLength, 33)
 		assert.equal(savedStructures[32].length, 68)
 		deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized, data)
+
+		deserialized = packr.unpack(serializedWith32)
+		assert.deepEqual(deserialized, data)
+		assert.equal(savedStructures.sharedLength, 33)
+		assert.equal(savedStructures[32].length, 68)
+
+		deserialized = packr.unpack(serialized)
+		assert.deepEqual(deserialized, data)
+		assert.equal(savedStructures.sharedLength, 33)
+		assert.equal(savedStructures[32].length, 68)
 	})
 
 	test('big buffer', function() {

@@ -544,20 +544,24 @@ export class Packr extends Unpackr {
 						structures.nextId = (recordId = sharedLimitId > 0x6000 ? (sharedLimitId + 0xff) & 0xfff00 : sharedLimitId) + 1
 				}
 				transition[RECORD_SYMBOL] = recordId
+				let parentStructure
 				if (recordId >= 0x6000) {
-					let parentId = (recordId >> 8) - 0x40;
-					(structures[parentId] || (structures[parentId] = []))[recordId & 0xff] = keys
+					let parentId = (recordId >> 8) - 0x40
+					parentStructure = structures[parentId] || (structures[parentId] = [])
+					parentStructure[recordId & 0xff] = keys
 				}
 				else
 					structures[recordId - 0x40] = keys
 				if (recordId < sharedLimitId) {
 					if (recordId >= 0x6000) {
-						structures.sharedLength = (recordId >> 8) - 0x3f
+						parentStructure.isShared = true
 						target[position++] = recordId >> 8
 						target[position++] = recordId & 0xff
+						structures.sharedLength = (recordId >> 8) - 0x3f
 					} else {
-						structures.sharedLength = recordId - 0x3f
+						keys.isShared = true
 						target[position++] = recordId
+						structures.sharedLength = recordId - 0x3f
 					}
 					hasSharedUpdate = true
 				} else {

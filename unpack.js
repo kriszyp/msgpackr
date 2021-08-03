@@ -801,19 +801,19 @@ function readKey() {
 // the registration of the record definition extension (as "r")
 const recordDefinition = (id, childId) => {
 	var structure = read()
-	if (childId === undefined)
+	let existingStructure = currentStructures[id]
+	if (existingStructure && existingStructure.isShared) {
+		(currentStructures.restoreStructures || (currentStructures.restoreStructures = []))[id] = existingStructure
+		existingStructure = null
+	}
+	if (childId === undefined) {
 		currentStructures[id] = structure
-	else {
-		let parentStructure = currentStructures[id] 
-		if (parentStructure && parentStructure.isShared) {
-			(currentStructures.restoreStructures || (currentStructures.restoreStructures = []))[id] = currentStructures[id]
-			parentStructure = null
+	} else {
+		if (!existingStructure) {
+			currentStructures[id] = existingStructure = []
+			existingStructure.read = createParentReader(id)
 		}
-		if (!parentStructure) {
-			currentStructures[id] = parentStructure = [[]] // initialize with at least the first entry as an array/object since we use that as the indicator of two-byte structures
-			parentStructure.read = createParentReader(id)
-		}
-		parentStructure[id] = structure
+		existingStructure[id] = structure
 	}
 	structure.read = createStructureReader(structure)
 	return structure.read()
