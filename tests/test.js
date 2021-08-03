@@ -1,6 +1,6 @@
 import * as msgpackr from '../index.js'
 import chai from 'chai'
-import inspector  from 'inspector'; inspector.open(9330, null, true); debugger
+//import inspector  from 'inspector'; inspector.open(9330, null, true); debugger
 import sampleData from './example4.json'
 function tryRequire(module) {
 	try {
@@ -299,7 +299,7 @@ suite('msgpackr basic tests', function(){
 		assert.deepEqual(deserialized, data)
 	})
 
-	test.only('many shared structures', function() {
+	test('many shared structures', function() {
 		let data = []
 		for (let i = 0; i < 200; i++) {
 			data.push({['a' + i]: i})

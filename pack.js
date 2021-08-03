@@ -552,10 +552,13 @@ export class Packr extends Unpackr {
 					structures[recordId - 0x40] = keys
 				if (recordId < sharedLimitId) {
 					if (recordId >= 0x6000) {
+						structures.sharedLength = (recordId >> 8) - 0x3f
 						target[position++] = recordId >> 8
 						target[position++] = recordId & 0xff
-					} else
+					} else {
+						structures.sharedLength = recordId - 0x3f
 						target[position++] = recordId
+					}
 					hasSharedUpdate = true
 				} else {
 					if (recordId >= 0x6000) {
