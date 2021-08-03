@@ -117,10 +117,12 @@ export class Unpackr {
 		}
 		loadedStructures.sharedLength = loadedStructures.length
 		for (let id in existingStructures || []) {
-			let structure = loadedStructures[id]
-			if (structure) {
-				(loadedStructures.restoreStructures || (loadedStructures.restoreStructures = []))[id] = structure
-				loadedStructures[id] = existingStructures[id]
+			if (typeof id == 'number') {
+				let structure = loadedStructures[id]
+				if (structure) {
+					(loadedStructures.restoreStructures || (loadedStructures.restoreStructures = []))[id] = structure
+					loadedStructures[id] = existingStructures[id]
+				}
 			}
 		}
 		return this.structures = loadedStructures
@@ -142,7 +144,8 @@ export function checkedRead() {
 		let result = read()
 		if (position == srcEnd) {
 			// finished reading this source, cleanup references
-			if (currentStructures.restoreStructures) restoreStructures()
+			if (currentStructures.restoreStructures)
+				restoreStructures()
 			currentStructures = null
 			src = null
 			if (referenceMap)
@@ -158,7 +161,8 @@ export function checkedRead() {
 		// else more to read, but we are reading sequentially, so don't clear source yet
 		return result
 	} catch(error) {
-		if (currentStructures.restoreStructures) restoreStructures()
+		if (currentStructures.restoreStructures)
+			restoreStructures()
 		clearSource()
 		if (error instanceof RangeError || error.message.startsWith('Unexpected end of buffer')) {
 			error.incomplete = true
@@ -810,10 +814,10 @@ const recordDefinition = (id, childId) => {
 		currentStructures[id] = structure
 	} else {
 		if (!existingStructure) {
-			currentStructures[id] = existingStructure = []
-			existingStructure.read = createParentReader(id)
+			currentStructures[id] = existingStructure = [[]] // array inside of array is used as indicator of a two-byte record
+			existingStructure.read = createParentReader(existingStructure)
 		}
-		existingStructure[id] = structure
+		existingStructure[childId] = structure
 	}
 	structure.read = createStructureReader(structure)
 	return structure.read()

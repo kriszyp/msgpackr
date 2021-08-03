@@ -531,27 +531,33 @@ export class Packr extends Unpackr {
 				} else
 					target[position++] = recordId
 			} else {
-				recordId = structures.nextId++
-				if (!recordId) {
+				recordId = structures.nextId
+				if (!recordId)
 					recordId = 0x40
-					structures.nextId = 0x41
-				}
-				else {
+				if (recordId < sharedLimitId && this.shouldShareStructure && !this.shouldShareStructure(keys)) {
+					recordId = structures.nextOwnId
+					if (!(recordId < maxStructureId))
+						recordId = sharedLimitId > 0x6000 ? (sharedLimitId + 0xff) & 0xfff00 : sharedLimitId
+					structures.nextOwnId = recordId + 1
+				} else {
 					if (recordId == 0x60 && maxStructureId >= 0x6000) // using two-byte record ids
-						structures.nextId = (recordId = 0x6000) + 1
+						recordId = 0x6000
 					else if (recordId === sharedLimitId ||// make sure we move to the next whole block of structures (next parent structure)
 							recordId >= maxStructureId)// cycle back around
-						structures.nextId = (recordId = sharedLimitId > 0x6000 ? (sharedLimitId + 0xff) & 0xfff00 : sharedLimitId) + 1
+						recordId = sharedLimitId > 0x6000 ? (sharedLimitId + 0xff) & 0xfff00 : sharedLimitId
+					structures.nextId = recordId + 1
 				}
 				transition[RECORD_SYMBOL] = recordId
 				let parentStructure
 				if (recordId >= 0x6000) {
 					let parentId = (recordId >> 8) - 0x40
-					parentStructure = structures[parentId] || (structures[parentId] = [])
+					parentStructure = structures[parentId];
+					if (!parentStructure || (!parentStructure.isShared && recordId < sharedLimitId))
+						structures[parentId] = parentStructure = []
 					parentStructure[recordId & 0xff] = keys
-				}
-				else
+				} else
 					structures[recordId - 0x40] = keys
+
 				if (recordId < sharedLimitId) {
 					if (recordId >= 0x6000) {
 						parentStructure.isShared = true
