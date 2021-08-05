@@ -64,7 +64,6 @@ export class Unpackr {
 			currentUnpackr = this
 			if (this.structures) {
 				currentStructures = this.structures
-				currentStructures.length = this.structures.sharedLength || (this.structures.sharedLength = this.structures.length) 
 				return checkedRead()
 			} else if (!currentStructures || currentStructures.length > 0) {
 				currentStructures = []

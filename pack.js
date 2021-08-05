@@ -70,7 +70,7 @@ export class Packr extends Unpackr {
 			if (sharedStructures) {
 				if (sharedStructures.uninitialized)
 					sharedStructures = packr._mergeStructures(packr.getStructures())
-				let sharedLength = sharedStructures.sharedLength
+				let sharedLength = sharedStructures.sharedLength || 0
 				if (sharedLength > maxSharedStructures) {
 					//if (maxSharedStructures <= 32 && sharedStructures.sharedLength > 32) // TODO: could support this, but would need to update the limit ids
 					throw new Error('Shared structures is larger than maximum shared structures, try increasing maxSharedStructures to ' + sharedStructures.sharedLength)
@@ -98,7 +98,7 @@ export class Packr extends Unpackr {
 							transition[RECORD_SYMBOL] = i < 32 ? i + 0x40 : (((i + 0x40) << 8) + j)
 						}
 					}
-					lastSharedStructuresLength = sharedStructures.length
+					lastSharedStructuresLength = sharedLength
 				}
 				if (!isSequential) {
 					sharedStructures.nextId = sharedLength + 0x40
@@ -138,16 +138,17 @@ export class Packr extends Unpackr {
 						recordIdsToRemove = []
 					}
 					if (hasSharedUpdate && packr.saveStructures) {
-						if (packr.structures.length > maxSharedStructures) {
-							packr.structures = packr.structures.slice(0, maxSharedStructures)
+						let sharedLength = sharedStructures.sharedLength || maxSharedStructures
+						if (sharedStructures.length > sharedLength) {
+							sharedStructures = sharedStructures.slice(0, sharedLength)
 						}
 
-						if (packr.saveStructures(packr.structures, lastSharedStructuresLength) === false) {
+						if (packr.saveStructures(sharedStructures, lastSharedStructuresLength) === false) {
 							// get updated structures and try again if the update failed
 							packr.structures = packr.getStructures() || []
 							return packr.pack(value)
 						}
-						lastSharedStructuresLength = packr.structures.length
+						lastSharedStructuresLength = sharedLength
 					}
 				}
 			}
