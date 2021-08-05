@@ -122,7 +122,18 @@ let packr = new Packr({
 	}
 });
 ```
-Msgpackr will automatically add and saves structures as it encounters any new object structures (up to a limit of 32). It will always add structures in an incremental/compatible way: Any object encoded with an earlier structure can be decoded with a later version (as long as it is persisted).
+Msgpackr will automatically add and saves structures as it encounters any new object structures (up to a limit of 32, by default). It will always add structures in an incremental/compatible way: Any object encoded with an earlier structure can be decoded with a later version (as long as it is persisted).
+
+#### Shared Structures Options
+By default there is a limit of 32 shared structures. This default is designed to record common shared structures, but also be resilient against sharing too many structures if there are many objects with dynamic properties that are likely to be repeated. This also allows for slightly more efficient one byte encoding. However, if your application has more structures that are commonly repeated, you can increase this limit by setting `maxSharedStructures` to a higher value. The maximum supported shared structures is 8160.
+
+You can also provide a `shouldShareStructure` function in the options if you want to specifically indicate which structures should be shared. This is called during the encoding process with the array of keys for a structure that is being considered for addition to the shared structure. For example, you might want:
+```
+	maxSharedStructures: 100,
+	shouldShareStructure(keys) {
+		return !(keys[0] > 1) // don't share structures that consist of numbers as keys
+	}
+```
 
 ### Reading Multiple Values
 If you have a buffer with multiple values sequentially encoded, you can choose to parse and read multiple values. This can be done using the `unpackMultiple` function/method, which can return an array of all the values it can sequentially parse within the provided buffer. For example:

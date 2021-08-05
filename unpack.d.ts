@@ -16,6 +16,9 @@ export interface Options {
 	useTimestamp32?: boolean
 	largeBigIntToFloat?: boolean
 	encodeUndefinedAsNil?: boolean
+	maxSharedStructures?: number
+	maxOwnStructures?: number
+	shouldShareStructure?: (keys: string[]) => boolean
 	getStructures?(): {}[]
 	saveStructures?(structures: {}[]): boolean | void
 }
