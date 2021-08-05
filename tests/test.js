@@ -335,20 +335,17 @@ suite('msgpackr basic tests', function(){
 			}
 		})
 		let serialized = packr.pack(data)
-		assert.equal(savedStructures.sharedLength, 33)
-		assert.equal(savedStructures[32].length, 68)
+		assert.equal(savedStructures.length, 100)
 		deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized, data)
 
 		deserialized = packr.unpack(serializedWith32)
 		assert.deepEqual(deserialized, data)
-		assert.equal(savedStructures.sharedLength, 33)
-		assert.equal(savedStructures[32].length, 68)
+		assert.equal(savedStructures.length, 100)
 
 		deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized, data)
-		assert.equal(savedStructures.sharedLength, 33)
-		assert.equal(savedStructures[32].length, 68)
+		assert.equal(savedStructures.sharedLength, 100)
 	})
 
 	test('big buffer', function() {

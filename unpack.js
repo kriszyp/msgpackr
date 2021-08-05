@@ -112,8 +112,11 @@ export class Unpackr {
 		loadedStructures = loadedStructures || []
 		for (let i = 0, l = loadedStructures.length; i < l; i++) {
 			let structure = loadedStructures[i]
-			structure.isShared = true
-			//if (structures[0])
+			if (structure) {
+				structure.isShared = true
+				if (i >= 32)
+					structure.highByte = i >> 5
+			}
 		}
 		loadedStructures.sharedLength = loadedStructures.length
 		for (let id in existingStructures || []) {
@@ -188,7 +191,7 @@ export function read() {
 				let structure = currentStructures[token & 0x3f]
 				if (structure) {
 					if (!structure.read) {
-						structure.read = createStructureReader(structure)
+						structure.read = createStructureReader(structure, token & 0x3f)
 					}
 					return structure.read()
 				} else if (currentUnpackr.getStructures) {
@@ -201,7 +204,7 @@ export function read() {
 					structure = currentStructures[token & 0x3f]
 					if (structure) {
 						if (!structure.read)
-							structure.read = createStructureReader(structure)
+							structure.read = createStructureReader(structure, token & 0x3f)
 						return structure.read()
 					} else
 						return token
@@ -420,14 +423,13 @@ export function read() {
 	}
 }
 const validName = /^[a-zA-Z_$][a-zA-Z\d_$]*$/
-function createStructureReader(structure) {
-	//if (structure.isTwoByte)
-	if (typeof structure[0] === 'object')
-		return createParentReader(structure)
+function createStructureReader(structure, firstId) {
 	function readObject() {
 		// This initial function is quick to instantiate, but runs slower. After several iterations pay the cost to build the faster function
 		if (readObject.count++ > 2) {
 			this.read = (new Function('r', 'return function(){return {' + structure.map(key => validName.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '}}'))(read)
+			if (structure.highByte === 0)
+				this.read = createSecondByteReader(firstId, this.read)
 			return this.read()
 		}
 		let object = {}
@@ -438,18 +440,24 @@ function createStructureReader(structure) {
 		return object
 	}
 	readObject.count = 0
+	if (structure.highByte === 0) {
+		return createSecondByteReader(firstId, readObject)
+	}
 	return readObject
 }
 
-const createParentReader = (parentStructure) => {
+const createSecondByteReader = (firstId, read0) => {
 	return function() {
-		let structure = parentStructure[src[position++]]
+		let highByte = src[position++]
+		if (highByte === 0)
+			return read0()
+		let structure = currentStructures[firstId < 32 ?
+			-(firstId + (highByte << 5)) : firstId + (highByte << 5)]
 		if (!structure.read)
-			structure.read = createStructureReader(structure)
+			structure.read = createStructureReader(structure, firstId)
 		return structure.read()
 	}
 }
-
 
 var readFixedString = readStringJS
 var readString8 = readStringJS
@@ -803,23 +811,19 @@ function readKey() {
 }
 
 // the registration of the record definition extension (as "r")
-const recordDefinition = (id, childId) => {
+const recordDefinition = (id, highByte) => {
 	var structure = read()
+	let firstByte = id
+	if (highByte !== undefined) {
+		id = id < 32 ? -((highByte << 5) + id) : ((highByte << 5) + id)
+		structure.highByte = highByte
+	}
 	let existingStructure = currentStructures[id]
 	if (existingStructure && existingStructure.isShared) {
 		(currentStructures.restoreStructures || (currentStructures.restoreStructures = []))[id] = existingStructure
-		existingStructure = null
 	}
-	if (childId === undefined) {
-		currentStructures[id] = structure
-	} else {
-		if (!existingStructure) {
-			currentStructures[id] = existingStructure = [[]] // array inside of array is used as indicator of a two-byte record
-			existingStructure.read = createParentReader(existingStructure)
-		}
-		existingStructure[childId] = structure
-	}
-	structure.read = createStructureReader(structure)
+	currentStructures[id] = structure
+	structure.read = createStructureReader(structure, firstByte)
 	return structure.read()
 }
 var glbl = typeof window == 'object' ? window : global
