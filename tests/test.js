@@ -345,7 +345,7 @@ suite('msgpackr basic tests', function(){
 
 		deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized, data)
-		assert.equal(savedStructures.sharedLength, 100)
+		assert.equal(packr.structures.sharedLength, 100)
 	})
 
 	test('big buffer', function() {

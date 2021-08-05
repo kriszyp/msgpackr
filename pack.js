@@ -38,6 +38,8 @@ export class Packr extends Unpackr {
 		let isSequential = options && options.sequential
 		let hasSharedStructures = options.structures || options.saveStructures
 		let maxSharedStructures = options.maxSharedStructures ?? (hasSharedStructures ? 32 : 0)
+		if (maxSharedStructures > 8160)
+			throw new Error('Maximum maxSharedStructure is 8160')
 		let maxOwnStructures = options.maxOwnStructures ?? (hasSharedStructures ? 32 : 64)
 		if (isSequential && !options.saveStructures)
 			this.structures = []
@@ -45,6 +47,9 @@ export class Packr extends Unpackr {
 		let useTwoByteRecords = maxSharedStructures > 32 || (maxOwnStructures + maxSharedStructures > 64)		
 		let sharedLimitId = maxSharedStructures + 0x40
 		let maxStructureId = maxSharedStructures + maxOwnStructures + 0x40
+		if (maxStructureId > 8256) {
+			throw new Error('Maximum maxSharedStructure + maxOwnStructure is 8192')
+		}
 		let recordIdsToRemove = []
 		let transitionsCount = 0
 		let serializationsSinceTransitionRebuild = 0

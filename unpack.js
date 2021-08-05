@@ -33,7 +33,7 @@ export class Unpackr {
 			if (options.useRecords === false && options.mapsAsObjects === undefined)
 				options.mapsAsObjects = true
 			if (options.structures)
-				options.structures.sharedLength = options.length
+				options.structures.sharedLength = options.structures.length
 			else if (options.getStructures) {
 				(options.structures = []).uninitialized = true // this is what we use to denote an uninitialized structures
 				options.structures.sharedLength = 0
@@ -138,7 +138,7 @@ export function getPosition() {
 }
 export function checkedRead() {
 	try {
-		if (!currentUnpackr.trusted) {
+		if (!currentUnpackr.trusted && !sequentialMode) {
 			let sharedLength = currentStructures.sharedLength || 0
 			if (sharedLength < currentStructures.length)
 				currentStructures.length = sharedLength
