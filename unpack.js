@@ -426,10 +426,10 @@ function createStructureReader(structure, firstId) {
 	function readObject() {
 		// This initial function is quick to instantiate, but runs slower. After several iterations pay the cost to build the faster function
 		if (readObject.count++ > 2) {
-			this.read = (new Function('r', 'return function(){return {' + structure.map(key => validName.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '}}'))(read)
+			let readObject = structure.read = (new Function('r', 'return function(){return {' + structure.map(key => validName.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '}}'))(read)
 			if (structure.highByte === 0)
-				this.read = createSecondByteReader(firstId, this.read)
-			return this.read()
+				structure.read = createSecondByteReader(firstId, structure.read)
+			return readObject() // second byte is already read, if there is one so immediately read object
 		}
 		let object = {}
 		for (let i = 0, l = structure.length; i < l; i++) {
@@ -452,6 +452,8 @@ const createSecondByteReader = (firstId, read0) => {
 			return read0()
 		let structure = currentStructures[firstId < 32 ?
 			-(firstId + (highByte << 5)) : firstId + (highByte << 5)]
+		if (!structure)
+			throw new Error('Record id is not defined ' + firstId.toString(16) + highByte.toString(16))
 		if (!structure.read)
 			structure.read = createStructureReader(structure, firstId)
 		return structure.read()
