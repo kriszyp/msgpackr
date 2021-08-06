@@ -114,7 +114,7 @@ export class Unpackr {
 			if (structure) {
 				structure.isShared = true
 				if (i >= 32)
-					structure.highByte = i >> 5
+					structure.highByte = (i - 32) >> 5
 			}
 		}
 		loadedStructures.sharedLength = loadedStructures.length
