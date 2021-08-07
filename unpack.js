@@ -119,11 +119,13 @@ export class Unpackr {
 		}
 		loadedStructures.sharedLength = loadedStructures.length
 		for (let id in existingStructures || []) {
-			if (typeof id == 'number') {
+			if (id >= 0) {
 				let structure = loadedStructures[id]
-				if (structure) {
-					(loadedStructures.restoreStructures || (loadedStructures.restoreStructures = []))[id] = structure
-					loadedStructures[id] = existingStructures[id]
+				let existing = existingStructures[id]
+				if (existing) {
+					if (structure)
+						(loadedStructures.restoreStructures || (loadedStructures.restoreStructures = []))[id] = structure
+					loadedStructures[id] = existing
 				}
 			}
 		}
@@ -915,6 +917,7 @@ function saveState(callback) {
 	// TODO: We may need to revisit this if we do more external calls to user code (since it could be slow)
 	let savedSrc = new Uint8Array(src.slice(0, srcEnd)) // we copy the data in case it changes while external data is processed
 	let savedStructures = currentStructures
+	let savedStructuresContents = currentStructures.slice(0, currentStructures.length)
 	let savedPackr = currentUnpackr
 	let savedSequentialMode = sequentialMode
 	let value = callback()
@@ -929,6 +932,7 @@ function saveState(callback) {
 	src = savedSrc
 	sequentialMode = savedSequentialMode
 	currentStructures = savedStructures
+	currentStructures.splice(0, currentStructures.length, ...savedStructuresContents)
 	currentUnpackr = savedPackr
 	dataView = new DataView(src.buffer, src.byteOffset, src.byteLength)
 	return value
