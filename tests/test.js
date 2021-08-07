@@ -347,6 +347,33 @@ suite('msgpackr basic tests', function(){
 		assert.deepEqual(deserialized, data)
 		assert.equal(packr.structures.sharedLength, 100)
 	})
+	test('more shared structures', function() {
+		const structures = []
+		for (let i = 0; i < 40; i++) {
+			structures.push(['a' + i])
+		}
+		const structures2 = [...structures]
+		const packr = new Packr({
+			getStructures() {
+				return structures
+			},
+			saveStructures(structures) {		  
+			},
+			maxSharedStructures: 100
+		})
+		const packr2 = new Packr({
+			getStructures() {
+				return structures2
+			},
+			saveStructures(structures) {		  
+			},
+			maxSharedStructures: 100
+		})
+		const inputData = {a35: 35}
+		const buffer = packr.pack(inputData)
+		const outputData = packr2.decode(buffer)
+		assert.deepEqual(inputData, outputData)
+	})
 
 	test('big buffer', function() {
 		var size = 100000000

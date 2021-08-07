@@ -84,24 +84,19 @@ export class Packr extends Unpackr {
 					// rebuild our structure transitions
 					sharedStructures.transitions = Object.create(null)
 					for (let i = 0; i < sharedLength; i++) {
-						let structures = sharedStructures[i]
-						if (i < 32)
-							structures = [structures]
-						for (let j = 0, l = structures.length; j < l; j++) {
-							let keys = structures[j]
-							if (!keys)
-								continue
-							let nextTransition, transition = sharedStructures.transitions
-							for (let k = 0, l = keys.length; k < l; k++) {
-								let key = keys[k]
-								nextTransition = transition[key]
-								if (!nextTransition) {
-									nextTransition = transition[key] = Object.create(null)
-								}
-								transition = nextTransition
+						let keys = sharedStructures[i]
+						if (!keys)
+							continue
+						let nextTransition, transition = sharedStructures.transitions
+						for (let j = 0, l = keys.length; j < l; j++) {
+							let key = keys[j]
+							nextTransition = transition[key]
+							if (!nextTransition) {
+								nextTransition = transition[key] = Object.create(null)
 							}
-							transition[RECORD_SYMBOL] = i < 32 ? i + 0x40 : (((i + 0x40) << 8) + j)
+							transition = nextTransition
 						}
+						transition[RECORD_SYMBOL] = i + 0x40
 					}
 					lastSharedStructuresLength = sharedLength
 				}
