@@ -145,7 +145,7 @@ export class Packr extends Unpackr {
 
 						if (packr.saveStructures(sharedStructures, lastSharedStructuresLength) === false) {
 							// get updated structures and try again if the update failed
-							packr.structures = packr.getStructures() || []
+							packr._mergeStructures(packr.getStructures())
 							return packr.pack(value)
 						}
 						lastSharedStructuresLength = sharedLength
