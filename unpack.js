@@ -826,7 +826,7 @@ const recordDefinition = (id, highByte) => {
 	structure.read = createStructureReader(structure, firstByte)
 	return structure.read()
 }
-var glbl = typeof window == 'object' ? window : global
+var glbl = typeof self == 'object' ? self : global
 currentExtensions[0] = () => {} // notepack defines extension 0 to mean undefined, so use that as the default here
 currentExtensions[0].noBuffer = true
 
