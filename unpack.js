@@ -189,26 +189,13 @@ export function read() {
 			if (token < 0x40)
 				return token
 			else {
-				let structure = currentStructures[token & 0x3f]
+				let structure = currentStructures[token & 0x3f] ||
+					currentUnpackr.getStructures && loadStructures()[token & 0x3f]
 				if (structure) {
 					if (!structure.read) {
 						structure.read = createStructureReader(structure, token & 0x3f)
 					}
 					return structure.read()
-				} else if (currentUnpackr.getStructures) {
-					let loadedStructures = saveState(() => {
-						// save the state in case getStructures modifies our buffer
-						src = null
-						return currentUnpackr.getStructures()
-					})
-					currentStructures = currentUnpackr._mergeStructures(loadedStructures, currentStructures)
-					structure = currentStructures[token & 0x3f]
-					if (structure) {
-						if (!structure.read)
-							structure.read = createStructureReader(structure, token & 0x3f)
-						return structure.read()
-					} else
-						return token
 				} else
 					return token
 			}
@@ -452,14 +439,24 @@ const createSecondByteReader = (firstId, read0) => {
 		let highByte = src[position++]
 		if (highByte === 0)
 			return read0()
-		let structure = currentStructures[firstId < 32 ?
-			-(firstId + (highByte << 5)) : firstId + (highByte << 5)]
-		if (!structure)
-			throw new Error('Record id is not defined ' + firstId.toString(16) + highByte.toString(16))
+		let id = firstId < 32 ? -(firstId + (highByte << 5)) : firstId + (highByte << 5)
+		let structure = currentStructures[id] || loadStructures()[id]
+		if (!structure) {
+			throw new Error('Record id is not defined for ' + id)
+		}
 		if (!structure.read)
 			structure.read = createStructureReader(structure, firstId)
 		return structure.read()
 	}
+}
+
+function loadStructures() {
+	let loadedStructures = saveState(() => {
+		// save the state in case getStructures modifies our buffer
+		src = null
+		return currentUnpackr.getStructures()
+	})
+	return currentStructures = currentUnpackr._mergeStructures(loadedStructures, currentStructures)
 }
 
 var readFixedString = readStringJS
