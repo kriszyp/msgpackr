@@ -37,10 +37,14 @@ export class Packr extends Unpackr {
 			options = {}
 		let isSequential = options && options.sequential
 		let hasSharedStructures = options.structures || options.saveStructures
-		let maxSharedStructures = options.maxSharedStructures ?? (hasSharedStructures ? 32 : 0)
+		let maxSharedStructures = options.maxSharedStructures
+		if (maxSharedStructures == null)
+			maxSharedStructures = hasSharedStructures ? 32 : 0
 		if (maxSharedStructures > 8160)
 			throw new Error('Maximum maxSharedStructure is 8160')
-		let maxOwnStructures = options.maxOwnStructures ?? (hasSharedStructures ? 32 : 64)
+		let maxOwnStructures = options.maxOwnStructures
+		if (maxOwnStructures == null)
+			maxOwnStructures = hasSharedStructures ? 32 : 64
 		if (isSequential && !options.saveStructures)
 			this.structures = []
 		// two byte record ids for shared structures
