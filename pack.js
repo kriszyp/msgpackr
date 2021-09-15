@@ -169,9 +169,9 @@ export class Packr extends Unpackr {
 				// first we estimate the header size, so we can write to the correct location
 				if (strLength < 0x20) {
 					headerSize = 1
-				} else if (strLength < 0x100) {
+				} else if (strLength < 0xff) {
 					headerSize = 2
-				} else if (strLength < 0x10000) {
+				} else if (strLength < 0xff00) {
 					headerSize = 3
 				} else {
 					headerSize = 5
