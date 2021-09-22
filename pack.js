@@ -273,7 +273,7 @@ export class Packr extends Unpackr {
 						targetView.setFloat32(position, value)
 						let xShifted
 						if (useFloat32 < 4 ||
-							// this checks for  rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
+								// this checks for rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
 								((xShifted = value * mult10[((target[position] & 0x7f) << 1) | (target[position + 1] >> 7)]) >> 0) === xShifted) {
 							position += 4
 							return

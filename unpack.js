@@ -964,3 +964,10 @@ export const FLOAT32_OPTIONS = {
 	DECIMAL_ROUND: 3,
 	DECIMAL_FIT: 4
 }
+let f32Array = new Float32Array(1)
+let u8Array = new Uint8Array(f32Array.buffer, 0, 4)
+export function roundFloat32(float32Number) {
+	f32Array[0] = float32Number
+	let multiplier = mult10[((u8Array[3] & 0x7f) << 1) | (u8Array[2] >> 7)]
+	return ((multiplier * float32Number + (float32Number > 0 ? 0.5 : -0.5)) >> 0) / multiplier
+}

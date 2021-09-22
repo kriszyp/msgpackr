@@ -15,6 +15,7 @@ var assert = chai.assert
 var Packr = msgpackr.Packr
 var unpack = msgpackr.unpack
 var unpackMultiple = msgpackr.unpackMultiple
+var roundFloat32 = msgpackr.roundFloat32
 var pack = msgpackr.pack
 var DECIMAL_FIT = msgpackr.FLOAT32_OPTIONS.DECIMAL_FIT
 
@@ -529,6 +530,11 @@ suite('msgpackr basic tests', function(){
 		serialized = packr.pack(tooBigInt)
 		deserialized = unpack(serialized)
 		assert.isTrue(deserialized.tooBig > 2n**65n)
+	})
+
+	test('roundFloat32', function() {
+		assert.equal(roundFloat32(0.00333000003), 0.00333)
+		assert.equal(roundFloat32(43.29999999993), 43.3)
 	})
 
 	test('buffers', function(){

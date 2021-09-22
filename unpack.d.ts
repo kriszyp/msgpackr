@@ -40,4 +40,5 @@ export function unpackMultiple(messagePack: Buffer | Uint8Array, forEach?: (valu
 export function decode(messagePack: Buffer | Uint8Array): any
 export function addExtension(extension: Extension): void
 export function clearSource(): void
+export function roundFloat32(float32Number: number): number
 export const C1: {}
