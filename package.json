@@ -5,6 +5,7 @@
   "description": "Ultra-fast MessagePack implementation with extensions for records and structured cloning",
   "license": "MIT",
   "types": "./index.d.ts",
+  "main": "./dist/index.js",
   "keywords": [
     "MessagePack",
     "msgpack",
@@ -19,6 +20,7 @@
   "scripts": {
     "benchmark": "node ./tests/benchmark.cjs",
     "build": "rollup -c",
+    "dry-run": "npm publish --dry-run",
     "prepare": "npm run build",
     "test": "mocha tests/test**.*js -u tdd --experimental-json-modules"
   },
