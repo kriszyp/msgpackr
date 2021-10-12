@@ -44,7 +44,7 @@ const addCompatibilitySuite = (data) => () => {
 		})
 	}
 	if (msgpack) {
-		test('from msgpack', function(){
+		test.skip('from msgpack', function(){
 			var serialized = msgpack.pack(data)
 			var deserialized = unpack(serialized)
 			assert.deepEqual(deserialized, data)
@@ -61,4 +61,4 @@ const addCompatibilitySuite = (data) => () => {
 suite('msgpackr compatibility tests (example)', addCompatibilitySuite(require('./example.json')))
 suite('msgpackr compatibility tests (example4)', addCompatibilitySuite(require('./example4.json')))
 suite('msgpackr compatibility tests (example5)', addCompatibilitySuite(require('./example5.json')))
-suite('msgpackr compatibility tests with dates', addCompatibilitySuite({ date: new Date() }))
+suite.skip('msgpackr compatibility tests with dates', addCompatibilitySuite({ date: new Date() }))
