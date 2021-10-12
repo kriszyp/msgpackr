@@ -1,11 +1,12 @@
 const data = require('./example4.json');
-const { pack, unpack } = require('msgpackr/pack');
+const { pack, unpack, Packr } = require('msgpackr/pack');
 const chai = require('chai');
 
 function tryRequire(module) {
 	try {
 		return require(module)
 	} catch(error) {
+		console.log(error)
 	}
 }
 //if (typeof chai === 'undefined') { chai = require('chai') }
@@ -13,6 +14,7 @@ const assert = chai.assert
 //if (typeof msgpackr === 'undefined') { msgpackr = require('..') }
 var msgpack_msgpack = tryRequire('@msgpack/msgpack');
 var msgpack_lite = tryRequire('msgpack-lite');
+var msgpack = tryRequire('msgpack');
 
 const addCompatibilitySuite = (data) => () => {
 	if (msgpack_msgpack) {
@@ -41,8 +43,22 @@ const addCompatibilitySuite = (data) => () => {
 			assert.deepEqual(deserialized, data)
 		})
 	}
+	if (msgpack) {
+		test('from msgpack', function(){
+			var serialized = msgpack.pack(data)
+			var deserialized = unpack(serialized)
+			assert.deepEqual(deserialized, data)
+		})
+
+		test('to msgpack', function(){
+			var serialized = pack(data)
+			var deserialized = msgpack.unpack(serialized)
+			assert.deepEqual(deserialized, data)
+		})
+	}
 }
 
 suite('msgpackr compatibility tests (example)', addCompatibilitySuite(require('./example.json')))
 suite('msgpackr compatibility tests (example4)', addCompatibilitySuite(require('./example4.json')))
 suite('msgpackr compatibility tests (example5)', addCompatibilitySuite(require('./example5.json')))
+suite('msgpackr compatibility tests with dates', addCompatibilitySuite({ date: new Date() }))
