@@ -58,7 +58,7 @@ export class Packr extends Unpackr {
 		let transitionsCount = 0
 		let serializationsSinceTransitionRebuild = 0
 
-		this.pack = this.encode = function(value) {
+		this.pack = this.encode = function(value, encodeOptions) {
 			if (!target) {
 				target = new ByteArrayAllocate(8192)
 				targetView = new DataView(target.buffer, 0, 8192)
@@ -123,6 +123,11 @@ export class Packr extends Unpackr {
 					referenceMap = null
 					return serialized
 				}
+				if (encodeOptions === REUSE_BUFFER_MODE) {
+					target.start = start
+					target.end = position
+					return target
+				}
 				return target.subarray(start, position) // position can change if we call pack again in saveStructures, so we get the buffer now
 			} finally {
 				if (sharedStructures) {
@@ -146,13 +151,15 @@ export class Packr extends Unpackr {
 						if (sharedStructures.length > sharedLength) {
 							sharedStructures = sharedStructures.slice(0, sharedLength)
 						}
-
+						// we can't rely on start/end with REUSE_BUFFER_MODE since they will (probably) change when we save
+						let returnBuffer = target.subarray(start, position)
 						if (packr.saveStructures(sharedStructures, lastSharedStructuresLength) === false) {
 							// get updated structures and try again if the update failed
 							packr._mergeStructures(packr.getStructures())
 							return packr.pack(value)
 						}
 						lastSharedStructuresLength = sharedLength
+						return returnBuffer
 					}
 				}
 			}
@@ -817,3 +824,4 @@ export const Encoder = Packr
 export { FLOAT32_OPTIONS } from './unpack.js'
 import { FLOAT32_OPTIONS } from './unpack.js'
 export const { NEVER, ALWAYS, DECIMAL_ROUND, DECIMAL_FIT } = FLOAT32_OPTIONS
+export const REUSE_BUFFER_MODE = 1000
