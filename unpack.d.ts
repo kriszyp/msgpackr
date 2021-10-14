@@ -25,8 +25,10 @@ export interface Options {
 interface Extension {
 	Class: Function
 	type: number
-	pack(value: any): Buffer | Uint8Array
-	unpack(messagePack: Buffer | Uint8Array): any
+	pack?(value: any): Buffer | Uint8Array
+	unpack?(messagePack: Buffer | Uint8Array): any	
+	read?(datum: any): any
+	write?(instance: any): any
 }
 export class Unpackr {
 	constructor(options?: Options)
