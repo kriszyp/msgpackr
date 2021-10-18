@@ -6,6 +6,7 @@
   "license": "MIT",
   "types": "./index.d.ts",
   "main": "./dist/node.cjs",
+  "module": "./index.js",
   "keywords": [
     "MessagePack",
     "msgpack",
