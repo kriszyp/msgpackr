@@ -5,7 +5,7 @@
   "description": "Ultra-fast MessagePack implementation with extensions for records and structured cloning",
   "license": "MIT",
   "types": "./index.d.ts",
-  "main": "./dist/index.js",
+  "main": "./dist/node.cjs",
   "keywords": [
     "MessagePack",
     "msgpack",
