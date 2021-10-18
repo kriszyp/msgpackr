@@ -1,8 +1,6 @@
 import minify from "rollup-plugin-babel-minify";
 import json  from "@rollup/plugin-json";
 
-import pkg from './package.json';
-
 export default [
     {
         input: "node-index.js",
@@ -10,10 +8,6 @@ export default [
             {
                 file: "dist/node.cjs",
                 format: "cjs"
-            },
-            {
-              file: pkg.module,
-              format: 'es'
             }
         ]
     },
