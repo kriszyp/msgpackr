@@ -1,6 +1,7 @@
 # msgpackr
 [![license](https://img.shields.io/badge/license-MIT-brightgreen)](LICENSE)
 [![npm version](https://img.shields.io/npm/v/msgpackr.svg?style=flat-square)](https://www.npmjs.org/package/msgpackr)
+[![npm version](https://img.shields.io/npm/dw/msgpackr)](https://www.npmjs.org/package/msgpackr)
 [![encode](https://img.shields.io/badge/encode-1.5GB%2Fs-yellow)](benchmark.md)
 [![decode](https://img.shields.io/badge/decode-2GB%2Fs-yellow)](benchmark.md)
 [![types](https://img.shields.io/npm/types/msgpackr)](README.md)
