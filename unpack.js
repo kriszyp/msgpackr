@@ -59,7 +59,15 @@ export class Unpackr {
 		// this provides cached access to the data view for a buffer if it is getting reused, which is a recommend
 		// technique for getting data from a database where it can be copied into an existing buffer instead of creating
 		// new ones
-		dataView = source.dataView || (source.dataView = new DataView(source.buffer, source.byteOffset, source.byteLength))
+		try {
+			dataView = source.dataView || (source.dataView = new DataView(source.buffer, source.byteOffset, source.byteLength))
+		} catch(error) {
+			// if it doesn't have a buffer, maybe it is the wrong type of object
+			src = null
+			if (source instanceof Uint8Array)
+				throw error
+			throw new Error('Source must be a Uint8Array or Buffer but was a ' + ((source && typeof source == 'object') ? source.constructor.name : typeof source))
+		}
 		if (this) {
 			currentUnpackr = this
 			if (this.structures) {
