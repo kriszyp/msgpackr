@@ -591,7 +591,7 @@ export class Packr extends Unpackr {
 				if ((end - start) > MAX_BUFFER_SIZE)
 					throw new Error('Packed buffer would be larger than maximum buffer size')
 				newSize = Math.min(MAX_BUFFER_SIZE,
-					Math.round(Math.max((end - start) * (end > 0x4000000 ? 1.25 : 2), 0x1000000) / 0x1000) * 0x1000)
+					Math.round(Math.max((end - start) * (end > 0x4000000 ? 1.25 : 2), 0x400000) / 0x1000) * 0x1000)
 			} else // faster handling for smaller buffers
 				newSize = ((Math.max((end - start) << 2, target.length - 1) >> 12) + 1) << 12
 			let newBuffer = new ByteArrayAllocate(newSize)
