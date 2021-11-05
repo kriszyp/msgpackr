@@ -44,3 +44,4 @@ export function addExtension(extension: Extension): void
 export function clearSource(): void
 export function roundFloat32(float32Number: number): number
 export const C1: {}
+export let isNativeAccelerationEnabled: boolean

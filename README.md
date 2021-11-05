@@ -184,6 +184,15 @@ Note, that the performance is decreased with decimal rounding by about 20-25%, a
 In addition, msgpackr exports a `roundFloat32(number)` function that can be used to round floating point numbers to the maximum significant decimal digits that can be stored in 32-bit float, just as DECIMAL_ROUND does when decoding. This can be useful for determining how a number will be decoded prior to encoding it.
 
 ## Performance
+### Native Acceleration
+Msgpackr employs an optional native node-addon to accelerate the parsing of strings. This should be automatically installed and utilized on NodeJS. However, you can verify this by checking the `isNativeAccelerationEnabled` property that is exported from msgpackr. If this is `false`, the `msgpackr-extract` package may not have been properly installed, and you may want to verify that it is installed correctly:
+```js
+import { isNativeAccelerationEnabled } from 'msgpackr'
+if (!isNativeAccelerationEnabled)
+	console.warn('Native acceleration not enabled, verify that install finished properly')
+```
+
+### Benchmarks
 Msgpackr is fast. Really fast. Here is comparison with the next fastest JS projects using the benchmark tool from `msgpack-lite` (and the sample data is from some clinical research data we use that has a good mix of different value types and structures). It also includes comparison to V8 native JSON functionality, and JavaScript Avro (`avsc`, a very optimized Avro implementation):
 
 operation                                                  |   op   |   ms  |  op/s

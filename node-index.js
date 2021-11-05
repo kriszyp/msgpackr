@@ -1,5 +1,5 @@
 export { Packr, Encoder, addExtension, pack, encode, NEVER, ALWAYS, DECIMAL_ROUND, DECIMAL_FIT } from './pack.js'
-export { Unpackr, Decoder, C1, unpack, unpackMultiple, decode, FLOAT32_OPTIONS, clearSource, roundFloat32 } from './unpack.js'
+export { Unpackr, Decoder, C1, unpack, unpackMultiple, decode, FLOAT32_OPTIONS, clearSource, roundFloat32, isNativeAccelerationEnabled } from './unpack.js'
 export { PackrStream, UnpackrStream, PackrStream as EncoderStream, UnpackrStream as DecoderStream } from './stream.js'
 export { decodeIter, encodeIter } from './iterators.js'
 export const useRecords = false
@@ -16,9 +16,7 @@ function tryRequire(moduleId) {
 		let require = createRequire(import.meta.url)
 		return require(moduleId)
 	} catch (error) {
-		if (typeof window == 'undefined')
-			console.warn('Native extraction module not loaded, msgpackr will still run, but with decreased performance. ' + error.message.split('\n')[0])
-		else
+		if (typeof window != 'undefined')
 			console.warn('For browser usage, directly use msgpackr/unpack or msgpackr/pack modules. ' + error.message.split('\n')[0])
 	}
 }

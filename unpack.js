@@ -471,8 +471,10 @@ var readFixedString = readStringJS
 var readString8 = readStringJS
 var readString16 = readStringJS
 var readString32 = readStringJS
+export let isNativeAccelerationEnabled = false
 
 export function setExtractor(extractStrings) {
+	isNativeAccelerationEnabled = true
 	readFixedString = readString(1)
 	readString8 = readString(2)
 	readString16 = readString(3)
