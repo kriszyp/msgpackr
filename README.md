@@ -167,6 +167,7 @@ The following options properties can be provided to the Packr or Unpackr constru
 * `sequential` - Encode structures in serialized data, and reference previously encoded structures with expectation that decoder will read the encoded structures in the same order as encoded, with `unpackMultiple`.
 * `largeBigIntToFloat` - If a bigint needs to be encoded that is larger than will fit in 64-bit integers, it will be encoded as a float-64 (otherwise will throw a RangeError).
 * `encodeUndefinedAsNil` - Encodes a value of `undefined` as a MessagePack `nil`, the same as a `null`.
+* `int64AsNumber` - This will decode uint64 and int64 numbers as standard JS numbers rather than as bigint numbers.
 
 ### 32-bit Float Options
 By default all non-integer numbers are serialized as 64-bit float (double). This is fast, and ensures maximum precision. However, often real-world data doesn't not need 64-bits of precision, and using 32-bit encoding can be much more space efficient. There are several options that provide more efficient encodings. Using the decimal rounding options for encoding and decoding provides lossless storage of common decimal representations like 7.99, in more efficient 32-bit format (rather than 64-bit). The `useFloat32` property has several possible options, available from the module as constants:
