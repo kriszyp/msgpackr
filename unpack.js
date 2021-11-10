@@ -68,7 +68,7 @@ export class Unpackr {
 				throw error
 			throw new Error('Source must be a Uint8Array or Buffer but was a ' + ((source && typeof source == 'object') ? source.constructor.name : typeof source))
 		}
-		if (this) {
+		if (this instanceof Unpackr) {
 			currentUnpackr = this
 			if (this.structures) {
 				currentStructures = this.structures
@@ -966,8 +966,6 @@ export const mult10 = new Array(147) // this is a table matching binary exponent
 for (let i = 0; i < 256; i++) {
 	mult10[i] = +('1e' + Math.floor(45.15 - i * 0.30103))
 }
-export const useRecords = false
-export const mapsAsObjects = true
 export const Decoder = Unpackr
 var defaultUnpackr = new Unpackr({ useRecords: false })
 export const unpack = defaultUnpackr.unpack
