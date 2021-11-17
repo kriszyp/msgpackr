@@ -622,7 +622,7 @@ function copyBinary(source, target, targetOffset, offset, endOffset) {
 
 extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/, C1Type ]
 extensions = [{
-	pack(date, allocateForWrite) {
+	pack(date, allocateForWrite, pack) {
 		let seconds = date.getTime() / 1000
 		if ((this.useTimestamp32 || date.getMilliseconds() === 0) && seconds >= 0 && seconds < 0x100000000) {
 			// Timestamp 32
@@ -637,6 +637,14 @@ extensions = [{
 			target[position++] = 0xff
 			targetView.setUint32(position, date.getMilliseconds() * 4000000 + ((seconds / 1000 / 0x100000000) >> 0))
 			targetView.setUint32(position + 4, seconds)
+		} else if (isNaN(seconds)) {
+			if (this.onInvalidDate)
+				return pack(this.onInvalidDate())
+			// Intentionally invalid timestamp
+			let { target, targetView, position} = allocateForWrite(3)
+			target[position++] = 0xd4
+			target[position++] = 0xff
+			target[position++] = 0xff
 		} else {
 			// Timestamp 96
 			let { target, targetView, position} = allocateForWrite(15)

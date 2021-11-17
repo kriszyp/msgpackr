@@ -416,6 +416,7 @@ suite('msgpackr basic tests', function(){
 			date: new Date(1532219539733),
 			farFutureDate: new Date(3532219539133),
 			ancient: new Date(-3532219539133),
+			invalidDate: new Date('invalid')
 		}
 		let packr = new Packr()
 		var serialized = packr.pack(data)
@@ -425,6 +426,7 @@ suite('msgpackr basic tests', function(){
 		assert.equal(deserialized.date.getTime(), 1532219539733)
 		assert.equal(deserialized.farFutureDate.getTime(), 3532219539133)
 		assert.equal(deserialized.ancient.getTime(), -3532219539133)
+		assert.equal(deserialized.invalidDate.toString(), 'Invalid Date')
 	})
 	test('map/date with options', function(){
 		var map = new Map()
