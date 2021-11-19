@@ -437,16 +437,19 @@ suite('msgpackr basic tests', function(){
 		var data = {
 			map: map,
 			date: new Date(1532219539011),
+			invalidDate: new Date('invalid')
 		}
 		let packr = new Packr({
 			mapsAsObjects: true,
 			useTimestamp32: true,
+			onInvalidDate: () => 'Custom invalid date'
 		})
 		var serialized = packr.pack(data)
 		var deserialized = packr.unpack(serialized)
 		assert.equal(deserialized.map[4], 'four')
 		assert.equal(deserialized.map.three, 3)
 		assert.equal(deserialized.date.getTime(), 1532219539000)
+		assert.equal(deserialized.invalidDate, 'Custom invalid date')
 	})
 	test('key caching', function() {
 		var data = {

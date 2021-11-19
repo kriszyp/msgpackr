@@ -21,6 +21,7 @@ export interface Options {
 	shouldShareStructure?: (keys: string[]) => boolean
 	getStructures?(): {}[]
 	saveStructures?(structures: {}[]): boolean | void
+	onInvalidDate?: () => any
 }
 interface Extension {
 	Class: Function
