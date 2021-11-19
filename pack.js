@@ -638,8 +638,10 @@ extensions = [{
 			targetView.setUint32(position, date.getMilliseconds() * 4000000 + ((seconds / 1000 / 0x100000000) >> 0))
 			targetView.setUint32(position + 4, seconds)
 		} else if (isNaN(seconds)) {
-			if (this.onInvalidDate)
+			if (this.onInvalidDate) {
+				allocateForWrite(0)
 				return pack(this.onInvalidDate())
+			}
 			// Intentionally invalid timestamp
 			let { target, targetView, position} = allocateForWrite(3)
 			target[position++] = 0xd4
