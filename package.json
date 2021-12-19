@@ -52,13 +52,8 @@
   "files": [
     "/dist",
     "*.md",
-    "unpack.*",
-    "pack.*",
-    "index.*",
-    "iterators.js",
-    "stream.js",
-    "browser.js",
-    "node-index.js"
+    "/*.js",
+    "/*.ts"
   ],
   "optionalDependencies": {
     "msgpackr-extract": "^1.0.14"
