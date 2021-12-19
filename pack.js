@@ -123,7 +123,7 @@ export class Packr extends Unpackr {
 					referenceMap = null
 					return serialized
 				}
-				if (encodeOptions === REUSE_BUFFER_MODE) {
+				if (encodeOptions & REUSE_BUFFER_MODE) {
 					target.start = start
 					target.end = position
 					return target
@@ -162,6 +162,8 @@ export class Packr extends Unpackr {
 						return returnBuffer
 					}
 				}
+				if (encodeOptions & RESET_BUFFER_MODE)
+					position = start
 			}
 		}
 		const pack = (value) => {
@@ -834,4 +836,5 @@ export const Encoder = Packr
 export { FLOAT32_OPTIONS } from './unpack.js'
 import { FLOAT32_OPTIONS } from './unpack.js'
 export const { NEVER, ALWAYS, DECIMAL_ROUND, DECIMAL_FIT } = FLOAT32_OPTIONS
-export const REUSE_BUFFER_MODE = 1000
+export const REUSE_BUFFER_MODE = 512
+export const RESET_BUFFER_MODE = 1024
