@@ -8,7 +8,7 @@
 [![license](https://img.shields.io/badge/license-MIT-brightgreen)](LICENSE)
 
 
-The msgpackr package is an extremely fast MessagePack NodeJS/JavaScript implementation. Currently, it is significantly faster than any other known implementations, faster than Avro (for JS), and generally faster than native V8 JSON.stringify/parse, on NodeJS. It also includes an optional record extension (the `r` in msgpackr), for defining record structures that makes MessagePack even faster and more compact, often over twice as fast as even native JSON functions, several times faster than other JS implementations, and 15-50% more compact. See the performance section for more details. Structured cloning (with support for cyclical references) is also supported through optional extensions.
+The msgpackr package is an extremely fast MessagePack NodeJS/JavaScript implementation. Currently, it is significantly faster than any other known implementations, faster than Avro (for JS), and generally faster than native V8 JSON.stringify/parse, on NodeJS. It also includes an optional record extension (the `r` in msgpackr), for defining record structures that makes MessagePack even faster and more compact, often over twice as fast as even native JSON functions, several times faster than other JS implementations, and 15-50% more compact. See the performance section for more details. Structured cloning (with support for cyclical references) is also supported through optional extensions.<img align="right" src="./assets/performance.png" width="380"/>
 
 ## Basic Usage
 
@@ -53,7 +53,7 @@ receivingStream.on('data', (data) => {
 The `PackrStream` and `UnpackrStream` instances  will have also the record structure extension enabled by default (see below).
 
 ## Deno Usage
-Msgpackr modules are standard ESM modules and can be loaded directly from github (https://raw.githubusercontent.com/kriszyp/msgpackr/master/index.js) or downloaded and used directly in Deno. The standard pack/encode and unpack/decode functionality is available on Deno, like other platforms.
+Msgpackr modules are standard ESM modules and can be loaded directly from the [deno.land registry for msgpackr](https://deno.land/x/msgpackr) for use in Deno. The standard pack/encode and unpack/decode functionality is available on Deno, like other platforms.
 
 ## Browser Usage
 Msgpackr works as standalone JavaScript as well, and runs on modern browsers. It includes a bundled script, at `dist/index.js` for ease of direct loading:
