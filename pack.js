@@ -13,6 +13,8 @@ let target
 let targetView
 let position = 0
 let safeEnd
+let bundledStrings = null
+const hasNonLatin = /[\u0080-\uFFFF]/
 const RECORD_SYMBOL = Symbol('record-id')
 export class Packr extends Unpackr {
 	constructor(options) {
@@ -75,6 +77,14 @@ export class Packr extends Unpackr {
 				position = (position + 7) & 0x7ffffff8 // Word align to make any future copying of this buffer faster
 			start = position
 			referenceMap = packr.structuredClone ? new Map() : null
+			if (packr.bundleStrings) {
+				bundledStrings = ['', '']
+				target[position++] = 0xd6
+				target[position++] = 0x62 // 'b'
+				bundledStrings.position = position - start
+				position += 4
+			} else
+				bundledStrings = null
 			sharedStructures = packr.structures
 			if (sharedStructures) {
 				if (sharedStructures.uninitialized)
@@ -113,6 +123,13 @@ export class Packr extends Unpackr {
 			structures = sharedStructures || []
 			try {
 				pack(value)
+				if (bundledStrings) {
+					targetView.setUint32(bundledStrings.position + start, position - bundledStrings.position - start)
+					let writeStrings = bundledStrings
+					bundledStrings = null
+					pack(writeStrings[0])
+					pack(writeStrings[1])
+				}
 				packr.offset = position // update the offset so next serialization doesn't write over our buffer, but can continue writing to same buffer sequentially
 				if (referenceMap && referenceMap.idsToInsert) {
 					position += referenceMap.idsToInsert.length * 6
@@ -174,6 +191,13 @@ export class Packr extends Unpackr {
 			var length
 			if (type === 'string') {
 				let strLength = value.length
+				if (bundledStrings && strLength >= 8 && strLength < 0x1000) {
+					let twoByte = hasNonLatin.test(value)
+					bundledStrings[twoByte ? 0 : 1] += value
+					target[position++] = 0xc1
+					pack(twoByte ? -strLength : strLength);
+					return
+				}
 				let headerSize
 				// first we estimate the header size, so we can write to the correct location
 				if (strLength < 0x20) {

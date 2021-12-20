@@ -109,6 +109,14 @@ suite('msgpackr basic tests', function(){
 		var deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized, data)
 	})
+	test('pack/unpack sample data with bundled strings', function(){
+		var data = sampleData
+		let structures = []
+		let packr = new Packr({ structures, bundleStrings: true })
+		var serialized = packr.pack(data)
+		var deserialized = packr.unpack(serialized)
+		assert.deepEqual(deserialized, data)
+	})
 	if (typeof Buffer != 'undefined')
 	test('replace data', function(){
 		var data1 = {
@@ -630,7 +638,7 @@ suite('msgpackr performance tests', function(){
 		let structures = []
 		var serialized = pack(data)
 		console.log('MessagePack size', serialized.length)
-		let packr = new Packr({ structures })
+		let packr = new Packr({ structures, bundleStrings: false })
 		var serialized = packr.pack(data)
 		console.log('msgpackr w/ record ext size', serialized.length)
 		for (var i = 0; i < ITERATIONS; i++) {
@@ -641,7 +649,7 @@ suite('msgpackr performance tests', function(){
 		var data = sampleData
 		this.timeout(10000)
 		let structures = []
-		let packr = new Packr({ structures })
+		let packr = new Packr({ structures, bundleStrings: false })
 		let buffer = typeof Buffer != 'undefined' ? Buffer.alloc(0x10000) : new Uint8Array(0x10000)
 
 		for (var i = 0; i < ITERATIONS; i++) {

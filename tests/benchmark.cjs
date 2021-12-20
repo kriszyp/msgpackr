@@ -50,6 +50,13 @@ if (msgpackr) {
   obj = bench('require("msgpackr").unpack(buf);', msgpackr.unpack, buf);
   test(obj);
 
+  packr = new msgpackr.Packr({ bundleStrings: true, structures: [] })
+  buf = bench('bundled strings packr.pack(obj);', packr.pack.bind(packr), data);
+    //buf = bench('require("msgpackr").pack(obj);', data => {let result = packr.pack(data); packr.resetMemory(); return result;}, data);
+
+  obj = bench('bundled strings packr.unpack(buf);', packr.unpack.bind(packr), buf);
+  test(obj);
+
   packr = new msgpackr.Packr({ structures: [] })
   buf = bench('msgpackr w/ shared structures: packr.pack(obj);', packr.pack.bind(packr), data);
   //buf = bench('msgpackr w/ shared structures: packr.pack(obj);', data => {let result = packr.pack(data); packr.resetMemory(); return result;}, data);

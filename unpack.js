@@ -15,6 +15,7 @@ var currentStructures
 var srcString
 var srcStringStart = 0
 var srcStringEnd = 0
+var bundledStrings
 var referenceMap
 var currentExtensions = []
 var dataView
@@ -55,6 +56,7 @@ export class Unpackr {
 		srcStringEnd = 0
 		srcString = null
 		strings = EMPTY_ARRAY
+		bundledStrings = null
 		src = source
 		// this provides cached access to the data view for a buffer if it is getting reused, which is a recommend
 		// technique for getting data from a database where it can be copied into an existing buffer instead of creating
@@ -248,7 +250,15 @@ export function read() {
 		let value
 		switch (token) {
 			case 0xc0: return null
-			case 0xc1: return C1; // "never-used", return special object to denote that
+			case 0xc1:
+				if (bundledStrings) {
+					value = read() // followed by the length of the string in characters (not bytes!)
+					if (value > 0)
+						return bundledStrings[1].slice(bundledStrings.position1, bundledStrings.position1 += value)
+					else
+						return bundledStrings[0].slice(bundledStrings.position0, bundledStrings.position0 -= value)
+				}
+				return C1; // "never-used", return special object to denote that
 			case 0xc2: return false
 			case 0xc3: return true
 			case 0xc4:
@@ -898,6 +908,22 @@ currentExtensions[0x78] = () => {
 	return new RegExp(data[0], data[1])
 }
 
+currentExtensions[0x62] = (data) => {
+	let dataSize = (data[0] << 24) + (data[1] << 16) + (data[2] << 8) + data[3]
+	let dataPosition = position
+	position += dataSize - 4
+	bundledStrings = [read(), read()]
+	bundledStrings.position0 = 0
+	bundledStrings.position1 = 0
+	let postBundlePosition = position
+	position = dataPosition
+	try {
+		return read()
+	} finally {
+		position = postBundlePosition
+	}
+}
+
 currentExtensions[0xff] = (data) => {
 	// 32-bit date extension
 	if (data.length == 4)
@@ -925,6 +951,7 @@ function saveState(callback) {
 	let savedSrcString = srcString
 	let savedStrings = strings
 	let savedReferenceMap = referenceMap
+	let savedBundledStrings = bundledStrings
 
 	// TODO: We may need to revisit this if we do more external calls to user code (since it could be slow)
 	let savedSrc = new Uint8Array(src.slice(0, srcEnd)) // we copy the data in case it changes while external data is processed
@@ -941,6 +968,7 @@ function saveState(callback) {
 	srcString = savedSrcString
 	strings = savedStrings
 	referenceMap = savedReferenceMap
+	bundledStrings = savedBundledStrings
 	src = savedSrc
 	sequentialMode = savedSequentialMode
 	currentStructures = savedStructures
