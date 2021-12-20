@@ -13,6 +13,7 @@ export interface Options {
 	mapsAsObjects?: boolean
 	variableMapSize?: boolean
 	copyBuffers?: boolean
+	bundleStrings?: boolean
 	useTimestamp32?: boolean
 	largeBigIntToFloat?: boolean
 	encodeUndefinedAsNil?: boolean
