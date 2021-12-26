@@ -156,6 +156,9 @@ export function checkedRead() {
 				currentStructures.length = sharedLength
 		}
 		let result = read()
+		if (bundledStrings) // bundled strings to skip past
+			position = bundledStrings.postBundlePosition
+
 		if (position == srcEnd) {
 			// finished reading this source, cleanup references
 			if (currentStructures.restoreStructures)
@@ -498,6 +501,8 @@ export function setExtractor(extractStrings) {
 		return function readString(length) {
 			let string = strings[stringPosition++]
 			if (string == null) {
+				if (bundledStrings)
+					return readStringJS(length)
 				let extraction = extractStrings(position - headerLength, srcEnd, src)
 				if (typeof extraction == 'string') {
 					string = extraction
@@ -756,6 +761,36 @@ function shortStringInJS(length) {
 	}
 }
 
+function readOnlyJSString() {
+	let token = src[position++]
+	let length
+	if (token < 0xc0) {
+		// fixstr
+		length = token - 0xa0
+	} else {
+		switch(token) {
+			case 0xd9:
+			// str 8
+				length = src[position++]
+				break
+			case 0xda:
+			// str 16
+				length = dataView.getUint16(position)
+				position += 2
+				break
+			case 0xdb:
+			// str 32
+				length = dataView.getUint32(position)
+				position += 4
+				break
+			default:
+				throw new Error('Expected string')
+		}
+	}
+	return readStringJS(length)
+}
+
+
 function readBin(length) {
 	return currentUnpackr.copyBuffers ?
 		// specifically use the copying slice (not the node one)
@@ -907,21 +942,18 @@ currentExtensions[0x78] = () => {
 	let data = read()
 	return new RegExp(data[0], data[1])
 }
-
+const TEMP_BUNDLE = []
 currentExtensions[0x62] = (data) => {
 	let dataSize = (data[0] << 24) + (data[1] << 16) + (data[2] << 8) + data[3]
 	let dataPosition = position
-	position += dataSize - 4
-	bundledStrings = [read(), read()]
+	position += dataSize - data.length
+	bundledStrings = TEMP_BUNDLE
+	bundledStrings = [readOnlyJSString(), readOnlyJSString()]
 	bundledStrings.position0 = 0
 	bundledStrings.position1 = 0
-	let postBundlePosition = position
+	bundledStrings.postBundlePosition = position
 	position = dataPosition
-	try {
-		return read()
-	} finally {
-		position = postBundlePosition
-	}
+	return read()
 }
 
 currentExtensions[0xff] = (data) => {

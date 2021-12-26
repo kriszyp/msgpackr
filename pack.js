@@ -14,6 +14,7 @@ let targetView
 let position = 0
 let safeEnd
 let bundledStrings = null
+const MAX_BUNDLE_SIZE = 0xf000
 const hasNonLatin = /[\u0080-\uFFFF]/
 const RECORD_SYMBOL = Symbol('record-id')
 export class Packr extends Unpackr {
@@ -77,12 +78,9 @@ export class Packr extends Unpackr {
 				position = (position + 7) & 0x7ffffff8 // Word align to make any future copying of this buffer faster
 			start = position
 			referenceMap = packr.structuredClone ? new Map() : null
-			if (packr.bundleStrings) {
-				bundledStrings = ['', '']
-				target[position++] = 0xd6
-				target[position++] = 0x62 // 'b'
-				bundledStrings.position = position - start
-				position += 4
+			if (packr.bundleStrings && typeof value !== 'string') {
+				bundledStrings = []
+				bundledStrings.size = Infinity // force a new bundle start on first string
 			} else
 				bundledStrings = null
 			sharedStructures = packr.structures
@@ -124,11 +122,7 @@ export class Packr extends Unpackr {
 			try {
 				pack(value)
 				if (bundledStrings) {
-					targetView.setUint32(bundledStrings.position + start, position - bundledStrings.position - start)
-					let writeStrings = bundledStrings
-					bundledStrings = null
-					pack(writeStrings[0])
-					pack(writeStrings[1])
+					writeBundles(start, pack)
 				}
 				packr.offset = position // update the offset so next serialization doesn't write over our buffer, but can continue writing to same buffer sequentially
 				if (referenceMap && referenceMap.idsToInsert) {
@@ -191,7 +185,30 @@ export class Packr extends Unpackr {
 			var length
 			if (type === 'string') {
 				let strLength = value.length
-				if (bundledStrings && strLength >= 8 && strLength < 0x1000) {
+				if (bundledStrings && strLength >= 4 && strLength < 0x1000) {
+					if ((bundledStrings.size += strLength) > MAX_BUNDLE_SIZE) {
+						let extStart
+						let maxBytes = (bundledStrings[0] ? bundledStrings[0].length * 3 + bundledStrings[1].length : 0) + 10
+						if (position + maxBytes > safeEnd)
+							target = makeRoom(position + maxBytes)
+						if (bundledStrings.position) { // here we use the 0x62 extension to write the last bundle and reserve sapce for the reference pointer to the next/current bundle
+							target[position] = 0xc8 // ext 16
+							position += 3 // reserve for the writing bundle size
+							target[position++] = 0x62 // 'b'
+							extStart = position - start
+							position += 4 // reserve for writing bundle reference
+							writeBundles(start, pack) // write the last bundles
+							targetView.setUint16(extStart + start - 3, position - start - extStart)
+						} else { // here we use the 0x62 extension just to reserve the space for the reference pointer to the bundle (will be updated once the bundle is written)
+							target[position++] = 0xd6 // fixext 4
+							target[position++] = 0x62 // 'b'
+							extStart = position - start
+							position += 4 // reserve for writing bundle reference
+						}
+						bundledStrings = ['', ''] // create new ones
+						bundledStrings.size = 0
+						bundledStrings.position = extStart
+					}
 					let twoByte = hasNonLatin.test(value)
 					bundledStrings[twoByte ? 0 : 1] += value
 					target[position++] = 0xc1
@@ -839,6 +856,15 @@ function insertIds(serialized, idsToInsert) {
 		lastEnd = offset
 	}
 	return serialized
+}
+
+function writeBundles(start, pack) {
+	targetView.setUint32(bundledStrings.position + start, position - bundledStrings.position - start)
+	let writeStrings = bundledStrings
+	bundledStrings = null
+	let startPosition = position
+	pack(writeStrings[0])
+	pack(writeStrings[1])
 }
 
 export function addExtension(extension) {

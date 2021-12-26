@@ -111,8 +111,7 @@ suite('msgpackr basic tests', function(){
 	})
 	test('pack/unpack sample data with bundled strings', function(){
 		var data = sampleData
-		let structures = []
-		let packr = new Packr({ structures, bundleStrings: true })
+		let packr = new Packr({ /*structures,*/ useRecords: false, bundleStrings: true })
 		var serialized = packr.pack(data)
 		var deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized, data)
