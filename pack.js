@@ -655,6 +655,10 @@ export class Packr extends Unpackr {
 		targetView = new DataView(target.buffer, target.byteOffset, target.byteLength)
 		position = 0
 	}
+	clearSharedData() {
+		if (this.structures)
+			this.structures = []
+	}
 }
 
 function copyBinary(source, target, targetOffset, offset, endOffset) {
