@@ -9,7 +9,7 @@ const hasNodeBuffer = typeof Buffer !== 'undefined'
 const ByteArrayAllocate = hasNodeBuffer ? Buffer.allocUnsafeSlow : Uint8Array
 const ByteArray = hasNodeBuffer ? Buffer : Uint8Array
 const MAX_BUFFER_SIZE = hasNodeBuffer ? 0x100000000 : 0x7fd00000
-let target
+let target, keysTarget
 let targetView
 let position = 0
 let safeEnd
@@ -514,7 +514,7 @@ export class Packr extends Unpackr {
 			target[objectOffset + start] = size & 0xff
 		} :
 
-	/*	sharedStructures ?  // For highly stable structures, using for-in can a little bit faster
+		!useTwoByteRecords ?  // For highly stable structures, using for-in can a little bit faster
 		(object, safePrototype) => {
 			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null))
 			let objectOffset = position++ - start
@@ -522,38 +522,38 @@ export class Packr extends Unpackr {
 			for (let key in object) {
 				if (safePrototype || object.hasOwnProperty(key)) {
 					nextTransition = transition[key]
-					if (!nextTransition) {
-						nextTransition = transition[key] = Object.create(null)
-						nextTransition.__keys__ = (transition.__keys__ || []).concat([key])
-						/*let keys = Object.keys(object)
-						if 
-						let size = 0
-						let startBranch = transition.__keys__ ? transition.__keys__.length : 0
-						for (let i = 0, l = keys.length; i++) {
+					if (nextTransition)
+						transition = nextTransition
+					else {
+						// record doesn't exist, create full new record and insert it
+						let keys = Object.keys(object)
+						let lastTransition = transition
+						transition = structures.transitions
+						let newTransitions = 0
+						for (let i = 0, l = keys.length; i < l; i++) {
 							let key = keys[i]
-							size += key.length << 2
-							if (i >= startBranch) {
-								nextTransition = nextTransition[key] = Object.create(null)
-								nextTransition.__keys__ = keys.slice(0, i + 1)
+							nextTransition = transition[key]
+							if (!nextTransition) {
+								nextTransition = transition[key] = Object.create(null)
+								newTransitions++
 							}
+							transition = nextTransition
 						}
-						makeRoom(position + size)
-						nextTransition = transition[key]
-						target.copy(target, )
-						objectOffset
+						insertNewRecord(transition, keys, objectOffset, newTransitions)
+						wroteKeys = true
+						transition = lastTransition[key]
 					}
-					transition = nextTransition
 					pack(object[key])
 				}
 			}
-			let id = transition.id
-			if (!id) {
-				id = transition.id = structures.push(transition.__keys__) + 63
-				if (sharedStructures.onUpdate)
-					sharedStructures.onUpdate(id, transition.__keys__)
+			if (!wroteKeys) {
+				let recordId = transition[RECORD_SYMBOL]
+				if (recordId)
+					target[objectOffset + start] = recordId
+				else
+					insertNewRecord(transition, Object.keys(object), objectOffset, 0)
 			}
-			target[objectOffset + start] = id
-		}*/
+		} :
 		(object) => {
 			let keys = Object.keys(object)
 			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null))
@@ -575,53 +575,7 @@ export class Packr extends Unpackr {
 				} else
 					target[position++] = recordId
 			} else {
-				recordId = structures.nextId
-				if (!recordId)
-					recordId = 0x40
-				if (recordId < sharedLimitId && this.shouldShareStructure && !this.shouldShareStructure(keys)) {
-					recordId = structures.nextOwnId
-					if (!(recordId < maxStructureId))
-						recordId = sharedLimitId
-					structures.nextOwnId = recordId + 1
-				} else {
-					if (recordId >= maxStructureId)// cycle back around
-						recordId = sharedLimitId
-					structures.nextId = recordId + 1
-				}
-				let highByte = keys.highByte = recordId >= 0x60 && useTwoByteRecords ? (recordId - 0x60) >> 5 : -1
-				transition[RECORD_SYMBOL] = recordId
-				structures[recordId - 0x40] = keys
-
-				if (recordId < sharedLimitId) {
-					keys.isShared = true
-					structures.sharedLength = recordId - 0x3f
-					hasSharedUpdate = true
-					if (highByte >= 0) {
-						target[position++] = (recordId & 0x1f) + 0x60
-						target[position++] = highByte
-					} else {
-						target[position++] = recordId
-					}
-				} else {
-					if (highByte >= 0) {
-						target[position++] = 0xd5 // fixext 2
-						target[position++] = 0x72 // "r" record defintion extension type
-						target[position++] = (recordId & 0x1f) + 0x60
-						target[position++] = highByte
-					} else {
-						target[position++] = 0xd4 // fixext 1
-						target[position++] = 0x72 // "r" record defintion extension type
-						target[position++] = recordId
-					}
-
-					if (newTransitions)
-						transitionsCount += serializationsSinceTransitionRebuild * newTransitions
-					// record the removal of the id, we can maintain our shared structure
-					if (recordIdsToRemove.length >= maxOwnStructures)
-						recordIdsToRemove.shift()[RECORD_SYMBOL] = 0 // we are cycling back through, and have to remove old ones
-					recordIdsToRemove.push(transition)
-					pack(keys)
-				}
+				newRecord(transition, keys, newTransitions)
 			}
 			// now write the values
 			for (let i = 0, l = keys.length; i < l; i++)
@@ -647,6 +601,85 @@ export class Packr extends Unpackr {
 			start = 0
 			safeEnd = newBuffer.length - 10
 			return target = newBuffer
+		}
+		const newRecord = (transition, keys, newTransitions) => {
+			let recordId = structures.nextId
+			if (!recordId)
+				recordId = 0x40
+			if (recordId < sharedLimitId && this.shouldShareStructure && !this.shouldShareStructure(keys)) {
+				recordId = structures.nextOwnId
+				if (!(recordId < maxStructureId))
+					recordId = sharedLimitId
+				structures.nextOwnId = recordId + 1
+			} else {
+				if (recordId >= maxStructureId)// cycle back around
+					recordId = sharedLimitId
+				structures.nextId = recordId + 1
+			}
+			let highByte = keys.highByte = recordId >= 0x60 && useTwoByteRecords ? (recordId - 0x60) >> 5 : -1
+			transition[RECORD_SYMBOL] = recordId
+			structures[recordId - 0x40] = keys
+
+			if (recordId < sharedLimitId) {
+				keys.isShared = true
+				structures.sharedLength = recordId - 0x3f
+				hasSharedUpdate = true
+				if (highByte >= 0) {
+					target[position++] = (recordId & 0x1f) + 0x60
+					target[position++] = highByte
+				} else {
+					target[position++] = recordId
+				}
+			} else {
+				if (highByte >= 0) {
+					target[position++] = 0xd5 // fixext 2
+					target[position++] = 0x72 // "r" record defintion extension type
+					target[position++] = (recordId & 0x1f) + 0x60
+					target[position++] = highByte
+				} else {
+					target[position++] = 0xd4 // fixext 1
+					target[position++] = 0x72 // "r" record defintion extension type
+					target[position++] = recordId
+				}
+
+				if (newTransitions)
+					transitionsCount += serializationsSinceTransitionRebuild * newTransitions
+				// record the removal of the id, we can maintain our shared structure
+				if (recordIdsToRemove.length >= maxOwnStructures)
+					recordIdsToRemove.shift()[RECORD_SYMBOL] = 0 // we are cycling back through, and have to remove old ones
+				recordIdsToRemove.push(transition)
+				pack(keys)
+			}
+		}
+		const insertNewRecord = (transition, keys, insertionOffset, newTransitions) => {
+			let mainTarget = target
+			let mainPosition = position
+			let mainSafeEnd = safeEnd
+			let mainStart = start
+			target = keysTarget
+			position = 0
+			start = 0
+			if (!target)
+				keysTarget = target = new ByteArrayAllocate(8192)
+			safeEnd = target.length - 10
+			newRecord(transition, keys, newTransitions)
+			keysTarget = target
+			let keysPosition = position
+			target = mainTarget
+			position = mainPosition
+			safeEnd = mainSafeEnd
+			start = mainStart
+			if (keysPosition > 1) {
+				let newEnd = position + keysPosition - 1
+				if (newEnd > safeEnd)
+					makeRoom(newEnd)
+				let insertionPosition = insertionOffset + start
+				target.copyWithin(insertionPosition + keysPosition, insertionPosition + 1, position)
+				target.set(keysTarget.slice(0, keysPosition), insertionPosition)
+				position = newEnd
+			} else {
+				target[insertionOffset + start] = keysTarget[0]
+			}
 		}
 	}
 	useBuffer(buffer) {

@@ -43,7 +43,15 @@ console.log(rpad("", COL1, "-"), "|", lpad(":", COL2, "-"), "|", lpad(":", COL3,
 var buf, obj;
 
 if (msgpackr) {
-  let packr = new msgpackr.Packr({ useRecords: false })
+  let packr
+  packr = new msgpackr.Packr({ structures: [] })
+  buf = bench('msgpackr w/ shared structures: packr.pack(obj);', packr.pack.bind(packr), data);
+  //buf = bench('msgpackr w/ shared structures: packr.pack(obj);', data => {let result = packr.pack(data); packr.resetMemory(); return result;}, data);
+
+  obj = bench('msgpackr w/ shared structures: packr.unpack(buf);', packr.unpack.bind(packr), buf);
+  test(obj);
+
+  packr = new msgpackr.Packr({ useRecords: false })
   buf = bench('require("msgpackr").pack(obj);', msgpackr.pack, data);
     //buf = bench('require("msgpackr").pack(obj);', data => {let result = packr.pack(data); packr.resetMemory(); return result;}, data);
 
@@ -57,12 +65,6 @@ if (msgpackr) {
   obj = bench('bundled strings packr.unpack(buf);', packr.unpack.bind(packr), buf);
   test(obj);
 
-  packr = new msgpackr.Packr({ structures: [] })
-  buf = bench('msgpackr w/ shared structures: packr.pack(obj);', packr.pack.bind(packr), data);
-  //buf = bench('msgpackr w/ shared structures: packr.pack(obj);', data => {let result = packr.pack(data); packr.resetMemory(); return result;}, data);
-
-  obj = bench('msgpackr w/ shared structures: packr.unpack(buf);', packr.unpack.bind(packr), buf);
-  test(obj);
 }
 
 if (JSON) {
