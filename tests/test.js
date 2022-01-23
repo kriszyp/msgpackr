@@ -58,8 +58,27 @@ suite('msgpackr basic tests', function(){
 		let structures = []
 		let packr = new Packr({ structures })
 		var serialized = packr.pack(data)
+		serialized = packr.pack(data)
+		serialized = packr.pack(data)
 		var deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized, data)
+	})
+
+	test('mixed structures', function(){
+		let data1 = { a: 1, b: 2, c: 3 }
+		let data2 = { a: 1, b: 2, d: 4 }
+		let data3 = { a: 1, b: 2, e: 5 }
+		let structures = []
+		let packr = new Packr({ structures })
+		var serialized = packr.pack(data1)
+		var deserialized = packr.unpack(serialized)
+		assert.deepEqual(deserialized, data1)
+		var serialized = packr.pack(data2)
+		var deserialized = packr.unpack(serialized)
+		assert.deepEqual(deserialized, data2)
+		var serialized = packr.pack(data3)
+		var deserialized = packr.unpack(serialized)
+		assert.deepEqual(deserialized, data3)
 	})
 
 	test('mixed array', function(){

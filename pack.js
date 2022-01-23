@@ -118,7 +118,7 @@ export class Packr extends Unpackr {
 			}
 			if (hasSharedUpdate)
 				hasSharedUpdate = false
-			structures = sharedStructures || []
+			structures = sharedStructures || (packr.structures = [])
 			try {
 				pack(value)
 				if (bundledStrings) {
@@ -513,8 +513,7 @@ export class Packr extends Unpackr {
 			target[objectOffset++ + start] = size >> 8
 			target[objectOffset + start] = size & 0xff
 		} :
-
-		!useTwoByteRecords ?  // For highly stable structures, using for-in can a little bit faster
+		(options.progressiveRecords && !useTwoByteRecords) ?  // this is about 2% faster for highly stable structures, since it only requires one for-in loop (but much more expensive when new structure needs to be written)
 		(object, safePrototype) => {
 			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null))
 			let objectOffset = position++ - start
@@ -539,7 +538,12 @@ export class Packr extends Unpackr {
 							}
 							transition = nextTransition
 						}
-						insertNewRecord(transition, keys, objectOffset, newTransitions)
+						if (objectOffset + start + 1 == position) {
+							// first key, so we don't need to insert, we can just write record directly
+							position--
+							newRecord(transition, keys, newTransitions)
+						} else // otherwise we need to insert the record, moving existing data after the record
+							insertNewRecord(transition, keys, objectOffset, newTransitions)
 						wroteKeys = true
 						transition = lastTransition[key]
 					}
@@ -554,12 +558,10 @@ export class Packr extends Unpackr {
 					insertNewRecord(transition, Object.keys(object), objectOffset, 0)
 			}
 		} :
-		(object) => {
-			let keys = Object.keys(object)
+		(object, safePrototype) => {
 			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null))
 			let newTransitions = 0
-			for (let i = 0, l = keys.length; i < l; i++) {
-				let key = keys[i]
+			for (let key in object) if (safePrototype || object.hasOwnProperty(key)) {
 				nextTransition = transition[key]
 				if (!nextTransition) {
 					nextTransition = transition[key] = Object.create(null)
@@ -575,11 +577,12 @@ export class Packr extends Unpackr {
 				} else
 					target[position++] = recordId
 			} else {
-				newRecord(transition, keys, newTransitions)
+				newRecord(transition, transition.__keys__ || Object.keys(object), newTransitions)
 			}
 			// now write the values
-			for (let i = 0, l = keys.length; i < l; i++)
-				pack(object[keys[i]])
+			for (let key in object)
+				if (safePrototype || object.hasOwnProperty(key))
+					pack(object[key])
 		}
 		const makeRoom = (end) => {
 			let newSize
@@ -618,6 +621,7 @@ export class Packr extends Unpackr {
 			}
 			let highByte = keys.highByte = recordId >= 0x60 && useTwoByteRecords ? (recordId - 0x60) >> 5 : -1
 			transition[RECORD_SYMBOL] = recordId
+			transition.__keys__ = keys
 			structures[recordId - 0x40] = keys
 
 			if (recordId < sharedLimitId) {
