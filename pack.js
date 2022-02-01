@@ -144,6 +144,8 @@ export class Packr extends Unpackr {
 				if (sharedStructures) {
 					if (serializationsSinceTransitionRebuild < 10)
 						serializationsSinceTransitionRebuild++
+					if (sharedStructures.length > maxSharedStructures)
+						sharedStructures.length = maxSharedStructures
 					if (transitionsCount > 10000) {
 						// force a rebuild occasionally after a lot of transitions so it can get cleaned up
 						sharedStructures.transitions = null
