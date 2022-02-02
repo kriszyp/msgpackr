@@ -23,7 +23,6 @@ export class Packr extends Unpackr {
 		this.offset = 0
 		let typeBuffer
 		let start
-		let sharedStructures
 		let hasSharedUpdate
 		let structures
 		let referenceMap
@@ -48,7 +47,7 @@ export class Packr extends Unpackr {
 		let maxOwnStructures = options.maxOwnStructures
 		if (maxOwnStructures == null)
 			maxOwnStructures = hasSharedStructures ? 32 : 64
-		if (isSequential && !options.saveStructures)
+		if (!this.structures && options.useRecords != false)
 			this.structures = []
 		// two byte record ids for shared structures
 		let useTwoByteRecords = maxSharedStructures > 32 || (maxOwnStructures + maxSharedStructures > 64)		
@@ -83,23 +82,23 @@ export class Packr extends Unpackr {
 				bundledStrings.size = Infinity // force a new bundle start on first string
 			} else
 				bundledStrings = null
-			sharedStructures = packr.structures
-			if (sharedStructures) {
-				if (sharedStructures.uninitialized)
-					sharedStructures = packr._mergeStructures(packr.getStructures())
-				let sharedLength = sharedStructures.sharedLength || 0
+			structures = packr.structures
+			if (structures) {
+				if (structures.uninitialized)
+					structures = packr._mergeStructures(packr.getStructures())
+				let sharedLength = structures.sharedLength || 0
 				if (sharedLength > maxSharedStructures) {
-					//if (maxSharedStructures <= 32 && sharedStructures.sharedLength > 32) // TODO: could support this, but would need to update the limit ids
-					throw new Error('Shared structures is larger than maximum shared structures, try increasing maxSharedStructures to ' + sharedStructures.sharedLength)
+					//if (maxSharedStructures <= 32 && structures.sharedLength > 32) // TODO: could support this, but would need to update the limit ids
+					throw new Error('Shared structures is larger than maximum shared structures, try increasing maxSharedStructures to ' + structures.sharedLength)
 				}
-				if (!sharedStructures.transitions) {
+				if (!structures.transitions) {
 					// rebuild our structure transitions
-					sharedStructures.transitions = Object.create(null)
+					structures.transitions = Object.create(null)
 					for (let i = 0; i < sharedLength; i++) {
-						let keys = sharedStructures[i]
+						let keys = structures[i]
 						if (!keys)
 							continue
-						let nextTransition, transition = sharedStructures.transitions
+						let nextTransition, transition = structures.transitions
 						for (let j = 0, l = keys.length; j < l; j++) {
 							let key = keys[j]
 							nextTransition = transition[key]
@@ -113,12 +112,11 @@ export class Packr extends Unpackr {
 					lastSharedStructuresLength = sharedLength
 				}
 				if (!isSequential) {
-					sharedStructures.nextId = sharedLength + 0x40
+					structures.nextId = sharedLength + 0x40
 				}
 			}
 			if (hasSharedUpdate)
 				hasSharedUpdate = false
-			structures = sharedStructures || (packr.structures = [])
 			try {
 				pack(value)
 				if (bundledStrings) {
@@ -141,14 +139,15 @@ export class Packr extends Unpackr {
 				}
 				return target.subarray(start, position) // position can change if we call pack again in saveStructures, so we get the buffer now
 			} finally {
-				if (sharedStructures) {
+				if (structures) {
 					if (serializationsSinceTransitionRebuild < 10)
 						serializationsSinceTransitionRebuild++
-					if (sharedStructures.length > maxSharedStructures)
-						sharedStructures.length = maxSharedStructures
+					let sharedLength = structures.sharedLength || maxSharedStructures
+					if (structures.length > sharedLength)
+						structures.length = sharedLength
 					if (transitionsCount > 10000) {
 						// force a rebuild occasionally after a lot of transitions so it can get cleaned up
-						sharedStructures.transitions = null
+						structures.transitions = null
 						serializationsSinceTransitionRebuild = 0
 						transitionsCount = 0
 						if (recordIdsToRemove.length > 0)
@@ -160,13 +159,9 @@ export class Packr extends Unpackr {
 						recordIdsToRemove = []
 					}
 					if (hasSharedUpdate && packr.saveStructures) {
-						let sharedLength = sharedStructures.sharedLength || maxSharedStructures
-						if (sharedStructures.length > sharedLength) {
-							sharedStructures = sharedStructures.slice(0, sharedLength)
-						}
 						// we can't rely on start/end with REUSE_BUFFER_MODE since they will (probably) change when we save
 						let returnBuffer = target.subarray(start, position)
-						if (packr.saveStructures(sharedStructures, lastSharedStructuresLength) === false) {
+						if (packr.saveStructures(structures, lastSharedStructuresLength) === false) {
 							// get updated structures and try again if the update failed
 							packr._mergeStructures(packr.getStructures())
 							return packr.pack(value)
