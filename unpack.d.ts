@@ -19,6 +19,7 @@ export interface Options {
 	encodeUndefinedAsNil?: boolean
 	maxSharedStructures?: number
 	maxOwnStructures?: number
+	int64AsNumber?: boolean
 	shouldShareStructure?: (keys: string[]) => boolean
 	getStructures?(): {}[]
 	saveStructures?(structures: {}[]): boolean | void
