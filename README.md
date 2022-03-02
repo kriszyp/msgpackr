@@ -159,7 +159,8 @@ The following options properties can be provided to the Packr or Unpackr constru
 
 * `useRecords` - Setting this to `false` disables the record extension and stores JavaScript objects as MessagePack maps, and unpacks maps as JavaScript `Object`s, which ensures compatibilty with other decoders.
 * `structures` - Provides the array of structures that is to be used for record extension, if you want the structures saved and used again. This array will be modified in place with new record structures that are serialized (if less than 32 structures are in the array).
-* `structuredClone` - This enables the structured cloning extensions that will encode object/cyclic references and additional built-in types/classes.
+* `moreTypes` - Enable additional built-in types/classes.
+* `structuredClone` - This enables the structured cloning extensions that will encode object/cyclic references, must also enable `moreTypes`
 * `mapsAsObjects` - If `true`, this will decode MessagePack maps and JS `Object`s with the map entries decoded to object properties. If `false`, maps are decoded as JavaScript `Map`s. This is disabled by default if `useRecords` is enabled (which allows `Map`s to be preserved), and is enabled by default if `useRecords` is disabled.
 * `useFloat32` - This will enable msgpackr to encode non-integer numbers as `float32`. See next section for possible values.
 * `variableMapSize` - This will use varying map size definition (fixmap, map16, map32) based on the number of keys when encoding objects, which yields slightly more compact encodings (for small objects), but is typically 5-10% slower during encoding. This is necessary if you need to use objects with more than 65535 keys. This is only relevant when record extension is disabled.

@@ -286,6 +286,7 @@ suite('msgpackr basic tests', function(){
 		object.children[2] = object.children[0]
 		object.childrenAgain = object.children
 		let packr = new Packr({
+			moreTypes: true,
 			structuredClone: true,
 		})
 		var serialized = packr.pack(object)
@@ -310,6 +311,7 @@ suite('msgpackr basic tests', function(){
 			uint16Array: new Uint16Array([3,4])
 		}
 		let packr = new Packr({
+			moreTypes: true,
 			structuredClone: true,
 		})
 		var serialized = packr.pack(object)
