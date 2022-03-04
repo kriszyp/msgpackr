@@ -44,8 +44,8 @@ export class Packr extends Unpackr {
 			maxSharedStructures = hasSharedStructures ? 32 : 0
 		if (maxSharedStructures > 8160)
 			throw new Error('Maximum maxSharedStructure is 8160')
-		if (options.structuredClone && !options.moreTypes) {
-			throw new Error("Can't use structuredClone without moreTypes")
+		if (options.structuredClone && options.moreTypes == undefined) {
+			options.moreTypes = true
 		}
 		let maxOwnStructures = options.maxOwnStructures
 		if (maxOwnStructures == null)
