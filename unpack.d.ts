@@ -9,6 +9,7 @@ export interface Options {
 	useFloat32?: FLOAT32_OPTIONS
 	useRecords?: boolean
 	structures?: {}[]
+	moreTypes?: boolean
 	structuredClone?: boolean
 	mapsAsObjects?: boolean
 	variableMapSize?: boolean

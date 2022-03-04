@@ -44,6 +44,9 @@ export class Packr extends Unpackr {
 			maxSharedStructures = hasSharedStructures ? 32 : 0
 		if (maxSharedStructures > 8160)
 			throw new Error('Maximum maxSharedStructure is 8160')
+		if (options.structuredClone && !options.moreTypes) {
+			throw new Error("Can't use structuredClone without moreTypes")
+		}
 		let maxOwnStructures = options.maxOwnStructures
 		if (maxOwnStructures == null)
 			maxOwnStructures = hasSharedStructures ? 32 : 64
@@ -741,8 +744,8 @@ extensions = [{
 }, {
 	pack(set, allocateForWrite, pack) {
 		let array = Array.from(set)
-		let { target, position} = allocateForWrite(this.structuredClone ? 3 : 0)
-		if (this.structuredClone) {
+		let { target, position} = allocateForWrite(this.moreTypes ? 3 : 0)
+		if (this.moreTypes) {
 			target[position++] = 0xd4
 			target[position++] = 0x73 // 's' for Set
 			target[position++] = 0
@@ -751,8 +754,8 @@ extensions = [{
 	}
 }, {
 	pack(error, allocateForWrite, pack) {
-		let { target, position} = allocateForWrite(this.structuredClone ? 3 : 0)
-		if (this.structuredClone) {
+		let { target, position} = allocateForWrite(this.moreTypes ? 3 : 0)
+		if (this.moreTypes) {
 			target[position++] = 0xd4
 			target[position++] = 0x65 // 'e' for error
 			target[position++] = 0
@@ -761,8 +764,8 @@ extensions = [{
 	}
 }, {
 	pack(regex, allocateForWrite, pack) {
-		let { target, position} = allocateForWrite(this.structuredClone ? 3 : 0)
-		if (this.structuredClone) {
+		let { target, position} = allocateForWrite(this.moreTypes ? 3 : 0)
+		if (this.moreTypes) {
 			target[position++] = 0xd4
 			target[position++] = 0x78 // 'x' for regeXp
 			target[position++] = 0
@@ -771,7 +774,7 @@ extensions = [{
 	}
 }, {
 	pack(arrayBuffer, allocateForWrite) {
-		if (this.structuredClone)
+		if (this.moreTypes)
 			writeExtBuffer(arrayBuffer, 0x10, allocateForWrite)
 		else
 			writeBuffer(hasNodeBuffer ? Buffer.from(arrayBuffer) : new Uint8Array(arrayBuffer), allocateForWrite)
@@ -779,7 +782,7 @@ extensions = [{
 }, {
 	pack(typedArray, allocateForWrite) {
 		let constructor = typedArray.constructor
-		if (constructor !== ByteArray && this.structuredClone)
+		if (constructor !== ByteArray && this.moreTypes)
 			writeExtBuffer(typedArray, typedArrays.indexOf(constructor.name), allocateForWrite)
 		else
 			writeBuffer(typedArray, allocateForWrite)

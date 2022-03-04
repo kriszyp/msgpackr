@@ -17,7 +17,7 @@ for (let i = 0; i < 100; i++) {
 }
 
 suite('encode and decode tests with partial values', function () {
-  const encoder = new Encoder({ objectMode: true, structures: [], structuredClone: true })
+  const encoder = new Encoder({ objectMode: true, structures: [], moreTypes: true, structuredClone: true })
 
   for (const [label, testData] of Object.entries(tests)) {
     test(label, () => {
