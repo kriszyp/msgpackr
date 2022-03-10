@@ -27,6 +27,13 @@ export class C1Type {}
 export const C1 = new C1Type()
 C1.name = 'MessagePack 0xC1'
 var sequentialMode = false
+var inlineObjectReadThreshold = 2
+try {
+	new Function('')
+} catch(error) {
+	// if eval variants are not supported, do not create inline object readers ever
+	inlineObjectReadThreshold = Infinity
+}
 
 export class Unpackr {
 	constructor(options) {
@@ -440,7 +447,7 @@ const validName = /^[a-zA-Z_$][a-zA-Z\d_$]*$/
 function createStructureReader(structure, firstId) {
 	function readObject() {
 		// This initial function is quick to instantiate, but runs slower. After several iterations pay the cost to build the faster function
-		if (readObject.count++ > 2) {
+		if (readObject.count++ > inlineObjectReadThreshold) {
 			let readObject = structure.read = (new Function('r', 'return function(){return {' + structure.map(key => validName.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '}}'))(read)
 			if (structure.highByte === 0)
 				structure.read = createSecondByteReader(firstId, structure.read)
