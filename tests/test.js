@@ -1,7 +1,8 @@
 import * as msgpackr from '../index.js'
 import chai from 'chai'
 //import inspector  from 'inspector'; inspector.open(9330, null, true); debugger
-import sampleData from './example4.json' assert {type: 'json'}
+import { readFileSync } from 'fs'
+const sampleData = JSON.parse(readFileSync(new URL('./example4.json', import.meta.url)))
 function tryRequire(module) {
 	try {
 		return require(module)
