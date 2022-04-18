@@ -16,7 +16,6 @@ function tryRequire(moduleId) {
 		let require = createRequire(import.meta.url)
 		return require(moduleId)
 	} catch (error) {
-		if (typeof window != 'undefined')
-			console.warn('For browser usage, directly use msgpackr/unpack or msgpackr/pack modules. ' + error.message.split('\n')[0])
+		// native module is optional
 	}
 }
