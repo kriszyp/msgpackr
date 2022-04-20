@@ -444,6 +444,7 @@ suite('msgpackr basic tests', function(){
 			map: map,
 			date: new Date(1532219539733),
 			farFutureDate: new Date(3532219539133),
+			fartherFutureDate: new Date('2106-08-05T18:48:20.323Z'),
 			ancient: new Date(-3532219539133),
 			invalidDate: new Date('invalid')
 		}
@@ -454,6 +455,7 @@ suite('msgpackr basic tests', function(){
 		assert.equal(deserialized.map.get('three'), 3)
 		assert.equal(deserialized.date.getTime(), 1532219539733)
 		assert.equal(deserialized.farFutureDate.getTime(), 3532219539133)
+		assert.equal(deserialized.fartherFutureDate.toISOString(), '2106-08-05T18:48:20.323Z')
 		assert.equal(deserialized.ancient.getTime(), -3532219539133)
 		assert.equal(deserialized.invalidDate.toString(), 'Invalid Date')
 	})

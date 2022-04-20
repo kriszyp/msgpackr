@@ -714,7 +714,7 @@ extensions = [{
 			target[position++] = 0xd6
 			target[position++] = 0xff
 			targetView.setUint32(position, seconds)
-		} else if (seconds > 0 && seconds < 0x400000000) {
+		} else if (seconds > 0 && seconds < 0x100000000) {
 			// Timestamp 64
 			let { target, targetView, position} = allocateForWrite(10)
 			target[position++] = 0xd7
