@@ -37,6 +37,10 @@ try {
 
 export class Unpackr {
 	constructor(options) {
+		this.readFixedString = readFixedString;
+		this.readString8 = readString8;
+		this.readString16 = readString16;
+		this.readString32 = readString32;
 		if (options) {
 			if (options.useRecords === false && options.mapsAsObjects === undefined)
 				options.mapsAsObjects = true
@@ -45,6 +49,12 @@ export class Unpackr {
 			else if (options.getStructures) {
 				(options.structures = []).uninitialized = true // this is what we use to denote an uninitialized structures
 				options.structures.sharedLength = 0
+			}
+			if (options.disableNativeAcceleration === true) {
+				this.readFixedString = readStringJS;
+				this.readString8 = readStringJS;
+				this.readString16 = readStringJS;
+				this.readString32 = readStringJS;
 			}
 		}
 		Object.assign(this, options)
@@ -255,7 +265,7 @@ export function read() {
 			if (string != null)
 				return string
 		}
-		return readFixedString(length)
+		return currentUnpackr.readFixedString(length)
 	} else {
 		let value
 		switch (token) {
@@ -393,7 +403,7 @@ export function read() {
 				if (srcStringEnd >= position) {
 					return srcString.slice(position - srcStringStart, (position += value) - srcStringStart)
 				}
-				return readString8(value)
+				return currentUnpackr.readString8(value)
 			case 0xda:
 			// str 16
 				value = dataView.getUint16(position)
@@ -401,7 +411,7 @@ export function read() {
 				if (srcStringEnd >= position) {
 					return srcString.slice(position - srcStringStart, (position += value) - srcStringStart)
 				}
-				return readString16(value)
+				return currentUnpackr.readString16(value)
 			case 0xdb:
 			// str 32
 				value = dataView.getUint32(position)
@@ -409,7 +419,7 @@ export function read() {
 				if (srcStringEnd >= position) {
 					return srcString.slice(position - srcStringStart, (position += value) - srcStringStart)
 				}
-				return readString32(value)
+				return currentUnpackr.readString32(value)
 			case 0xdc:
 			// array 16
 				value = dataView.getUint16(position)
@@ -822,7 +832,7 @@ function readKey() {
 		if (srcStringEnd >= position) // if it has been extracted, must use it (and faster anyway)
 			return srcString.slice(position - srcStringStart, (position += length) - srcStringStart)
 		else if (!(srcStringEnd == 0 && srcEnd < 180))
-			return readFixedString(length)
+			return currentUnpackr.readFixedString(length)
 	} else { // not cacheable, go back and do a standard read
 		position--
 		return read()
@@ -874,7 +884,7 @@ function readKey() {
 	let string = length < 16 ? shortStringInJS(length) : longStringInJS(length)
 	if (string != null)
 		return entry.string = string
-	return entry.string = readFixedString(length)
+	return entry.string = currentUnpackr.readFixedString(length)
 }
 
 // the registration of the record definition extension (as "r")
