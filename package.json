@@ -1,7 +1,7 @@
 {
   "name": "msgpackr",
   "author": "Kris Zyp",
-  "version": "1.5.7",
+  "version": "1.6.0",
   "description": "Ultra-fast MessagePack implementation with extensions for records and structured cloning",
   "license": "MIT",
   "types": "./index.d.ts",
@@ -32,6 +32,10 @@
         "require": "./dist/node.cjs",
         "import": "./node-index.js"
       },
+      "bun": {
+        "require": "./dist/node.cjs",
+        "import": "./node-index.js"
+      },
       "default": "./index.js"
     },
     "./pack": {
@@ -39,10 +43,18 @@
         "import": "./index.js",
         "require": "./dist/node.cjs"
       },
+      "bun": {
+        "import": "./index.js",
+        "require": "./dist/node.cjs"
+      },
       "default": "./pack.js"
     },
     "./unpack": {
       "node": {
+        "import": "./index.js",
+        "require": "./dist/node.cjs"
+      },
+      "bun": {
         "import": "./index.js",
         "require": "./dist/node.cjs"
       },
@@ -56,7 +68,7 @@
     "/*.ts"
   ],
   "optionalDependencies": {
-    "msgpackr-extract": "^1.1.4"
+    "msgpackr-extract": "^2.0.0"
   },
   "devDependencies": {
     "@rollup/plugin-json": "^4.1.0",

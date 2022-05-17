@@ -10,16 +10,15 @@ import { createRequire } from 'module'
 const nativeAccelerationDisabled = process.env.MSGPACKR_NATIVE_ACCELERATION_DISABLED !== undefined && process.env.MSGPACKR_NATIVE_ACCELERATION_DISABLED.toLowerCase() === 'true';
 
 if (!nativeAccelerationDisabled) {
-	const extractor = tryRequire('msgpackr-extract')
-	if (extractor)
-		setExtractor(extractor.extractStrings)
-	
-	function tryRequire(moduleId) {
-		try {
-			let require = createRequire(import.meta.url)
-			return require(moduleId)
-		} catch (error) {
-			// native module is optional
-		}
+	let extractor
+	try {
+		if (typeof require == 'function')
+			extractor = require('msgpackr-extract')
+		else
+			extractor = createRequire(import.meta.url)('msgpackr-extract')
+		if (extractor)
+			setExtractor(extractor.extractStrings)
+	} catch (error) {
+		// native module is optional
 	}
 }

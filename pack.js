@@ -6,7 +6,8 @@ try {
 } catch (error) {}
 let extensions, extensionClasses
 const hasNodeBuffer = typeof Buffer !== 'undefined'
-const ByteArrayAllocate = hasNodeBuffer ? Buffer.allocUnsafeSlow : Uint8Array
+const ByteArrayAllocate = hasNodeBuffer ?
+	function(length) { return Buffer.allocUnsafeSlow(length) } : Uint8Array
 const ByteArray = hasNodeBuffer ? Buffer : Uint8Array
 const MAX_BUFFER_SIZE = hasNodeBuffer ? 0x100000000 : 0x7fd00000
 let target, keysTarget
@@ -596,6 +597,7 @@ export class Packr extends Unpackr {
 				newSize = ((Math.max((end - start) << 2, target.length - 1) >> 12) + 1) << 12
 			let newBuffer = new ByteArrayAllocate(newSize)
 			targetView = new DataView(newBuffer.buffer, 0, newSize)
+			end = Math.min(end, target.length)
 			if (target.copy)
 				target.copy(newBuffer, 0, start, end)
 			else
