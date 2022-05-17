@@ -27,8 +27,8 @@ export class Packr extends Unpackr {
 		let structures
 		let referenceMap
 		let lastSharedStructuresLength = 0
-		let encodeUtf8 = ByteArray.prototype.utf8Write ? function(string, position, maxBytes) {
-			return target.utf8Write(string, position, maxBytes)
+		let encodeUtf8 = ByteArray.prototype.utf8Write ? function(string, position) {
+			return target.utf8Write(string, position, 0xffffffff)
 		} : (textEncoder && textEncoder.encodeInto) ?
 			function(string, position) {
 				return textEncoder.encodeInto(string, target.subarray(position)).written
@@ -257,7 +257,7 @@ export class Packr extends Unpackr {
 					}
 					length = strPosition - position - headerSize
 				} else {
-					length = encodeUtf8(value, position + headerSize, maxBytes)
+					length = encodeUtf8(value, position + headerSize)
 				}
 
 				if (length < 0x20) {
