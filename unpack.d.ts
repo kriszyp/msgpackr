@@ -21,7 +21,6 @@ export interface Options {
 	maxSharedStructures?: number
 	maxOwnStructures?: number
 	int64AsNumber?: boolean
-	disableNativeAcceleration?: boolean
 	shouldShareStructure?: (keys: string[]) => boolean
 	getStructures?(): {}[]
 	saveStructures?(structures: {}[]): boolean | void
