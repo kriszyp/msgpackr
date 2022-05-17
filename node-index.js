@@ -7,15 +7,19 @@ export const mapsAsObjects = true
 import { setExtractor } from './unpack.js'
 import { createRequire } from 'module'
 
-const extractor = tryRequire('msgpackr-extract')
-if (extractor)
-	setExtractor(extractor.extractStrings)
+const nativeAccelerationDisabled = process.env.MSGPACKR_NATIVE_ACCELERATION_DISABLED !== undefined && process.env.MSGPACKR_NATIVE_ACCELERATION_DISABLED.toLowerCase() === 'true';
 
-function tryRequire(moduleId) {
-	try {
-		let require = createRequire(import.meta.url)
-		return require(moduleId)
-	} catch (error) {
-		// native module is optional
+if (!nativeAccelerationDisabled) {
+	const extractor = tryRequire('msgpackr-extract')
+	if (extractor)
+		setExtractor(extractor.extractStrings)
+	
+	function tryRequire(moduleId) {
+		try {
+			let require = createRequire(import.meta.url)
+			return require(moduleId)
+		} catch (error) {
+			// native module is optional
+		}
 	}
 }
