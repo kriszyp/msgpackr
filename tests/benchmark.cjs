@@ -1,4 +1,5 @@
-var msgpackr = tryRequire("../dist/node.cjs");
+var msgpackr = require("../dist/node.cjs");
+console.log('isNativeAccelerationEnabled', msgpackr.isNativeAccelerationEnabled)
 var msgpack_node = tryRequire("msgpack");
 var msgpack_msgpack = tryRequire("@msgpack/msgpack");
 var msgpack_lite = tryRequire("msgpack-lite");
@@ -68,6 +69,7 @@ if (msgpackr) {
 }
 
 if (JSON) {
+console.log('JSON')
   buf = bench('buf = Buffer(JSON.stringify(obj));', JSON_stringify, data);
   obj = bench('obj = JSON.parse(buf);', JSON.parse, buf);
   test(obj);
@@ -143,11 +145,11 @@ if (cbor) {
 }
 
 function JSON_stringify(src) {
-  return Buffer(JSON.stringify(src));
+  return Buffer.from(JSON.stringify(src));
 }
 
 function msgpack_codec_pack(data) {
-  return Buffer(msgpack_codec.pack(data));
+  return Buffer.from(msgpack_codec.pack(data));
 }
 
 function bench(name, func, src) {
