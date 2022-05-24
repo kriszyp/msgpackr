@@ -24,18 +24,20 @@ suite('encode and decode tests with partial values', function () {
       const encoded = encoder.encode(testData)
       assert.isTrue(Buffer.isBuffer(encoded), 'encode returns a Buffer')
       assert.deepStrictEqual(encoder.decode(encoded, encoded.length, true), testData, 'full buffer decodes well')
-      const firstHalf = encoded.slice(0, Math.floor(encoded.length / 2))
-      let value
-      try {
-        value = encoder.decode(firstHalf, firstHalf.length, true)
-      } catch (err) {
-        if (err.incomplete !== true) {
-          assert.fail(`Should throw an error with .incomplete set to true, instead threw error <${err}>`)
-        } else {
-          return; // victory! correct outcome!
+      for (let length = Math.max(1, Math.ceil(encoded.length / 2) - 40); length < Math.ceil(encoded.length / 2); length++) {
+        const firstHalf = encoded.slice(0, length)
+        let value
+        try {
+          value = encoder.decode(firstHalf, firstHalf.length, true)
+        } catch (err) {
+          if (err.incomplete !== true) {
+            assert.fail(`Should throw an error with .incomplete set to true, instead threw error <${err}>, for ${JSON.stringify(testData)} ${encoded.length}, ${length}`)
+          } else {
+            continue; // victory! correct outcome!
+          }
         }
+        assert.fail(`Should throw an error with .incomplete set to true, instead returned value ${JSON.stringify(value)}`)
       }
-      assert.fail(`Should throw an error with .incomplete set to true, instead returned value ${JSON.stringify(value)}`)
     })
   }
 })

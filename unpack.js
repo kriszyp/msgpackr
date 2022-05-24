@@ -178,7 +178,7 @@ export function checkedRead() {
 			// over read
 			throw new Error('Unexpected end of MessagePack data')
 		} else if (!sequentialMode) {
-			throw new Error('Data read, but end of buffer not reached')
+			throw new Error('Data read, but end of buffer not reached ' + JSON.stringify(result).slice(0, 100))
 		}
 		// else more to read, but we are reading sequentially, so don't clear source yet
 		return result
@@ -271,7 +271,10 @@ export function read() {
 			case 0xc3: return true
 			case 0xc4:
 				// bin 8
-				return readBin(src[position++])
+				value = src[position++]
+				if (value === undefined)
+					throw new Error('Unexpected end of buffer')
+				return readBin(value)
 			case 0xc5:
 				// bin 16
 				value = dataView.getUint16(position)
