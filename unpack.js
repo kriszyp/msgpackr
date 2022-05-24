@@ -176,9 +176,7 @@ export function checkedRead() {
 				referenceMap = null
 		} else if (position > srcEnd) {
 			// over read
-			let error = new Error('Unexpected end of MessagePack data')
-			error.incomplete = true
-			throw error
+			throw new Error('Unexpected end of MessagePack data')
 		} else if (!sequentialMode) {
 			throw new Error('Data read, but end of buffer not reached')
 		}
@@ -188,7 +186,7 @@ export function checkedRead() {
 		if (currentStructures.restoreStructures)
 			restoreStructures()
 		clearSource()
-		if (error instanceof RangeError || error.message.startsWith('Unexpected end of buffer')) {
+		if (error instanceof RangeError || error.message.startsWith('Unexpected end of buffer') || position > srcEnd) {
 			error.incomplete = true
 		}
 		throw error
@@ -621,12 +619,12 @@ function longStringInJS(length) {
 	for (let i = 0; i < length; i++) {
 		const byte = src[position++];
 		if ((byte & 0x80) > 0) {
-			position = start
-    			return
-    		}
-    		bytes[i] = byte
-    	}
-    	return fromCharCode.apply(String, bytes)
+				position = start
+				return
+			}
+			bytes[i] = byte
+		}
+		return fromCharCode.apply(String, bytes)
 }
 function shortStringInJS(length) {
 	if (length < 4) {
