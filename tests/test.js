@@ -169,6 +169,10 @@ suite('msgpackr basic tests', function(){
 		assert.deepEqual(deserialized2, data2)
 	})
 
+	test('compact 123', function() {
+		assert.equal(pack(123).length, 1)
+	})
+
 	test('extended class pack/unpack', function(){
 		function Extended() {
 
