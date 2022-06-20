@@ -1,4 +1,15 @@
-export { Unpackr, Decoder, unpack, decode, addExtension, FLOAT32_OPTIONS, clearSource, roundFloat32, isNativeAccelerationEnabled } from './unpack'
+export {
+	Unpackr,
+	Decoder,
+	unpack,
+	unpackMultiple,
+	decode,
+	addExtension,
+	FLOAT32_OPTIONS,
+	clearSource,
+	roundFloat32,
+	isNativeAccelerationEnabled,
+} from './unpack'
 import { Options } from './unpack'
 export { Packr, Encoder, pack, encode } from './pack'
 import { Transform, Readable } from 'stream'
