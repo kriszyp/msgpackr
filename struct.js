@@ -26,8 +26,9 @@
 // 111 - constants and 3-byte strings
 
 import { setWriteSlots, RECORD_SYMBOL } from './pack.js'
-import { setReadStruct, unpack } from './unpack.js';
-const hasNonLatin = /[\u0080-\uFFFF]/
+import { setReadStruct, unpack, mult10 } from './unpack.js';
+const hasNonLatin = /[\u0080-\uFFFF]/;
+const float32Headers = [false, true, true, false, false, true, true, false]
 setWriteSlots(writeSlots);
 function writeSlots(object, target, position, structures, makeRoom) {
 	let transition = structures.transitions || false
@@ -57,9 +58,22 @@ function writeSlots(object, target, position, structures, makeRoom) {
 		let value = object[key];
 		switch (typeof value) {
 			case 'number':
-				if (value >>> 0 === value && value < 0x10000000)
+				if (value >>> 0 === value && value < 0x20000000) {
 					encoded = value;
-				break;
+					break;
+				} else if (value < 0x100000000 && value >= -0x80000000) {
+					targetView.setFloat32(position, value, true)
+					if (float32Headers[uint32[position] >>> 29]) {
+						let xShifted
+						// this checks for rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
+						if (((xShifted = value * mult10[((target[position] & 0x7f) << 1) | (target[position + 1] >> 7)]) >> 0) === xShifted) {
+							break;
+						}
+					}
+				}
+				// fall back to msgpack encoding
+				queuedReferences.push(value, position++);
+				continue;
 			case 'string':
 				if (hasNonLatin.test(value)) {
 					queuedReferences.push(value, position++);
@@ -67,6 +81,7 @@ function writeSlots(object, target, position, structures, makeRoom) {
 				}
 				if (value.length < 4) { // we can inline really small strings
 					encoded = 0xf8000000 + (value.length << 24) + (value.charCodeAt(0) << 16) + (value.charCodeAt(1) << 8) + (value.charCodeAt(2) || 0)
+					// TODO: determining remaining and make max value be a ratio of that (probably 1/256th)
 				} else if (value.length < 256 && stringData.length < 61440) {
 					// bundle these strings
 					encoded = 0x60000000 | (value.length << 16) | stringData.length;
@@ -137,6 +152,7 @@ function readStruct(src, position, srcEnd, structure) {
 						case 0:
 							return value;
 						case 1: case 2: case 5: case 6:
+							// TODO: Use decimal rounding
 							return float32[source.position + i];
 						case 3:
 							if (!srcString) {
