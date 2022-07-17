@@ -136,6 +136,13 @@ suite('msgpackr basic tests', function(){
 		var deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized, data)
 	})
+	test('pack/unpack empty data with bundled strings', function(){
+		var data = {}
+		let packr = new Packr({ bundleStrings: true })
+		var serialized = packr.pack(data)
+		var deserialized = packr.unpack(serialized)
+		assert.deepEqual(deserialized, data)
+	})
 	if (typeof Buffer != 'undefined')
 	test('replace data', function(){
 		var data1 = {

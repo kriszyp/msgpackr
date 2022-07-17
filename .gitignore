@@ -63,6 +63,7 @@ tests/samples
 # Visual Studio Code directory
 .vscode
 .vs
+.idea
 
 build
 dist/test.js
