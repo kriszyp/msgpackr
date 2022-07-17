@@ -1,8 +1,9 @@
 import * as msgpackr from '../index.js'
+import '../struct.js'
 import chai from 'chai'
-//import inspector  from 'inspector'; inspector.open(9330, null, true); debugger
+//import inspector  from 'inspector'; inspector.open(9229, null, true); debugger
 import { readFileSync } from 'fs'
-const sampleData = JSON.parse(readFileSync(new URL('./example4.json', import.meta.url)))
+const sampleData = JSON.parse(readFileSync(new URL('./example5.json', import.meta.url)))
 function tryRequire(module) {
 	try {
 		return require(module)
@@ -115,18 +116,23 @@ suite('msgpackr basic tests', function(){
 		var data = sampleData
 		let structures = []
 		var serialized = pack(data)
+		debugger;
 		var deserialized = unpack(serialized)
 		assert.deepEqual(deserialized, data)
 		var serialized = pack(data)
 		var deserialized = unpack(serialized)
 		assert.deepEqual(deserialized, data)
 	})
-	test('pack/unpack sample data with records', function(){
+	test.only('pack/unpack sample data with records', function(){
 		var data = sampleData
 		let structures = []
 		let packr = new Packr({ structures, useRecords: true })
-		var serialized = packr.pack(data)
+		var serialized = packr.pack(data, 2048)
+		serialized = packr.pack(data, 2048)
 		var deserialized = packr.unpack(serialized)
+		for (let key in deserialized) {
+			console.log(deserialized[key]);
+		}
 		assert.deepEqual(deserialized, data)
 	})
 	test('pack/unpack sample data with bundled strings', function(){
@@ -338,6 +344,18 @@ suite('msgpackr basic tests', function(){
 		var serialized = pack(data)
 		var deserialized = unpack(serialized)
 		assert.deepEqual(deserialized, data)
+	})
+
+	test('separate instances', function() {
+		const packr = new Packr({
+			structures: [['m', 'e'], ['action', 'share']]
+		});
+		const packr2 = new Packr({
+			structures: [['m', 'e'], ['action', 'share']]
+		});
+		let packed = packr.pack([{m: 1, e: 2}, {action: 3, share: 4}]);
+		// also tried directly decoding this without the first Packr instance packed = new Uint8Array([0x92, 0x40, 0x01, 0x02, 0x41, 0x03, 0x04]);
+		console.log(packr2.unpack(packed));
 	})
 
 	test('many shared structures', function() {

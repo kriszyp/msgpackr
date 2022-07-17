@@ -1,104 +1,179 @@
-/*
-types:
-double
-float
-uint16
-uint8
-ref16
-ref32
-str16 - starting with 0x8 (first bit set) means latin1
-str32 - starting with 0xf, means latin1
+// first four bits
+// 0000 - unsigned int
+// 0010 - float32
+// 0011 - float32
+// 0100 - float32
+// 0101 - float32
+// 0110 - plain reference
+// 0111 - latin string reference
+// 1000 - structure reference
+// 1001 - random access structure reference
+// 1010 - float32
+// 1011 - float32
+// 1100 - float32
+// 1101 - float32
+// 1110 - constants and 3-byte strings
+// 1111 - negative int
 
-all types:
-(0xff)*, 0xc0 = null
-(0xff)*, msgpackr encoding -> decode with msgpackr
-*/
+// first three bits
+// 000 - unsigned int
+// 001 - float32
+// 010 - float32
+// 011 - latin string reference
+// 100 - reference
+// 101 - float32
+// 110 - float32
+// 111 - constants and 3-byte strings
 
-const TYPE_SIZE = {
-	double: 8,
-	float: 4,
-	uint16: 2,
-	uint8: 1,
-	ref16: 2,
-	ref32: 4,
-	str16: 2,
-	str32: 4,
-	ref0: 0,
-	str0: 0,
-}
-function readObject() {
-	
-	var prototype = {}
-	// sort with biggest types first for optimal packing and alignment
-	positioned = structure.slice(0).sort((a, b) => {
-		let asSize = TYPE_SIZE[a.type];
-		let bSize = TYPE_SIZE[b.type];
-		return asSize > bSize ? 1 : aSize < bSize ? -1 : 0;
-	})
-	let l = structure.length;
-	let offset = 0;
-	let lastReferencingOffset;
-	for (let i = 0; i < l; i++) {
-		let property = positioned[i];
-		property.offset = offset;
-		property.start = lastReferencingOffset;
-		lastReferencingOffset = offset;
-		offset += TYPE_SIZE[property.type];
-	}
-	for (let i = 0, l = structure.length; i < l; i++) {
-		let property = structure[i]
-		let get, set
-		let offset = property.offset
-		switch (property.type) {
-			case 'double':
-				get = function() {
-					return this.buffer.dataView.getFloat64(this.position + offset)
-				};
+import { setWriteSlots, RECORD_SYMBOL } from './pack.js'
+import { setReadStruct, unpack } from './unpack.js';
+const hasNonLatin = /[\u0080-\uFFFF]/
+setWriteSlots(writeSlots);
+function writeSlots(object, target, position, structures, makeRoom) {
+	let transition = structures.transitions || false
+	let newTransitions = 0
+	let keyCount = 0;
+	let start = position;
+	position = (position >> 2) + 1;
+	let queuedReferences = [];
+	let uint32 = target.uint32 || (target.uint32 = new Uint32Array(target.buffer));
+	let encoded;
+	let stringData = '';
+	let safeEnd = (target.length - 10) >> 2;
+	for (let key in object) {
+		let nextTransition = transition[key]
+		if (!nextTransition) {
+			return; // bail
+			//nextTransition = transition[key] = Object.create(null)
+			//newTransitions++
+		}
+		if (position > safeEnd) {
+			target = makeRoom(position << 2)
+			position -= start
+			start = 0
+			safeEnd = target.length - 10
+		}
+		transition = nextTransition
+		let value = object[key];
+		switch (typeof value) {
+			case 'number':
+				if (value >>> 0 === value && value < 0x10000000)
+					encoded = value;
 				break;
-			case 'uint16':
-				get = function() {
-					let value = this.buffer.dataView.getUint16(this.position + offset)
-					if (value >= 0xffc0) {
-						return unpack(this.buffer, this.position + 2, this.position + 1);
-					}
-					return value;
-				};
-				break;
-			case 'ref16':
-				let start = property.start;
-				get = function() {
-					
-					let refEnd = this.buffer.dataView.getUint16(this.position + offset) + this.position + offset;
-					
-					if (value >= 0xffc0) {
-						return unpack(this.buffer, this.position + 2, this.position + 1);
-					}
-					return value;
+			case 'string':
+				if (hasNonLatin.test(value)) {
+					queuedReferences.push(value, position++);
+					continue;
 				}
-				
+				if (value.length < 4) { // we can inline really small strings
+					encoded = 0xf8000000 + (value.length << 24) + (value.charCodeAt(0) << 16) + (value.charCodeAt(1) << 8) + (value.charCodeAt(2) || 0)
+				} else if (value.length < 256 && stringData.length < 61440) {
+					// bundle these strings
+					encoded = 0x60000000 | (value.length << 16) | stringData.length;
+					stringData += value;
+				} else { // else queue it
+					queuedReferences.push(value, position++);
+					continue;
+				}
+				break;
+			case 'object':
+				if (value) {
+					queuedReferences.push(value, position++);
+					continue;
+				} else { // null
+					encoded = 0xe0000000;
+				}
+				break;
+			case 'boolean':
+				encoded = value ? 0xe3000000 : 0xe2000000;
+				break;
+			case 'undefined':
+				encoded = 0xe1000000;
+				break;
 		}
-		Object.defineProperty(prototype, property.name, { get, set, enumerable: true })
-
+		uint32[position++] = encoded;
 	}
-	structure.read = function() {
-		let object = {
-			position,
-			source,
-			__proto__: prototype
-		}
-		position += 
+	let recordId = transition[RECORD_SYMBOL]
+	if (!(recordId < 256)) {
+		// for now just punt and go back to writeObject
+		return;
+		// newRecord(transition, transition.__keys__ || Object.keys(object), newTransitions, true)
 	}
-
-	if (readObject.count++ > inlineObjectReadThreshold) {
-		let readObject = structure.read = (new Function('r', 'return function(){return {' + structure.map(key => validName.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '}}'))(read)
-		if (structure.highByte === 0)
-			structure.read = createSecondByteReader(firstId, structure.read)
-		return readObject() // second byte is already read, if there is one so immediately read object
+	position = position << 2;
+	safeEnd = safeEnd << 2;
+	let stringLength = stringData.length;
+	if (stringData) {
+		if (position + stringLength > safeEnd) {
+			target = makeRoom(position + stringLength);
+		}	
+		position += target.latin1Write(stringData, position, 0xffffffff);
 	}
-	let object = {}
-	for (let i = 0, l = structure.length; i < l; i++) {
-		let key = structure[i]
-		object[key] = read()
-	}
-	return object
+	target[start++] = 0xc1;
+	target[start++] = recordId;
+	target[start++] = stringLength >> 8;
+	target[start++] = stringLength & 0xff;
+	queuedReferences.position = position;
+	return queuedReferences;
 }
+var sourceSymbol = Symbol('source')
+function readStruct(src, position, srcEnd, structure) {
+	var stringLength = (src[position++] << 8) | src[position++];
+	var construct = structure.construct;
+	var srcString;
+	if (!construct) {
+		construct = structure.construct = function() {
+		}
+		var prototype = construct.prototype;
+		for (let i = 0, l = structure.length; i < l; i++) {
+			let key = structure[i];
+			Object.defineProperty(prototype, key, {
+				get() {
+					let source = this[sourceSymbol];
+					let src = source.src;
+					let uint32 = src.uint32 || (src.uint32 = new Uint32Array(src.buffer, src.byteOffset, src.byteLength));
+					let value = uint32[source.position + i];
+					let start;
+					switch (value >>> 29) {
+						case 0:
+							return value;
+						case 1: case 2: case 5: case 6:
+							return float32[source.position + i];
+						case 3:
+							if (!srcString) {
+								start = (source.position + l) << 2;
+								srcString = src.toString('utf-8', start, start + stringLength);
+							}
+							start = value & 0xffff;
+							return srcString.slice(start, start + ((value >> 16) & 0x7ff));
+						case 4:
+								start = 0x1fffffff & value;
+								let end = srcEnd;
+								for (let next = i + 1; next < l; next++) {
+									let nextValue = uint32[source.position + next];
+									if ((nextValue & 0xf0000000) == 0x30000000) {
+										end = 0x1fffffff & nextValue;
+									}
+								}
+								return unpack(src.slice(start, end));
+						case 7:
+							switch((value >> 24) & 0xf) {
+								case 0: return null;
+								case 1: return undefined;
+								case 2: return false;
+								case 3: return true;
+							}
+					}
+				},
+				enumerable: true,
+			});
+		}
+	}
+	var instance = new construct();
+	instance[sourceSymbol] = {
+		src,
+		uint32: src.uint32,
+		position: position >> 2,
+	}
+	return instance;
+}
+setReadStruct(readStruct)

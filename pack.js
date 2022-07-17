@@ -15,9 +15,10 @@ let targetView
 let position = 0
 let safeEnd
 let bundledStrings = null
+let writeSlots
 const MAX_BUNDLE_SIZE = 0xf000
 const hasNonLatin = /[\u0080-\uFFFF]/
-const RECORD_SYMBOL = Symbol('record-id')
+export const RECORD_SYMBOL = Symbol('record-id')
 export class Packr extends Unpackr {
 	constructor(options) {
 		super(options)
@@ -122,7 +123,10 @@ export class Packr extends Unpackr {
 			if (hasSharedUpdate)
 				hasSharedUpdate = false
 			try {
-				pack(value)
+				if (encodeOptions & RANDOM_ACCESS_STRUCT)
+					writeStruct(value);
+				else
+					pack(value)
 				if (bundledStrings) {
 					writeBundles(start, pack)
 				}
@@ -687,6 +691,17 @@ export class Packr extends Unpackr {
 				target[insertionOffset + start] = keysTarget[0]
 			}
 		}
+		const writeStruct = (object, safePrototype) => {
+			let queuedReferences = writeSlots(object, target, position, structures, makeRoom)
+			if (!queuedReferences)
+				return writeObject(object, true);
+			position = queuedReferences.position;
+			for (let i = 0, l = queuedReferences.length; i < l;) {
+				let value = queuedReferences[i++];
+				target.uint32[queuedReferences[i++]] = 0x60000000 | position;
+				pack(value);
+			}
+		}
 	}
 	useBuffer(buffer) {
 		// this means we are finished using our own buffer and we can write over it safely
@@ -921,6 +936,9 @@ export function addExtension(extension) {
 	}
 	unpackAddExtension(extension)
 }
+export function setWriteSlots(func) {
+	writeSlots = func;
+}
 
 let defaultPackr = new Packr({ useRecords: false })
 export const pack = defaultPackr.pack
@@ -931,3 +949,4 @@ import { FLOAT32_OPTIONS } from './unpack.js'
 export const { NEVER, ALWAYS, DECIMAL_ROUND, DECIMAL_FIT } = FLOAT32_OPTIONS
 export const REUSE_BUFFER_MODE = 512
 export const RESET_BUFFER_MODE = 1024
+export const RANDOM_ACCESS_STRUCT = 2048

@@ -28,6 +28,7 @@ export const C1 = new C1Type()
 C1.name = 'MessagePack 0xC1'
 var sequentialMode = false
 var inlineObjectReadThreshold = 2
+var readStruct
 try {
 	new Function('')
 } catch(error) {
@@ -265,6 +266,11 @@ export function read() {
 						return bundledStrings[1].slice(bundledStrings.position1, bundledStrings.position1 += value)
 					else
 						return bundledStrings[0].slice(bundledStrings.position0, bundledStrings.position0 -= value)
+				} else if (readStruct) {
+					let id = src[position++]
+					value = readStruct(src, position, srcEnd, currentStructures[id - 0x40] || loadStructures()[id - 0x40])
+					position = srcEnd
+					return value
 				}
 				return C1; // "never-used", return special object to denote that
 			case 0xc2: return false
@@ -1050,4 +1056,7 @@ export function roundFloat32(float32Number) {
 	f32Array[0] = float32Number
 	let multiplier = mult10[((u8Array[3] & 0x7f) << 1) | (u8Array[2] >> 7)]
 	return ((multiplier * float32Number + (float32Number > 0 ? 0.5 : -0.5)) >> 0) / multiplier
+}
+export function setReadStruct(func) {
+	readStruct = func;
 }

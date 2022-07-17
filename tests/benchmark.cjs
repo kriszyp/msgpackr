@@ -18,7 +18,7 @@ msgpack_codec = msgpack_codec && msgpack_codec.msgpack;
 what_the_pack = what_the_pack && what_the_pack.initialize(2**20);
 
 var pkg = require("../package.json");
-var data = require("./example4.json");
+var data = require("./example5.json");
 var packed = msgpack_lite && msgpack_lite.encode(data);
 var expected = JSON.stringify(data);
 
@@ -38,18 +38,37 @@ var COL2 = 7;
 var COL3 = 5;
 var COL4 = 6;
 
-console.log(rpad("operation", COL1), "|", "  op  ", "|", "  ms ", "|", " op/s ");
-console.log(rpad("", COL1, "-"), "|", lpad(":", COL2, "-"), "|", lpad(":", COL3, "-"), "|", lpad(":", COL4, "-"));
+console.log(rpad("operation", COL1), "|", "  op  ", "|", "  ms ", "|", " op/s ", "|", "size");
+console.log(rpad("", COL1, "-"), "|", lpad(":", COL2, "-"), "|", lpad(":", COL3, "-"), "|", lpad(":", COL4, "-"), "|", lpad(":", COL4, "-"));
 
 var buf, obj;
 
 if (msgpackr) {
-  let packr
+  let packr, last
+  let keys = Object.keys(data);
   packr = new msgpackr.Packr({ structures: [] })
   buf = bench('msgpackr w/ shared structures: packr.pack(obj);', packr.pack.bind(packr), data);
   //buf = bench('msgpackr w/ shared structures: packr.pack(obj);', data => {let result = packr.pack(data); packr.resetMemory(); return result;}, data);
+  obj = bench('msgpackr w/ shared structures: packr.unpack(buf);', value => {
+	let o = packr.unpack(value);
+	for (let i of keys) {
+		last = o[i];
+	}
+	return last;
+  }, buf);
+  test(obj);
 
-  obj = bench('msgpackr w/ shared structures: packr.unpack(buf);', packr.unpack.bind(packr), buf);
+  packr = new msgpackr.Packr({ structures: [] })
+  buf = bench('msgpackr w/ random access structures: packr.pack(obj);', value => packr.pack(value, 2048), data);
+  //buf = bench('msgpackr w/ shared structures: packr.pack(obj);', data => {let result = packr.pack(data); packr.resetMemory(); return result;}, data);
+
+  obj = bench('msgpackr w/ random access structures: packr.unpack(buf);', value => {
+	let o = packr.unpack(value);
+	for (let i of keys) {
+		last = o[i];
+	}
+	return last;
+  }, buf);
   test(obj);
 
   packr = new msgpackr.Packr({ useRecords: false })
@@ -173,7 +192,7 @@ function bench(name, func, src) {
   count = lpad(count, COL2);
   duration = lpad(duration, COL3);
   score = lpad(score, COL4);
-  console.log(name, "|", count, "|", duration, "|", score);
+  console.log(name, "|", count, "|", duration, "|", score, "|", src.length);
   return ret;
 }
 
