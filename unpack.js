@@ -40,6 +40,14 @@ export class Unpackr {
 		if (options) {
 			if (options.useRecords === false && options.mapsAsObjects === undefined)
 				options.mapsAsObjects = true
+			if (options.sequential && options.trusted !== false) {
+				options.trusted = true;
+				if (!options.structures && options.useRecords != false) {
+					options.structures = []
+					if (!options.maxSharedStructures)
+						options.maxSharedStructures = 0
+				}
+			}
 			if (options.structures)
 				options.structures.sharedLength = options.structures.length
 			else if (options.getStructures) {
