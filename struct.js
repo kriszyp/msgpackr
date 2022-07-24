@@ -25,22 +25,23 @@
 // 110 - float32
 // 111 - constants and 3-byte strings
 
-import { setWriteSlots, RECORD_SYMBOL } from './pack.js'
+import { setWriteStructSlots, RECORD_SYMBOL } from './pack.js'
 import { setReadStruct, unpack, mult10 } from './unpack.js';
 const hasNonLatin = /[\u0080-\uFFFF]/;
 const float32Headers = [false, true, true, false, false, true, true, false]
-setWriteSlots(writeSlots);
-function writeSlots(object, target, position, structures, makeRoom) {
+setWriteStructSlots(writeStruct);
+function writeStruct(object, target, position, structures, makeRoom) {
 	let transition = structures.transitions || false
 	let newTransitions = 0
 	let keyCount = 0;
 	let start = position;
-	position = (position >> 2) + 1;
+	position += 4;
 	let queuedReferences = [];
 	let uint32 = target.uint32 || (target.uint32 = new Uint32Array(target.buffer));
+	let targetView = target.dataView;
 	let encoded;
 	let stringData = '';
-	let safeEnd = (target.length - 10) >> 2;
+	let safeEnd = target.length - 10;
 	for (let key in object) {
 		let nextTransition = transition[key]
 		if (!nextTransition) {
@@ -49,7 +50,7 @@ function writeSlots(object, target, position, structures, makeRoom) {
 			//newTransitions++
 		}
 		if (position > safeEnd) {
-			target = makeRoom(position << 2)
+			target = makeRoom(position)
 			position -= start
 			start = 0
 			safeEnd = target.length - 10
@@ -63,20 +64,23 @@ function writeSlots(object, target, position, structures, makeRoom) {
 					break;
 				} else if (value < 0x100000000 && value >= -0x80000000) {
 					targetView.setFloat32(position, value, true)
-					if (float32Headers[uint32[position] >>> 29]) {
+					if (float32Headers[target[position + 3] >>> 5]) {
 						let xShifted
 						// this checks for rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
-						if (((xShifted = value * mult10[((target[position] & 0x7f) << 1) | (target[position + 1] >> 7)]) >> 0) === xShifted) {
-							break;
+						if (((xShifted = value * mult10[((target[position + 3] & 0x7f) << 1) | (target[position + 2] >> 7)]) >> 0) === xShifted) {
+							position += 4;
+							continue;
 						}
 					}
 				}
 				// fall back to msgpack encoding
-				queuedReferences.push(value, position++);
+				queuedReferences.push(value, position);
+				position += 4;
 				continue;
 			case 'string':
 				if (hasNonLatin.test(value)) {
-					queuedReferences.push(value, position++);
+					queuedReferences.push(value, position);
+					position += 4;
 					continue;
 				}
 				if (value.length < 4) { // we can inline really small strings
@@ -87,13 +91,15 @@ function writeSlots(object, target, position, structures, makeRoom) {
 					encoded = 0x60000000 | (value.length << 16) | stringData.length;
 					stringData += value;
 				} else { // else queue it
-					queuedReferences.push(value, position++);
+					queuedReferences.push(value, position);
+					position += 4;
 					continue;
 				}
 				break;
 			case 'object':
 				if (value) {
-					queuedReferences.push(value, position++);
+					queuedReferences.push(value, position);
+					position += 4;
 					continue;
 				} else { // null
 					encoded = 0xe0000000;
@@ -106,7 +112,8 @@ function writeSlots(object, target, position, structures, makeRoom) {
 				encoded = 0xe1000000;
 				break;
 		}
-		uint32[position++] = encoded;
+		targetView.setUint32(position, encoded, true);
+		position += 4;
 	}
 	let recordId = transition[RECORD_SYMBOL]
 	if (!(recordId < 256)) {
@@ -114,8 +121,6 @@ function writeSlots(object, target, position, structures, makeRoom) {
 		return;
 		// newRecord(transition, transition.__keys__ || Object.keys(object), newTransitions, true)
 	}
-	position = position << 2;
-	safeEnd = safeEnd << 2;
 	let stringLength = stringData.length;
 	if (stringData) {
 		if (position + stringLength > safeEnd) {
@@ -145,32 +150,36 @@ function readStruct(src, position, srcEnd, structure) {
 				get() {
 					let source = this[sourceSymbol];
 					let src = source.src;
-					let uint32 = src.uint32 || (src.uint32 = new Uint32Array(src.buffer, src.byteOffset, src.byteLength));
-					let value = uint32[source.position + i];
+					//let uint32 = src.uint32 || (src.uint32 = new Uint32Array(src.buffer, src.byteOffset, src.byteLength));
+					let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
+					let position = source.position + (i << 2);
+					let value = dataView.getUint32(position, true);
 					let start;
 					switch (value >>> 29) {
 						case 0:
 							return value;
-						case 1: case 2: case 5: case 6:
-							// TODO: Use decimal rounding
-							return float32[source.position + i];
 						case 3:
 							if (!srcString) {
-								start = (source.position + l) << 2;
+								start = source.position + (l << 2);
 								srcString = src.toString('utf-8', start, start + stringLength);
 							}
 							start = value & 0xffff;
 							return srcString.slice(start, start + ((value >> 16) & 0x7ff));
 						case 4:
-								start = 0x1fffffff & value;
-								let end = srcEnd;
-								for (let next = i + 1; next < l; next++) {
-									let nextValue = uint32[source.position + next];
-									if ((nextValue & 0xf0000000) == 0x30000000) {
-										end = 0x1fffffff & nextValue;
-									}
+							start = 0x1fffffff & value;
+							let end = srcEnd;
+							for (let next = i + 1; next < l; next++) {
+								let nextValue = dataView.getUint32(source.position + (next << 2), true);;
+								if ((nextValue & 0xe0000000) == 0x80000000) {
+									end = 0x1fffffff & nextValue;
 								}
-								return unpack(src.slice(start, end));
+							}
+							return unpack(src.slice(start, end));
+						case 1: case 2: case 5: case 6:
+							let fValue = dataView.getFloat32(position, true);
+							// this does rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
+							let multiplier = mult10[((src[position + 3] & 0x7f) << 1) | (src[position + 2] >> 7)]
+							return ((multiplier * fValue + (fValue > 0 ? 0.5 : -0.5)) >> 0) / multiplier;
 						case 7:
 							switch((value >> 24) & 0xf) {
 								case 0: return null;
@@ -188,7 +197,7 @@ function readStruct(src, position, srcEnd, structure) {
 	instance[sourceSymbol] = {
 		src,
 		uint32: src.uint32,
-		position: position >> 2,
+		position,
 	}
 	return instance;
 }
