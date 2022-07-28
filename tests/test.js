@@ -1,7 +1,7 @@
 import * as msgpackr from '../index.js'
 import '../struct.js'
 import chai from 'chai'
-import inspector  from 'inspector'; inspector.open(9229, null, true); debugger
+//import inspector  from 'inspector'; inspector.open(9229, null, true); debugger
 import { readFileSync } from 'fs'
 const sampleData = JSON.parse(readFileSync(new URL('./example.json', import.meta.url)))
 function tryRequire(module) {
@@ -123,16 +123,13 @@ suite('msgpackr basic tests', function(){
 		var deserialized = unpack(serialized)
 		assert.deepEqual(deserialized, data)
 	})
-	test.only('pack/unpack sample data with records', function(){
+	test('pack/unpack sample data with records', function(){
 		var data = sampleData
 		let structures = []
-		let packr = new Packr({ structures, useRecords: true })
-		var serialized = packr.pack(data, 2048)
-		serialized = packr.pack(data, 2048)
+		let packr = new Packr({ structures, useRecords: true, randomAccessStructure: true, freezeData: true })
+		var serialized = packr.pack(data)
+		serialized = packr.pack(data)
 		var deserialized = packr.unpack(serialized)
-		for (let key in deserialized) {
-			console.log(key, deserialized[key]);
-		}
 		assert.deepEqual(deserialized, data)
 	})
 	test('pack/unpack sample data with bundled strings', function(){

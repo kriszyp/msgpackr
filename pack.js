@@ -123,7 +123,7 @@ export class Packr extends Unpackr {
 			if (hasSharedUpdate)
 				hasSharedUpdate = false
 			try {
-				if (encodeOptions & RANDOM_ACCESS_STRUCT)
+				if (packr.randomAccessStructure)
 					writeStruct(value);
 				else
 					pack(value)
@@ -949,4 +949,3 @@ import { FLOAT32_OPTIONS } from './unpack.js'
 export const { NEVER, ALWAYS, DECIMAL_ROUND, DECIMAL_FIT } = FLOAT32_OPTIONS
 export const REUSE_BUFFER_MODE = 512
 export const RESET_BUFFER_MODE = 1024
-export const RANDOM_ACCESS_STRUCT = 2048
