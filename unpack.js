@@ -268,7 +268,7 @@ export function read() {
 						return bundledStrings[0].slice(bundledStrings.position0, bundledStrings.position0 -= value)
 				} else if (readStruct) {
 					let id = src[position++]
-					value = readStruct(src, position, srcEnd, currentStructures[id - 0x40] || loadStructures()[id - 0x40])
+					value = readStruct(src, position, srcEnd, currentStructures[id - 0x40] || loadStructures()[id - 0x40], currentUnpackr)
 					position = srcEnd
 					return value
 				}

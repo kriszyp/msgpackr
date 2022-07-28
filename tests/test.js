@@ -3,7 +3,7 @@ import '../struct.js'
 import chai from 'chai'
 import inspector  from 'inspector'; inspector.open(9229, null, true); debugger
 import { readFileSync } from 'fs'
-const sampleData = JSON.parse(readFileSync(new URL('./example5.json', import.meta.url)))
+const sampleData = JSON.parse(readFileSync(new URL('./example.json', import.meta.url)))
 function tryRequire(module) {
 	try {
 		return require(module)
@@ -131,7 +131,7 @@ suite('msgpackr basic tests', function(){
 		serialized = packr.pack(data, 2048)
 		var deserialized = packr.unpack(serialized)
 		for (let key in deserialized) {
-			console.log(deserialized[key]);
+			console.log(key, deserialized[key]);
 		}
 		assert.deepEqual(deserialized, data)
 	})

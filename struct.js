@@ -136,7 +136,7 @@ function writeStruct(object, target, position, structures, makeRoom) {
 	return queuedReferences;
 }
 var sourceSymbol = Symbol('source')
-function readStruct(src, position, srcEnd, structure) {
+function readStruct(src, position, srcEnd, structure, unpackr) {
 	var stringLength = (src[position++] << 8) | src[position++];
 	var construct = structure.construct;
 	var srcString;
@@ -170,22 +170,28 @@ function readStruct(src, position, srcEnd, structure) {
 							let end = srcEnd;
 							for (let next = i + 1; next < l; next++) {
 								let nextValue = dataView.getUint32(source.position + (next << 2), true);;
-								if ((nextValue & 0xe0000000) == 0x80000000) {
+								if ((nextValue & 0xe0000000) == -0x80000000) {
 									end = 0x1fffffff & nextValue;
+									break;
 								}
 							}
-							return unpack(src.slice(start, end));
+							return unpackr.unpack(src.slice(start, end));
 						case 1: case 2: case 5: case 6:
 							let fValue = dataView.getFloat32(position, true);
 							// this does rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
 							let multiplier = mult10[((src[position + 3] & 0x7f) << 1) | (src[position + 2] >> 7)]
 							return ((multiplier * fValue + (fValue > 0 ? 0.5 : -0.5)) >> 0) / multiplier;
 						case 7:
-							switch((value >> 24) & 0xf) {
+							switch((value >> 24) & 0x1f) {
 								case 0: return null;
 								case 1: return undefined;
 								case 2: return false;
 								case 3: return true;
+								case 0x18: return '';
+								case 0x19: return String.fromCharCode((value >> 16) & 0xff);
+								case 0x20: return String.fromCharCode((value >> 16) & 0xff, (value >> 8) & 0xff);
+								case 0x21: return String.fromCharCode((value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff);
+								default: throw new Error('Unknown constant');
 							}
 					}
 				},
