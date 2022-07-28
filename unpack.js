@@ -240,6 +240,8 @@ export function read() {
 			for (let i = 0; i < token; i++) {
 				array[i] = read()
 			}
+			if (currentUnpackr.freezeData)
+				return Object.freeze(array)
 			return array
 		}
 	} else if (token < 0xc0) {
@@ -455,7 +457,8 @@ function createStructureReader(structure, firstId) {
 	function readObject() {
 		// This initial function is quick to instantiate, but runs slower. After several iterations pay the cost to build the faster function
 		if (readObject.count++ > inlineObjectReadThreshold) {
-			let readObject = structure.read = (new Function('r', 'return function(){return {' + structure.map(key => validName.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '}}'))(read)
+			let readObject = structure.read = (new Function('r', 'return function(){return ' + (currentUnpackr.freezeData ? 'Object.freeze' : '') +
+				'({' + structure.map(key => validName.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '})}'))(read)
 			if (structure.highByte === 0)
 				structure.read = createSecondByteReader(firstId, structure.read)
 			return readObject() // second byte is already read, if there is one so immediately read object
@@ -465,6 +468,8 @@ function createStructureReader(structure, firstId) {
 			let key = structure[i]
 			object[key] = read()
 		}
+		if (currentUnpackr.freezeData)
+			return Object.freeze(object);
 		return object
 	}
 	readObject.count = 0
@@ -602,6 +607,8 @@ function readArray(length) {
 	for (let i = 0; i < length; i++) {
 		array[i] = read()
 	}
+	if (currentUnpackr.freezeData)
+		return Object.freeze(array)
 	return array
 }
 
