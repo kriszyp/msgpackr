@@ -163,6 +163,11 @@ export function checkedRead() {
 			if (sharedLength < currentStructures.length)
 				currentStructures.length = sharedLength
 		}
+		if (currentUnpackr.randomAccessStructure && src[position] < 0x40 && readStruct) {
+			let id = (src[position++] << 8) + src[position++];
+			return readStruct(src, position, srcEnd, currentStructures[id - 0x40] || loadStructures()[id - 0x40], currentUnpackr)
+		}
+
 		let result = read()
 		if (bundledStrings) // bundled strings to skip past
 			position = bundledStrings.postBundlePosition
@@ -268,11 +273,6 @@ export function read() {
 						return bundledStrings[1].slice(bundledStrings.position1, bundledStrings.position1 += value)
 					else
 						return bundledStrings[0].slice(bundledStrings.position0, bundledStrings.position0 -= value)
-				} else if (readStruct) {
-					let id = src[position++]
-					value = readStruct(src, position, srcEnd, currentStructures[id - 0x40] || loadStructures()[id - 0x40], currentUnpackr)
-					position = srcEnd
-					return value
 				}
 				return C1; // "never-used", return special object to denote that
 			case 0xc2: return false

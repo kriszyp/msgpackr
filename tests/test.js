@@ -123,7 +123,7 @@ suite('msgpackr basic tests', function(){
 		var deserialized = unpack(serialized)
 		assert.deepEqual(deserialized, data)
 	})
-	test('pack/unpack sample data with records', function(){
+	test.only('pack/unpack sample data with records', function(){
 		var data = sampleData
 		let structures = []
 		let packr = new Packr({ structures, useRecords: true, randomAccessStructure: true, freezeData: true })

@@ -692,15 +692,19 @@ export class Packr extends Unpackr {
 			}
 		}
 		const writeStruct = (object, safePrototype) => {
-			let queuedReferences = writeStructSlots(object, target, position, structures, makeRoom)
-			if (!queuedReferences)
+			let newPosition = writeStructSlots(object, target, position, structures, makeRoom, (value, newPosition) => {
+				position = newPosition;
+				if (start > 0) {
+					pack(value);
+					if (start == 0)
+						return -position; // indicate the buffer was re-allocated
+				} else
+					pack(value);
+				return position;
+			})
+			if (newPosition === 0) // bail and go to a msgpack object
 				return writeObject(object, true);
-			position = queuedReferences.position;
-			for (let i = 0, l = queuedReferences.length; i < l;) {
-				let value = queuedReferences[i++];
-				targetView.setUint32(queuedReferences[i++], 0x80000000 | (position - start), true);
-				pack(value);
-			}
+			position = newPosition;
 		}
 	}
 	useBuffer(buffer) {

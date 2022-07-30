@@ -4,8 +4,8 @@
 // 0011 - float32
 // 0100 - float32
 // 0101 - float32
-// 0110 - plain reference
-// 0111 - latin string reference
+// 0110 - latin string reference
+// 0111 - plain reference
 // 1000 - structure reference
 // 1001 - random access structure reference
 // 1010 - float32
@@ -30,7 +30,7 @@ import { setReadStruct, unpack, mult10 } from './unpack.js';
 const hasNonLatin = /[\u0080-\uFFFF]/;
 const float32Headers = [false, true, true, false, false, true, true, false]
 setWriteStructSlots(writeStruct);
-function writeStruct(object, target, position, structures, makeRoom) {
+function writeStruct(object, target, position, structures, makeRoom, pack) {
 	let transition = structures.transitions || false
 	let newTransitions = 0
 	let keyCount = 0;
@@ -45,13 +45,14 @@ function writeStruct(object, target, position, structures, makeRoom) {
 	for (let key in object) {
 		let nextTransition = transition[key]
 		if (!nextTransition) {
-			return; // bail
+			return 0; // bail
 			//nextTransition = transition[key] = Object.create(null)
 			//newTransitions++
 		}
 		if (position > safeEnd) {
+			let newPosition = position - start;
 			target = makeRoom(position)
-			position -= start
+			position = newPosition;
 			start = 0
 			safeEnd = target.length - 10
 		}
@@ -74,12 +75,12 @@ function writeStruct(object, target, position, structures, makeRoom) {
 					}
 				}
 				// fall back to msgpack encoding
-				queuedReferences.push(value, position);
+				queuedReferences.push(value, position - start);
 				position += 4;
 				continue;
 			case 'string':
 				if (hasNonLatin.test(value)) {
-					queuedReferences.push(value, position);
+					queuedReferences.push(value, position - start);
 					position += 4;
 					continue;
 				}
@@ -91,14 +92,14 @@ function writeStruct(object, target, position, structures, makeRoom) {
 					encoded = 0x60000000 | (value.length << 16) | stringData.length;
 					stringData += value;
 				} else { // else queue it
-					queuedReferences.push(value, position);
+					queuedReferences.push(value, position - start);
 					position += 4;
 					continue;
 				}
 				break;
 			case 'object':
 				if (value) {
-					queuedReferences.push(value, position);
+					queuedReferences.push(value, position - start);
 					position += 4;
 					continue;
 				} else { // null
@@ -116,24 +117,52 @@ function writeStruct(object, target, position, structures, makeRoom) {
 		position += 4;
 	}
 	let recordId = transition[RECORD_SYMBOL]
-	if (!(recordId < 256)) {
+	if (!(recordId < 1024)) {
 		// for now just punt and go back to writeObject
-		return;
+		return 0;
 		// newRecord(transition, transition.__keys__ || Object.keys(object), newTransitions, true)
 	}
 	let stringLength = stringData.length;
 	if (stringData) {
 		if (position + stringLength > safeEnd) {
 			target = makeRoom(position + stringLength);
-		}	
+		}
 		position += target.latin1Write(stringData, position, 0xffffffff);
 	}
-	target[start++] = 0xc1;
-	target[start++] = recordId;
-	target[start++] = stringLength >> 8;
-	target[start++] = stringLength & 0xff;
-	queuedReferences.position = position;
-	return queuedReferences;
+	target[start] = recordId >> 8;
+	target[start + 1] = recordId & 0xff;
+	target[start + 2] = stringLength >> 8;
+	target[start + 3] = stringLength & 0xff;
+	let queued32BitReferences;
+	for (let i = 0, l = queuedReferences.length; i < l;) {
+		let value = queuedReferences[i++];
+		let slotOffset = queuedReferences[i++] + start;
+		let offset = position - slotOffset;
+		if (offset < 0x1f000000) {
+			targetView.setUint32(slotOffset, 0x80000000 | (offset), true);
+		} else {
+			if (!queued32BitReferences)
+				queued32BitReferences = [];
+			queued32BitReferences.push({slotOffset, offset: position - start});
+		}
+		position = pack(value, position);
+		if (position < 0) {
+			// re-allocated
+			position = -position;
+			start = 0;
+		}
+	}
+	if (queued32BitReferences) {
+		// TODO: makeRoom
+		for (let i = 0, l = queued32BitReferences.length; i < l; i++) {
+			let ref = queued32BitReferences[i];
+			targetView.setUint32(ref.slotOffset, 0xa0000000 - ((l - i) << 2), true);
+			targetView.setUint32(position, ref.offset, true);
+			position += 4;
+		}
+	}
+
+	return position;
 }
 var sourceSymbol = Symbol('source')
 function readStruct(src, position, srcEnd, structure, unpackr) {
@@ -144,6 +173,18 @@ function readStruct(src, position, srcEnd, structure, unpackr) {
 		construct = structure.construct = function() {
 		}
 		var prototype = construct.prototype;
+		Object.defineProperty(prototype, 'toJSON', {
+			get() {
+				// return an enumerable object with own properties to JSON stringify
+				let resolved = {};
+				for (let i = 0, l = structure.length; i < l; i++) {
+					let key = structure[i];
+					resolved[key] = this[key];
+				}
+				return resolved;
+			},
+			// not enumerable or anything 
+		});
 		for (let i = 0, l = structure.length; i < l; i++) {
 			let key = structure[i];
 			Object.defineProperty(prototype, key, {
@@ -159,19 +200,25 @@ function readStruct(src, position, srcEnd, structure, unpackr) {
 						case 0:
 							return value;
 						case 3:
-							if (!srcString) {
-								start = source.position + (l << 2);
-								srcString = src.toString('utf-8', start, start + stringLength);
+							if (value & 0x10000000) {
+								start = (value & 0xffff) + position;
+								return src.toString('utf8', start, start + ((value >> 16) & 0x7ff));
+							} else {
+								if (!srcString) {
+									start = source.position + (l << 2);
+									srcString = src.toString('latin1', start, start + stringLength);
+								}
+								start = value & 0xffff;
+								return srcString.slice(start, start + ((value >> 16) & 0x7ff));
 							}
-							start = value & 0xffff;
-							return srcString.slice(start, start + ((value >> 16) & 0x7ff));
 						case 4:
-							start = 0x1fffffff & value;
+							start = (0x1fffffff & value) + position;
 							let end = srcEnd;
 							for (let next = i + 1; next < l; next++) {
-								let nextValue = dataView.getUint32(source.position + (next << 2), true);;
+								position = source.position + (next << 2);
+								let nextValue = dataView.getUint32(position, true);;
 								if ((nextValue & 0xe0000000) == -0x80000000) {
-									end = 0x1fffffff & nextValue;
+									end = (0x1fffffff & nextValue) + position;
 									break;
 								}
 							}
@@ -187,6 +234,7 @@ function readStruct(src, position, srcEnd, structure, unpackr) {
 								case 1: return undefined;
 								case 2: return false;
 								case 3: return true;
+								case 8: return dataView.getFloat64(position + (value & 0x3ffffff), true);
 								case 0x18: return '';
 								case 0x19: return String.fromCharCode((value >> 16) & 0xff);
 								case 0x20: return String.fromCharCode((value >> 16) & 0xff, (value >> 8) & 0xff);
