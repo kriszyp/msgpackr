@@ -171,12 +171,13 @@ export function checkedRead() {
 			if (sharedLength < currentStructures.length)
 				currentStructures.length = sharedLength
 		}
+		let result
 		if (currentUnpackr.randomAccessStructure && src[position] < 0x40 && readStruct) {
 			let id = (src[position++] << 8) + src[position++];
-			return readStruct(src, position, srcEnd, currentStructures[id - 0x40] || loadStructures()[id - 0x40], currentUnpackr)
-		}
-
-		let result = read()
+			result = readStruct(src, position, srcEnd, currentStructures[id - 0x40] || loadStructures()[id - 0x40], currentUnpackr)
+			position = srcEnd
+		} else
+			result = read()
 		if (bundledStrings) // bundled strings to skip past
 			position = bundledStrings.postBundlePosition
 
