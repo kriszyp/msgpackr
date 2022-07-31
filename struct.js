@@ -145,12 +145,14 @@ function writeStruct(object, target, position, structures, makeRoom, pack) {
 				queued32BitReferences = [];
 			queued32BitReferences.push({slotOffset, offset: position - start});
 		}
-		position = pack(value, position);
-		if (position < 0) {
+		let newPosition = pack(value, position);
+		if (typeof newPosition === 'object') {
 			// re-allocated
-			position = -position;
+			position = newPosition.position;
+			targetView = newPosition.targetView;
 			start = 0;
-		}
+		} else
+			position = newPosition;
 	}
 	if (queued32BitReferences) {
 		// TODO: makeRoom

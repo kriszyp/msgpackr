@@ -3,7 +3,11 @@ import '../struct.js'
 import chai from 'chai'
 //import inspector  from 'inspector'; inspector.open(9229, null, true); debugger
 import { readFileSync } from 'fs'
-const sampleData = JSON.parse(readFileSync(new URL('./example.json', import.meta.url)))
+const allSampleData = [];
+for (let i = 1; i < 6; i++) {
+	allSampleData.push(JSON.parse(readFileSync(new URL(`./example${i > 1 ? i : ''}.json`, import.meta.url))));
+}
+const sampleData = allSampleData[3];
 function tryRequire(module) {
 	try {
 		return require(module)
@@ -111,34 +115,36 @@ suite('msgpackr basic tests', function(){
 		var deserialized = unpack(serialized)
 		assert.equal(deserialized, data)
 	})
-
-	test('pack/unpack sample data', function(){
-		var data = sampleData
-		let structures = []
-		var serialized = pack(data)
-		debugger;
-		var deserialized = unpack(serialized)
-		assert.deepEqual(deserialized, data)
-		var serialized = pack(data)
-		var deserialized = unpack(serialized)
-		assert.deepEqual(deserialized, data)
-	})
-	test.only('pack/unpack sample data with records', function(){
-		var data = sampleData
-		let structures = []
-		let packr = new Packr({ structures, useRecords: true, randomAccessStructure: true, freezeData: true })
-		var serialized = packr.pack(data)
-		serialized = packr.pack(data)
-		var deserialized = packr.unpack(serialized)
-		assert.deepEqual(deserialized, data)
-	})
-	test('pack/unpack sample data with bundled strings', function(){
-		var data = sampleData
-		let packr = new Packr({ /*structures,*/ useRecords: false, bundleStrings: true })
-		var serialized = packr.pack(data)
-		var deserialized = packr.unpack(serialized)
-		assert.deepEqual(deserialized, data)
-	})
+	for (let sampleData of allSampleData) {
+		let snippet = JSON.stringify(sampleData).slice(0, 20) + '...';
+		test('pack/unpack sample data ' + snippet, function(){
+			var data = sampleData
+			let structures = []
+			var serialized = pack(data)
+			var deserialized = unpack(serialized)
+			assert.deepEqual(deserialized, data)
+			var serialized = pack(data)
+			var deserialized = unpack(serialized)
+			assert.deepEqual(deserialized, data)
+		})
+		test('pack/unpack sample data with random access structures ' + snippet, function() {
+			var data = sampleData
+			let structures = []
+			let packr = new Packr({ structures, useRecords: true, randomAccessStructure: true, freezeData: true })
+			for (let i = 0; i < 20; i++) {
+				var serialized = packr.pack(data)
+				var deserialized = packr.unpack(serialized)
+				assert.deepEqual(deserialized, data)
+			}
+		})
+		test('pack/unpack sample data with bundled strings ' + snippet, function(){
+			var data = sampleData
+			let packr = new Packr({ /*structures,*/ useRecords: false, bundleStrings: true })
+			var serialized = packr.pack(data)
+			var deserialized = packr.unpack(serialized)
+			assert.deepEqual(deserialized, data)
+		})
+	}
 	if (typeof Buffer != 'undefined')
 	test('replace data', function(){
 		var data1 = {

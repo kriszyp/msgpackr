@@ -697,7 +697,7 @@ export class Packr extends Unpackr {
 				if (start > 0) {
 					pack(value);
 					if (start == 0)
-						return -position; // indicate the buffer was re-allocated
+						return { position, targetView }; // indicate the buffer was re-allocated
 				} else
 					pack(value);
 				return position;
