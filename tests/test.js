@@ -19,6 +19,7 @@ function tryRequire(module) {
 var assert = chai.assert
 //if (typeof msgpackr === 'undefined') { msgpackr = require('..') }
 var Packr = msgpackr.Packr
+var Unpackr = msgpackr.Unpackr
 var unpack = msgpackr.unpack
 var unpackMultiple = msgpackr.unpackMultiple
 var roundFloat32 = msgpackr.roundFloat32
@@ -145,6 +146,25 @@ suite('msgpackr basic tests', function(){
 			assert.deepEqual(deserialized, data)
 		})
 	}
+
+	test('pack/unpack empty data with bundled strings', function(){
+		var data = {}
+		let packr = new Packr({ bundleStrings: true })
+		var serialized = packr.pack(data)
+		var deserialized = packr.unpack(serialized)
+		assert.deepEqual(deserialized, data)
+	})
+	test('pack/unpack sequential data', function(){
+		var data = { foo:1, bar: 2 }
+		let packr = new Packr({ sequential: true })
+		let unpackr = new Unpackr({ sequential: true })
+		var serialized = packr.pack(data)
+		var deserialized = unpackr.unpack(serialized)
+		assert.deepEqual(deserialized, data)
+		var serialized = packr.pack(data)
+		var deserialized = unpackr.unpack(serialized)
+		assert.deepEqual(deserialized, data)
+	})
 	if (typeof Buffer != 'undefined')
 	test('replace data', function(){
 		var data1 = {

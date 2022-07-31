@@ -38,11 +38,13 @@ export class Unpackr {
 	constructor(options?: Options)
 	unpack(messagePack: Buffer | Uint8Array): any
 	decode(messagePack: Buffer | Uint8Array): any
-	unpackMultiple(messagePack: Buffer | Uint8Array, forEach?: (value: any) => any): [] | void
+	unpackMultiple(messagePack: Buffer | Uint8Array): any[]
+	unpackMultiple(messagePack: Buffer | Uint8Array, forEach: (value: any) => any): void
 }
 export class Decoder extends Unpackr {}
 export function unpack(messagePack: Buffer | Uint8Array): any
-export function unpackMultiple(messagePack: Buffer | Uint8Array, forEach?: (value: any) => any): [] | void
+export function unpackMultiple(messagePack: Buffer | Uint8Array): any[]
+export function unpackMultiple(messagePack: Buffer | Uint8Array, forEach: (value: any) => any): void
 export function decode(messagePack: Buffer | Uint8Array): any
 export function addExtension(extension: Extension): void
 export function clearSource(): void

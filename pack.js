@@ -921,12 +921,14 @@ function insertIds(serialized, idsToInsert) {
 }
 
 function writeBundles(start, pack) {
-	targetView.setUint32(bundledStrings.position + start, position - bundledStrings.position - start)
-	let writeStrings = bundledStrings
-	bundledStrings = null
-	let startPosition = position
-	pack(writeStrings[0])
-	pack(writeStrings[1])
+	if (bundledStrings.length > 0) {
+		targetView.setUint32(bundledStrings.position + start, position - bundledStrings.position - start)
+		let writeStrings = bundledStrings
+		bundledStrings = null
+		let startPosition = position
+		pack(writeStrings[0])
+		pack(writeStrings[1])
+	}
 }
 
 export function addExtension(extension) {
