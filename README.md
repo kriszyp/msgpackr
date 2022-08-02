@@ -40,7 +40,7 @@ stream.write(myData);
 ```
 Or for a full example of sending and receiving data on a stream:
 ```js
-import { PackrStream } from 'msgpackr';
+import { PackrStream, UnpackrStream } from 'msgpackr';
 let sendingStream = new PackrStream();
 let receivingStream = new UnpackrStream();
 // we are just piping to our own stream, but normally you would send and
