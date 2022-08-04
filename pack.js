@@ -123,7 +123,7 @@ export class Packr extends Unpackr {
 			if (hasSharedUpdate)
 				hasSharedUpdate = false
 			try {
-				if (packr.randomAccessStructure)
+				if (packr.randomAccessStructure && value.constructor && value.constructor === Object)
 					writeStruct(value);
 				else
 					pack(value)

@@ -170,7 +170,6 @@ var sourceSymbol = Symbol('source')
 function readStruct(src, position, srcEnd, structure, unpackr) {
 	var stringLength = (src[position++] << 8) | src[position++];
 	var construct = structure.construct;
-	var srcString;
 	if (!construct) {
 		construct = structure.construct = function() {
 		}
@@ -206,16 +205,16 @@ function readStruct(src, position, srcEnd, structure, unpackr) {
 								start = (value & 0xffff) + position;
 								return src.toString('utf8', start, start + ((value >> 16) & 0x7ff));
 							} else {
-								if (!srcString) {
+								if (!source.srcString) {
 									start = source.position + (l << 2);
-									srcString = src.toString('latin1', start, start + stringLength);
+									source.srcString = src.toString('latin1', start, start + source.stringLength);
 								}
 								start = value & 0xffff;
-								return srcString.slice(start, start + ((value >> 16) & 0x7ff));
+								return source.srcString.slice(start, start + ((value >> 16) & 0x7ff));
 							}
 						case 4:
 							start = (0x1fffffff & value) + position;
-							let end = srcEnd;
+							let end = source.srcEnd;
 							for (let next = i + 1; next < l; next++) {
 								position = source.position + (next << 2);
 								let nextValue = dataView.getUint32(position, true);;
@@ -239,8 +238,8 @@ function readStruct(src, position, srcEnd, structure, unpackr) {
 								case 8: return dataView.getFloat64(position + (value & 0x3ffffff), true);
 								case 0x18: return '';
 								case 0x19: return String.fromCharCode((value >> 16) & 0xff);
-								case 0x20: return String.fromCharCode((value >> 16) & 0xff, (value >> 8) & 0xff);
-								case 0x21: return String.fromCharCode((value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff);
+								case 0x1a: return String.fromCharCode((value >> 16) & 0xff, (value >> 8) & 0xff);
+								case 0x1b: return String.fromCharCode((value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff);
 								default: throw new Error('Unknown constant');
 							}
 					}
@@ -254,6 +253,9 @@ function readStruct(src, position, srcEnd, structure, unpackr) {
 		src,
 		uint32: src.uint32,
 		position,
+		srcString: '',
+		srcEnd,
+		stringLength
 	}
 	return instance;
 }
