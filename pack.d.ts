@@ -1,5 +1,5 @@
-import { Unpackr } from './unpack'
-export { addExtension, FLOAT32_OPTIONS } from './unpack'
+import { Unpackr } from './unpack.js'
+export { addExtension, FLOAT32_OPTIONS } from './unpack.js'
 export class Packr extends Unpackr {
 	pack(value: any): Buffer
 	encode(value: any): Buffer
