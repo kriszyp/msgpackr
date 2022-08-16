@@ -1,13 +1,15 @@
 import * as msgpackr from '../index.js'
 import '../struct.js'
 import chai from 'chai'
-//import inspector  from 'inspector'; inspector.open(9229, null, true); debugger
+import inspector  from 'inspector';
+inspector.open(9229, null, true); debugger
 import { readFileSync } from 'fs'
-const allSampleData = [];
+let allSampleData = [];
 for (let i = 1; i < 6; i++) {
 	allSampleData.push(JSON.parse(readFileSync(new URL(`./example${i > 1 ? i : ''}.json`, import.meta.url))));
 }
 const sampleData = allSampleData[3];
+allSampleData = [allSampleData[4]]
 function tryRequire(module) {
 	try {
 		return require(module)
@@ -128,10 +130,14 @@ suite('msgpackr basic tests', function(){
 			var deserialized = unpack(serialized)
 			assert.deepEqual(deserialized, data)
 		})
-		test('pack/unpack sample data with random access structures ' + snippet, function() {
+		test.only('pack/unpack sample data with random access structures ' + snippet, function() {
 			var data = sampleData
 			let structures = []
-			let packr = new Packr({ structures, useRecords: true, randomAccessStructure: true, freezeData: true })
+			let packr = new Packr({ structures, useRecords: true, randomAccessStructure: true, freezeData: true, saveStructure(id, structure) {
+				console.log('saved',{id, structure});
+			}, getStructure(id) {
+				console.log('get',{id});
+			} })
 			for (let i = 0; i < 20; i++) {
 				var serialized = packr.pack(data)
 				var deserialized = packr.unpack(serialized)

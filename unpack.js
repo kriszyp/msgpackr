@@ -173,8 +173,7 @@ export function checkedRead() {
 		}
 		let result
 		if (currentUnpackr.randomAccessStructure && src[position] < 0x40 && readStruct) {
-			let id = (src[position++] << 8) + src[position++];
-			result = readStruct(src, position, srcEnd, currentStructures[id - 0x40] || loadStructures()[id - 0x40], currentUnpackr)
+			result = readStruct(src, position, srcEnd, currentUnpackr)
 			position = srcEnd
 		} else
 			result = read()

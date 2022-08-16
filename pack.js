@@ -701,7 +701,7 @@ export class Packr extends Unpackr {
 				} else
 					pack(value);
 				return position;
-			})
+			}, this);
 			if (newPosition === 0) // bail and go to a msgpack object
 				return writeObject(object, true);
 			position = newPosition;
