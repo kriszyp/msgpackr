@@ -2,14 +2,13 @@ import * as msgpackr from '../index.js'
 import '../struct.js'
 import chai from 'chai'
 import inspector  from 'inspector';
-inspector.open(9229, null, true); debugger
+//inspector.open(9229, null, true); debugger
 import { readFileSync } from 'fs'
 let allSampleData = [];
 for (let i = 1; i < 6; i++) {
 	allSampleData.push(JSON.parse(readFileSync(new URL(`./example${i > 1 ? i : ''}.json`, import.meta.url))));
 }
 const sampleData = allSampleData[3];
-allSampleData = [allSampleData[4]]
 function tryRequire(module) {
 	try {
 		return require(module)
@@ -140,7 +139,10 @@ suite('msgpackr basic tests', function(){
 			} })
 			for (let i = 0; i < 20; i++) {
 				var serialized = packr.pack(data)
-				var deserialized = packr.unpack(serialized)
+				var deserialized = packr.unpack(serialized);
+				for (let key in deserialized) {
+					console.log(key, deserialized[key]);
+				}
 				assert.deepEqual(deserialized, data)
 			}
 		})

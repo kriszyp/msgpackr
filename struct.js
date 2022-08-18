@@ -72,7 +72,7 @@ const PARENT = Symbol('parent');
 setWriteStructSlots(writeStruct);
 function writeStruct(object, target, position, structures, makeRoom, pack, packr) {
 	let structs = packr.structs || (packr.structs = []);
-	let transition = structs.transitions || Object.create(null);
+	let transition = structs.transitions || (structs.transitions = Object.create(null));
 	let start = position;
 	position += 2;
 	let queuedReferences = [], queuedStringReferences;
@@ -82,7 +82,7 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 	let stringData = '';
 	let safeEnd = target.length - 10;
 	for (let key in object) {
-		let nextTransition = transition[key] = (transition[key] = Object.create(null, {
+		let nextTransition = transition[key] || (transition[key] = Object.create(null, {
 			key: {value: key},
 			parent: {value: transition},
 		}));
@@ -105,7 +105,7 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 						continue;
 					} else*/ {
 						transition = transition.num32 || createTypeTransition(transition, 'num32');
-						targetView.setUint32(position, value);
+						targetView.setUint32(position, value, true);
 						position += 4;
 					}
 					break;
@@ -115,9 +115,9 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 						let xShifted
 						// this checks for rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
 						if (((xShifted = value * mult10[((target[position + 3] & 0x7f) << 1) | (target[position + 2] >> 7)]) >> 0) === xShifted) {
-							transition = transition.num32 || createTypeTransition(transition, 'num32');;
+							transition = transition.num32 || createTypeTransition(transition, 'num32');
 							position += 4;
-							break;;
+							break;
 						}
 					}
 				}
@@ -126,7 +126,7 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 				position += 8;
 				break;
 			case 'string':
-				transition = transition.string || createTypeTransition(transition, 'string');
+				transition = transition.string16 || createTypeTransition(transition, 'string16');
 				let header = (stringData.length > 0x3000 || hasNonLatin.test(value)) ? 0 : 0xc000; // the later indicates a latin string in the short string section
 				if (value.length > 0x100 || stringData.length > 0x3000 || hasNonLatin.test(value)) {
 					queuedReferences.push(value, position - start);
@@ -163,16 +163,17 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 		while(true) {
 			recordId = packr.structs.length;
 			let structure = [];
-			let nextTransition;
+			let nextTransition = transition;
 			let key, type;
-			while((type = transition[TYPE])) {
-				transition = transition[PARENT];
-				key = transition.key;
+			while((type = nextTransition[TYPE])) {
+				nextTransition = nextTransition[PARENT];
+				key = nextTransition.key;
 				structure.push([ key, type ]);
-				transition = transition.parent;
+				nextTransition = nextTransition.parent;
 			}
 			structure.reverse();
 			packr.structs[recordId] = structure;
+			transition[RECORD_SYMBOL] = recordId;
 			if (packr.saveStructure(recordId, structure) === false) {
 				while(packr.getStructure(++recordId)) {
 				}
@@ -186,10 +187,12 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 		return 0;
 		// newRecord(transition, transition.__keys__ || Object.keys(object), newTransitions, true)
 	}
+	let dataStart = position;
 	let stringLength = stringData.length;
 	if (stringData) {
 		if (position + stringLength > safeEnd) {
 			target = makeRoom(position + stringLength);
+			dataStart = position;
 		}
 		position += target.latin1Write(stringData, position, 0xffffffff);
 	}
@@ -210,10 +213,14 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 	for (let i = 0, l = queuedReferences.length; i < l;) {
 		let value = queuedReferences[i];
 		let slotOffset = queuedReferences[i + 1] + start;
-		let offset = position - slotOffset;
-
-		let newPosition = pack(value, position);
-		queuedReferences[i] = newPosition;
+		let offset = position - dataStart;
+		let newPosition;
+		if (typeof value === 'string') {
+			newPosition = position + target.utf8Write(value, position, 0xffffffff);
+		} else {
+			newPosition = pack(value, position);
+		}
+		queuedReferences[i] = offset;
 		i += 2;
 		if (typeof newPosition === 'object') {
 			// re-allocated
@@ -240,7 +247,7 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 }
 function anyType(transition, position, targetView, value) {
 	let nextTransition;
-	if ((nextTransition = transition.short || transition.string || transition.object)) {
+	if ((nextTransition = transition.short || transition.string16 || transition.object)) {
 		targetView.setInt16(position, value);
 		updatedPosition = position + 2;
 		return nextTransition;
@@ -301,21 +308,29 @@ function readStruct(src, position, srcEnd, unpackr) {
 			// not enumerable or anything 
 		});
 		let currentOffset = 0;
-		let lastRefProperty;
+		let lastRefProperty, lastStrProperty;
 		for (let i = 0, l = structure.length; i < l; i++) {
 			let property = structure[i];
 			let [ key, type ] = property;
 			property.offset = currentOffset;
 			let get;
 			switch(type) {
-				case 'string': case 'object':
-					property.previous = lastRefProperty;
+				case 'string16':
+					property.multiGetCount = 0;
+					property.previous = lastStrProperty;
+					lastStrProperty = property;
+					// fall through
+				case 'object':
+					if (lastRefProperty) {
+
+						lastRefProperty.next = property;
+					}
 					get = function() {
 						let source = this[sourceSymbol];
 						let src = source.src;
 						let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
 						let ref = dataView.getUint16(source.position + property.offset);
-						let start;
+						let refStart = currentOffset + source.position;
 						if (ref >= 0xc000) {
 							if (ref >= 0xff00) {
 								if (ref === 0xfff6)
@@ -323,42 +338,68 @@ function readStruct(src, position, srcEnd, unpackr) {
 								if (ref === 0xfff7)
 									return undefined;
 							} else {
-								start = currentOffset; // offset of the start of the latin string section
+								ref = ref & 0x3fff;
+								let start = 0; // offset of the start of the latin string section
 								let previous = property;
-								while (previous = previous.previous) {
+								while ((previous = previous.previous)) {
 									let prevRef = dataView.getUint16(source.position + previous.offset);
 									if (prevRef >= 0xc000 && prevRef < 0xf000) {
-										start = prefRef & 0x3fff;
+										start = prevRef & 0x3fff;
 										break;
 									}
 								}
-								/*if (!source.srcString) {
-									// TODO:
-									source.srcString = src.toString('latin1', start, start + source.stringLength);
-								}*/
-								return source.srcString.slice(start, (ref & 0x3fff) + currentOffset);
+								if (source.srcString) {
+									return source.srcString.slice(start, ref);
+								}
+								if (property.multiGetCount > 0) {
+									let strProp = lastStrProperty;
+									let stringEnd;
+									while (strProp !== property) {
+										let endRef = dataView.getUint16(source.position + strProp.offset);
+										if (endRef >= 0xc000 && endRef < 0xf000) {
+											stringEnd = endRef & 0x3fff;
+											break;
+										}
+										strProp = strProp.previous;
+									}
+									source.srcString = src.toString('latin1', refStart,
+										refStart + (stringEnd || ref));
+									return source.srcString.slice(start, ref);
+								}
+								if (source.prevStringGet) {
+									source.prevStringGet.multiGetCount += 2;
+								} else {
+									source.prevStringGet = property;
+									property.multiGetCount--;
+								}
+								return src.toString('latin1', start + refStart, ref + refStart);
 							}
 						}
-						let previous = property;
-						while (previous = previous.previous) {
-							let prevRef = dataView.getUint16(source.position + previous.offset);
-							if (prevRef < 0xc000) {
-								start = prefRef;
-								break;
-							}
-						}
-						if (!start) {
-							need_end_of_latin_string_section();
-						}
-						if (src[start] < 12) {
+						ref += refStart; // adjust to after the fixed slots
+						let end;
+
+						if (src[ref] < 12) {
 							// read the 32-bit reference
-							start = dataView.getUint32(ref - 8);
-							ref = dataView.getUint32(ref - 4);
-						}
-						if (type === 'string') {
-							return src.toString('utf8', start, ref);
+							ref = dataView.getUint32(ref) + refStart;
+							end = dataView.getUint32(ref + 4) + refStart;
 						} else {
-							return unpackr.unpack(src.slice(start, ref));
+							// if we have a recursive fixed structure, we also don't need to proactively
+							// get the end, but would need to
+							let next = property;
+							while ((next = next.next)) {
+								let nextRef = dataView.getUint16(source.position + next.offset);
+								if (nextRef < 0xc000) {
+									end = nextRef + refStart;
+									break;
+								}
+							}
+							if (!end) end = source.srcEnd;
+
+						}
+						if (type === 'string16') {
+							return src.toString('utf8', ref, end);
+						} else {
+							return unpackr.unpack(src.slice(ref, end));
 						}
 					};
 					lastRefProperty = property;
@@ -369,14 +410,15 @@ function readStruct(src, position, srcEnd, unpackr) {
 						let source = this[sourceSymbol];
 						let src = source.src;
 						let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
-						let value = dataView.getInt32(source.position + property.offset, true)
-						if (value < 0x20000000 && value >= -0x8000000) {
-							return value;
+						let position = source.position + property.offset;
+						let value = dataView.getInt32(position, true)
+						if (value < 0x20000000) {
+							if (value >= -0x6000000)
+								return value;
+							if (value >= -0x9000001)
+								return (value >>> 24) === 0xf6 ? null : undefined;
 						}
-						if (value >= -0xa0000000) {
-							return (value >> 24) == 0xf6 ? null : undefined;
-						}
-						let fValue = dataView.getFloat32(source.position + property.offset, true);
+						let fValue = dataView.getFloat32(position, true);
 						// this does rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
 						let multiplier = mult10[((src[position + 3] & 0x7f) << 1) | (src[position + 2] >> 7)]
 						return ((multiplier * fValue + (fValue > 0 ? 0.5 : -0.5)) >> 0) / multiplier;
