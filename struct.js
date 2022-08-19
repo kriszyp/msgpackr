@@ -81,10 +81,21 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 	let safeEnd = target.length - 10;
 	let usedLatin0;
 	for (let key in object) {
-		let nextTransition = transition[key] || (transition[key] = Object.create(null, {
-			key: {value: key},
-			parent: {value: transition},
-		}));
+		let value = object[key];
+		let nextTransition = transition[key];
+		if (!nextTransition){
+			transition[key] = nextTransition = {
+				key,
+				parent: transition,
+				latin0: null,
+				latin8: null,
+				num8: null,
+				string16: null,
+				object16: null,
+				num32: null,
+				float64: null
+			};
+		}
 		if (position > safeEnd) {
 			let newPosition = position - start;
 			target = makeRoom(position)
@@ -92,47 +103,46 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 			start = 0
 			safeEnd = target.length - 10
 		}
-		transition = nextTransition
-		let value = object[key];
 		switch (typeof value) {
 			case 'number':
-				if (value >> 0 === value && value < 0x20000000 && value > -0x1f000000) {
-					if (value < 0xf6 && value >= 0 && (transition.num8 || value < 0x20 && !transition.num32)) {
-						transition = transition.num8 || createTypeTransition(transition, 'num8');
-						target[position++] = value;
+				let number = value;
+				if (number >> 0 === number && number < 0x20000000 && number > -0x1f000000) {
+					if (number < 0xf6 && number >= 0 && (nextTransition.num8 || number < 0x20 && !nextTransition.num32)) {
+						transition = nextTransition.num8 || createTypeTransition(nextTransition, 'num8');
+						target[position++] = number;
 					} else {
-						transition = transition.num32 || createTypeTransition(transition, 'num32');
-						targetView.setUint32(position, value, true);
+						transition = nextTransition.num32 || createTypeTransition(nextTransition, 'num32');
+						targetView.setUint32(position, number, true);
 						position += 4;
 					}
 					break;
-				} else if (value < 0x100000000 && value >= -0x80000000) {
-					targetView.setFloat32(position, value, true);
+				} else if (number < 0x100000000 && number >= -0x80000000) {
+					targetView.setFloat32(position, number, true);
 					if (float32Headers[target[position + 3] >>> 5]) {
 						let xShifted
 						// this checks for rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
-						if (((xShifted = value * mult10[((target[position + 3] & 0x7f) << 1) | (target[position + 2] >> 7)]) >> 0) === xShifted) {
-							transition = transition.num32 || createTypeTransition(transition, 'num32');
+						if (((xShifted = number * mult10[((target[position + 3] & 0x7f) << 1) | (target[position + 2] >> 7)]) >> 0) === xShifted) {
+							transition = nextTransition.num32 || createTypeTransition(nextTransition, 'num32');
 							position += 4;
 							break;
 						}
 					}
 				}
-				transition = transition.float64 || createTypeTransition(transition, 'float64');
-				targetView.setFloat64(position, value, true);
+				transition = nextTransition.float64 || createTypeTransition(nextTransition, 'float64');
+				targetView.setFloat64(position, number, true);
 				position += 8;
 				break;
 			case 'string':
 				if (value.length > ((0xf5 - stringData.length) >> 2) || hasNonLatin.test(value)) {
-					transition = transition.string16 || createTypeTransition(transition, 'string16');
+					transition = nextTransition.string16 || createTypeTransition(nextTransition, 'string16');
 					queuedReferences.push(value, position - start);
 					position += 2;
 				} else { // latin reference
 					if (!stringData && !usedLatin0) {
-						transition = transition.latin0 || createTypeTransition(transition, 'latin0');
+						transition = nextTransition.latin0 || createTypeTransition(nextTransition, 'latin0');
 						usedLatin0 = true; // too complicated to use this more than once
 					} else {
-						transition = transition.latin8 || createTypeTransition(transition, 'latin8');
+						transition = nextTransition.latin8 || createTypeTransition(nextTransition, 'latin8');
 						target[position++] = stringData.length;
 					}
 					stringData += value;
@@ -140,21 +150,21 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 				break;
 			case 'object':
 				if (value) {
-					transition = transition.object16 || createTypeTransition(transition, 'object16');
+					transition = nextTransition.object16 || createTypeTransition(nextTransition, 'object16');
 					queuedReferences.push(value, position - start);
 					position += 2;
 					continue;
 				} else { // null
-					transition = anyType(transition, position, targetView, -10); // match CBOR with this
+					transition = anyType(nextTransition, position, targetView, -10); // match CBOR with this
 					position = updatedPosition;
 				}
 				break;
 			case 'boolean':
-				transition = transition.num8 || transition.latin8 || createTypeTransition(transition, 'num8');
+				transition = nextTransition.num8 || nextTransition.latin8 || createTypeTransition(nextTransition, 'num8');
 				target[position++] = value ? 0xf9 : 0xf8; // match CBOR with these
 				break;
 			case 'undefined':
-				transition = anyType(transition, position, targetView, -9); // match CBOR with this
+				transition = anyType(nextTransition, position, targetView, -9); // match CBOR with this
 				position = updatedPosition;
 				break;
 		}
@@ -166,8 +176,8 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 			let structure = [];
 			let nextTransition = transition;
 			let key, type;
-			while((type = nextTransition[TYPE])) {
-				nextTransition = nextTransition[PARENT];
+			while((type = nextTransition.__type)) {
+				nextTransition = nextTransition.__parent;
 				key = nextTransition.key;
 				structure.push([ key, type ]);
 				nextTransition = nextTransition.parent;
@@ -198,7 +208,13 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 			start = 0;
 			dataStart = position;
 		}
-		position += target.latin1Write(stringData, position, 0xffffffff);
+		if (stringLength > 0x40)
+			position += target.latin1Write(stringData, position, 0xffffffff);
+		else {
+			for (let i = 0; i < stringLength; i++) {
+				target[position++] = stringData.charCodeAt(i);
+			}
+		}
 	}
 	target[start] = 0x38; // indicator for one-byte record id
 	target[start + 1] = recordId;
@@ -285,8 +301,8 @@ function anyType(transition, position, targetView, value) {
 }
 function createTypeTransition(transition, type) {
 	let newTransition = transition[type] = Object.create(null);
-	newTransition[TYPE] = type;
-	newTransition[PARENT] = transition;
+	newTransition.__type = type;
+	newTransition.__parent = transition;
 	return newTransition;
 }
 function loadStruct(id, structure, transition) {
