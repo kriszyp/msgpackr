@@ -9,7 +9,6 @@ for (let i = 1; i < 6; i++) {
 	allSampleData.push(JSON.parse(readFileSync(new URL(`./example${i > 1 ? i : ''}.json`, import.meta.url))));
 }
 const sampleData = allSampleData[3];
-allSampleData = [allSampleData[3]];
 function tryRequire(module) {
 	try {
 		return require(module)

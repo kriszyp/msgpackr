@@ -75,8 +75,6 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 	let transition = structs.transitions || (structs.transitions = Object.create(null));
 	let start = position;
 	position += 2;
-	let hasOpenOneByte = (position & 1) === 1;
-	let pendingOneByte;
 	let queuedReferences = [];
 	let targetView = target.dataView;
 	let stringData = '';
@@ -95,16 +93,13 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 		}
 		transition = nextTransition
 		let value = object[key];
-		let oneByte;
 		switch (typeof value) {
 			case 'number':
-				if (value >>> 0 === value && value < 0x20000000) {
-/*					if (value < 0xf0) {
-						transition = transition.short || createTypeTransition(transition, 'short');
-						target[position++] = 0;
+				if (value >> 0 === value && value < 0x20000000 && value > -0x1f000000) {
+					if (value < 0xf6 && value >= 0 && (transition.num8 || value < 0x20 && !transition.num32)) {
+						transition = transition.num8 || createTypeTransition(transition, 'num8');
 						target[position++] = value;
-						continue;
-					} else*/ {
+					} else {
 						transition = transition.num32 || createTypeTransition(transition, 'num32');
 						targetView.setUint32(position, value, true);
 						position += 4;
@@ -118,14 +113,14 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 						if (((xShifted = value * mult10[((target[position + 3] & 0x7f) << 1) | (target[position + 2] >> 7)]) >> 0) === xShifted) {
 							transition = transition.num32 || createTypeTransition(transition, 'num32');
 							position += 4;
-							continue;
+							break;
 						}
 					}
 				}
 				transition = transition.float64 || createTypeTransition(transition, 'float64');
 				targetView.setFloat64(position, value, true);
 				position += 8;
-				continue;
+				break;
 			case 'string':
 				if (value.length > ((0xff - stringData.length) >> 2) || hasNonLatin.test(value)) {
 					transition = transition.string16 || createTypeTransition(transition, 'string16');
@@ -133,8 +128,9 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 					position += 2;
 				} else { // latin reference
 					// TODO: if stringData.length == 0, use latin0
+					// TODO: if stringData.length == 0, use latin0
 					transition = transition.latin8 || createTypeTransition(transition, 'latin8');
-					oneByte = stringData.length;
+					target[position++] = stringData.length;
 					stringData += value;
 				}
 				break;
@@ -145,46 +141,18 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 					position += 2;
 					continue;
 				} else { // null
-					if (transition.num8 || transition.latin8) {
-						transition = transition.num8 || transition.latin8
-						oneByte = 0xf6;
-						break;
-					} else {
-						transition = anyType(transition, position, targetView, -10); // match CBOR with this
-						position = updatedPosition;
-					}
-				}
-				continue;
-			case 'boolean':
-				transition = transition.num8 || createTypeTransition(transition, 'num8');
-				targetView.setInt16(position, value ? -11 : -12); // match CBOR with these
-				position += 2;
-				break;
-			case 'undefined':
-				if (transition.num8 || transition.latin8) {
-					transition = transition.num8 || transition.latin8
-					oneByte = 0xf7;
-				} else {
-					transition = anyType(transition, position, targetView, -9); // match CBOR with this
+					transition = anyType(transition, position, targetView, -10); // match CBOR with this
 					position = updatedPosition;
 				}
 				break;
-		}
-		if (oneByte >= 0) {
-			if (hasOpenOneByte) {
-				if (pendingOneByte >= 0) {
-					target[position++] = pendingOneByte;
-					target[position++] = stringData.length;
-					pendingOneByte = -1;
-				} else {
-					// in the case that there is an extra byte at the header
-					target[start + 1] = stringData.length;
-				}
-				hasOpenOneByte = false;
-			} else {
-				hasOpenOneByte = true;
-				pendingOneByte = stringData.length;
-			}
+			case 'boolean':
+				transition = transition.num8 || transition.latin8 || createTypeTransition(transition, 'num8');
+				target[position++] = value ? 0xf9 : 0xf8; // match CBOR with these
+				break;
+			case 'undefined':
+				transition = anyType(transition, position, targetView, -9); // match CBOR with this
+				position = updatedPosition;
+				break;
 		}
 	}
 	let recordId = transition[RECORD_SYMBOL];
@@ -266,7 +234,7 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 		} else
 			position = newPosition;
 		let slotOffset = queuedReferences[i++] + start;
-		targetView.setUint16(slotOffset, offset);
+		targetView.setUint16(slotOffset, offset, true);
 	}
 	/*
 	if (position > 0xc000) {
@@ -284,24 +252,30 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 }
 function anyType(transition, position, targetView, value) {
 	let nextTransition;
-	if ((nextTransition = transition.short || transition.string16 || transition.object16)) {
-		targetView.setInt16(position, value);
+	if ((nextTransition = transition.latin8 || transition.num8)) {
+		targetView.setInt8(position++, value, true);
+		return nextTransition;
+	}
+	if ((nextTransition = transition.string16 || transition.object16)) {
+		targetView.setInt16(position, value, true);
 		updatedPosition = position + 2;
 		return nextTransition;
 	}
 	if (nextTransition = transition.num32) {
-		targetView.setInt32(position, value);
+		targetView.setUint32(position, 0xe0000100 + value, true);
 		updatedPosition = position + 4;
 		return nextTransition;
 	}
 	// transition.float64
 	if (nextTransition = transition.float64) {
+		targetView.setFloat64(position, NaN, true);
+		targetView.setInt8(position, value);
 		updatedPosition = position + 8;
 		return nextTransition;
 	}
 	// TODO: can we do an any type where we defer the decision?
 	nextTransition = createTypeTransition(transition, 'object16');
-	targetView.setInt16(position, value);
+	targetView.setInt16(position, value, true);
 	updatedPosition = position + 2;
 	return nextTransition;
 }
@@ -375,7 +349,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 							next = firstRefProperty;
 							let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
 							do {
-								end = dataView.getUint16(source.position + next.offset);
+								end = dataView.getUint16(source.position + next.offset, true);
 								if (end < 0xff00)
 									break;
 								else
@@ -392,7 +366,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 							next = firstRefProperty;
 							let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
 							do {
-								latinEnd = dataView.getUint16(source.position + next.offset);
+								latinEnd = dataView.getUint16(source.position + next.offset, true);
 								if (latinEnd < 0xff00)
 									break;
 								else
@@ -423,7 +397,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 						let source = this[sourceSymbol];
 						let src = source.src;
 						let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
-						let ref = dataView.getUint16(source.position + property.offset);
+						let ref = dataView.getUint16(source.position + property.offset, true);
 						let refStart = currentOffset + source.position;
 						if (ref >= 0xff00) return toConstant(ref & 0xff);
 						ref += refStart; // adjust to after the fixed slots
@@ -438,14 +412,13 @@ function readStruct(src, position, srcEnd, unpackr) {
 							// get the end, but would need to
 							let next = property;
 							while ((next = next.next)) {
-								let nextRef = dataView.getUint16(source.position + next.offset);
+								let nextRef = dataView.getUint16(source.position + next.offset, true);
 								if (nextRef < 0xff00) {
 									end = nextRef + refStart;
 									break;
 								}
 							}
 							if (!end) end = source.srcEnd;
-
 						}
 						if (type === 'string16') {
 							return src.toString('utf8', ref, end);
@@ -463,10 +436,10 @@ function readStruct(src, position, srcEnd, unpackr) {
 						let position = source.position + property.offset;
 						let value = dataView.getInt32(position, true)
 						if (value < 0x20000000) {
-							if (value >= -0x6000000)
+							if (value > -0x1f000000)
 								return value;
-							if (value >= -0x9000001)
-								return toConstant(value >>> 24);
+							if (value > -0x20000000)
+								return toConstant(value & 0xff);
 						}
 						let fValue = dataView.getFloat32(position, true);
 						// this does rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
@@ -490,13 +463,14 @@ function readStruct(src, position, srcEnd, unpackr) {
 					};
 					currentOffset += 8;
 					break;
-				case 'boolean':
+				case 'num8':
 					get = function() {
 						let source = this[sourceSymbol];
 						let src = source.src;
-						return !!(src[source.position + property.offset + 1] & 1);
+						let value = src[source.position + property.offset];
+						return value < 0xf6 ? value : toConstant(value);
 					};
-					currentOffset += 2;
+					currentOffset += 1;
 					break;
 			}
 			Object.defineProperty(prototype, key, { get, enumerable: true });
@@ -505,7 +479,6 @@ function readStruct(src, position, srcEnd, unpackr) {
 	var instance = new construct();
 	instance[sourceSymbol] = {
 		src,
-		uint32: src.uint32,
 		position,
 		srcString: '',
 		srcEnd
