@@ -75,10 +75,10 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 	let transition = structs.transitions || (structs.transitions = Object.create(null));
 	let start = position;
 	position += 2;
-	let queuedReferences = [], queuedStringReferences;
-	let uint32 = target.uint32 || (target.uint32 = new Uint32Array(target.buffer));
+	let hasOpenOneByte = (position & 1) === 1;
+	let pendingOneByte;
+	let queuedReferences = [];
 	let targetView = target.dataView;
-	let encoded;
 	let stringData = '';
 	let safeEnd = target.length - 10;
 	for (let key in object) {
@@ -95,6 +95,7 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 		}
 		transition = nextTransition
 		let value = object[key];
+		let oneByte;
 		switch (typeof value) {
 			case 'number':
 				if (value >>> 0 === value && value < 0x20000000) {
@@ -117,14 +118,14 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 						if (((xShifted = value * mult10[((target[position + 3] & 0x7f) << 1) | (target[position + 2] >> 7)]) >> 0) === xShifted) {
 							transition = transition.num32 || createTypeTransition(transition, 'num32');
 							position += 4;
-							break;
+							continue;
 						}
 					}
 				}
 				transition = transition.float64 || createTypeTransition(transition, 'float64');
 				targetView.setFloat64(position, value, true);
 				position += 8;
-				break;
+				continue;
 			case 'string':
 				if (value.length > ((0xff - stringData.length) >> 2) || hasNonLatin.test(value)) {
 					transition = transition.string16 || createTypeTransition(transition, 'string16');
@@ -133,9 +134,8 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 				} else { // latin reference
 					// TODO: if stringData.length == 0, use latin0
 					transition = transition.latin8 || createTypeTransition(transition, 'latin8');
-					target[position] = stringData.length;
+					oneByte = stringData.length;
 					stringData += value;
-					position += 1;
 				}
 				break;
 			case 'object':
@@ -145,19 +145,46 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 					position += 2;
 					continue;
 				} else { // null
-					transition = anyType(transition, position, targetView, -10); // match CBOR with this
-					position = updatedPosition;
+					if (transition.num8 || transition.latin8) {
+						transition = transition.num8 || transition.latin8
+						oneByte = 0xf6;
+						break;
+					} else {
+						transition = anyType(transition, position, targetView, -10); // match CBOR with this
+						position = updatedPosition;
+					}
 				}
-				break;
+				continue;
 			case 'boolean':
-				transition = transition.boolean || createTypeTransition(transition, 'boolean');
+				transition = transition.num8 || createTypeTransition(transition, 'num8');
 				targetView.setInt16(position, value ? -11 : -12); // match CBOR with these
 				position += 2;
 				break;
 			case 'undefined':
-				transition = anyType(transition, position, targetView, -9); // match CBOR with this
-				position = updatedPosition;
+				if (transition.num8 || transition.latin8) {
+					transition = transition.num8 || transition.latin8
+					oneByte = 0xf7;
+				} else {
+					transition = anyType(transition, position, targetView, -9); // match CBOR with this
+					position = updatedPosition;
+				}
 				break;
+		}
+		if (oneByte >= 0) {
+			if (hasOpenOneByte) {
+				if (pendingOneByte >= 0) {
+					target[position++] = pendingOneByte;
+					target[position++] = stringData.length;
+					pendingOneByte = -1;
+				} else {
+					// in the case that there is an extra byte at the header
+					target[start + 1] = stringData.length;
+				}
+				hasOpenOneByte = false;
+			} else {
+				hasOpenOneByte = true;
+				pendingOneByte = stringData.length;
+			}
 		}
 	}
 	let recordId = transition[RECORD_SYMBOL];
@@ -217,7 +244,6 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 	let queued32BitReferences;
 	for (let i = 0, l = queuedReferences.length; i < l;) {
 		let value = queuedReferences[i];
-		let slotOffset = queuedReferences[i + 1] + start;
 		let offset = position - dataStart;
 		let newPosition;
 		if (typeof value === 'string') {
@@ -231,8 +257,7 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 		} else {
 			newPosition = pack(value, position);
 		}
-		queuedReferences[i] = offset;
-		i += 2;
+		queuedReferences[i++] = offset;
 		if (typeof newPosition === 'object') {
 			// re-allocated
 			position = newPosition.position;
@@ -240,7 +265,7 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 			start = 0;
 		} else
 			position = newPosition;
-
+		let slotOffset = queuedReferences[i++] + start;
 		targetView.setUint16(slotOffset, offset);
 	}
 	/*
