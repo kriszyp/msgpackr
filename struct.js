@@ -79,6 +79,7 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 	let targetView = target.dataView;
 	let stringData = '';
 	let safeEnd = target.length - 10;
+	let usedLatin0;
 	for (let key in object) {
 		let nextTransition = transition[key] || (transition[key] = Object.create(null, {
 			key: {value: key},
@@ -122,15 +123,18 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 				position += 8;
 				break;
 			case 'string':
-				if (value.length > ((0xff - stringData.length) >> 2) || hasNonLatin.test(value)) {
+				if (value.length > ((0xf5 - stringData.length) >> 2) || hasNonLatin.test(value)) {
 					transition = transition.string16 || createTypeTransition(transition, 'string16');
 					queuedReferences.push(value, position - start);
 					position += 2;
 				} else { // latin reference
-					// TODO: if stringData.length == 0, use latin0
-					// TODO: if stringData.length == 0, use latin0
-					transition = transition.latin8 || createTypeTransition(transition, 'latin8');
-					target[position++] = stringData.length;
+					if (!stringData && !usedLatin0) {
+						transition = transition.latin0 || createTypeTransition(transition, 'latin0');
+						usedLatin0 = true; // too complicated to use this more than once
+					} else {
+						transition = transition.latin8 || createTypeTransition(transition, 'latin8');
+						target[position++] = stringData.length;
+					}
 					stringData += value;
 				}
 				break;
@@ -327,6 +331,9 @@ function readStruct(src, position, srcEnd, unpackr) {
 			let get;
 			switch(type) {
 				case 'latin8':
+					currentOffset++;
+					// fall through
+				case 'latin0':
 					property.multiGetCount = 0;
 					if (lastLatinProperty)
 						lastLatinProperty.next = property;
@@ -335,7 +342,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 						let source = this[sourceSymbol];
 						let src = source.src;
 						let refStart = currentOffset + source.position;
-						let ref = src[source.position + property.offset];
+						let ref = type === 'latin0' ? 0 : src[source.position + property.offset];
 						if (ref >= 0xf6) return toConstant(ref);
 						let end, next = property;
 						while ((next = next.next)) {
@@ -385,7 +392,6 @@ function readStruct(src, position, srcEnd, unpackr) {
 						}
 						return src.toString('latin1', ref + refStart, end + refStart);
 					};
-					currentOffset++;
 					break;
 				case 'string16': case 'object16':
 					if (lastRefProperty)
