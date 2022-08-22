@@ -66,18 +66,30 @@ import { setReadStruct, unpack, mult10 } from './unpack.js';
 const hasNonLatin = /[\u0080-\uFFFF]/;
 const float32Headers = [false, true, true, false, false, true, true, false];
 let updatedPosition;
+const hasNodeBuffer = typeof Buffer !== 'undefined'
+let textEncoder
+try {
+	textEncoder = new TextEncoder()
+} catch (error) {}
+const encodeUtf8 = hasNodeBuffer ? function(target, string, position) {
+	return target.utf8Write(string, position, 0xffffffff)
+} : (textEncoder && textEncoder.encodeInto) ?
+	function(target, string, position) {
+		return textEncoder.encodeInto(string, target.subarray(position)).written
+	} : false
 
 const TYPE = Symbol('type');
 const PARENT = Symbol('parent');
 setWriteStructSlots(writeStruct);
 function writeStruct(object, target, position, structures, makeRoom, pack, packr) {
 	let structs = packr.structs || (packr.structs = []);
+	let stringsOffset = structs.lastStringStart || 100;
+	let strOffset = 0;
 	let transition = structs.transitions || (structs.transitions = Object.create(null));
 	let start = position;
 	position += 2;
 	let queuedReferences = [];
 	let targetView = target.dataView;
-	let stringData = '';
 	let safeEnd = target.length - 10;
 	let usedLatin0;
 	for (let key in object) {
@@ -133,20 +145,62 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 				position += 8;
 				break;
 			case 'string':
-				if (value.length > ((0xf5 - stringData.length) >> 2) || hasNonLatin.test(value)) {
-					transition = nextTransition.string16 || createTypeTransition(nextTransition, 'string16');
+				let strLength = value.length;
+				if (strLength > ((0xff00 - strOffset) >> 2)) {
 					queuedReferences.push(value, position - start);
-					position += 2;
-				} else { // latin reference
-					if (!stringData && !usedLatin0) {
-						transition = nextTransition.latin0 || createTypeTransition(nextTransition, 'latin0');
-						usedLatin0 = true; // too complicated to use this more than once
-					} else {
-						transition = nextTransition.latin8 || createTypeTransition(nextTransition, 'latin8');
-						target[position++] = stringData.length;
-					}
-					stringData += value;
+					break;
 				}
+				let strPosition = strOffset + stringsOffset + start;
+				let isNotAscii
+				let strStart = strPosition;
+				if (strLength < 0x40) {
+					let i, c1, c2, isNotAscii
+					for (i = 0; i < strLength; i++) {
+						c1 = value.charCodeAt(i)
+						if (c1 < 0x80) {
+							target[strPosition++] = c1
+						} else if (c1 < 0x800) {
+							isNotAscii = true;
+							target[strPosition++] = c1 >> 6 | 0xc0
+							target[strPosition++] = c1 & 0x3f | 0x80
+						} else if (
+							(c1 & 0xfc00) === 0xd800 &&
+							((c2 = value.charCodeAt(i + 1)) & 0xfc00) === 0xdc00
+						) {
+							isNotAscii = true;
+							c1 = 0x10000 + ((c1 & 0x03ff) << 10) + (c2 & 0x03ff)
+							i++
+							target[strPosition++] = c1 >> 18 | 0xf0
+							target[strPosition++] = c1 >> 12 & 0x3f | 0x80
+							target[strPosition++] = c1 >> 6 & 0x3f | 0x80
+							target[strPosition++] = c1 & 0x3f | 0x80
+						} else {
+							isNotAscii = true;
+							target[strPosition++] = c1 >> 12 | 0xe0
+							target[strPosition++] = c1 >> 6 & 0x3f | 0x80
+							target[strPosition++] = c1 & 0x3f | 0x80
+						}
+					}
+				} else {
+					strPosition += encodeUtf8(target, value, strPosition);
+					isNotAscii = strPosition - strStart > strLength;
+				}
+
+				if (strOffset < 0x100) {
+					if (isNotAscii)
+						transition = nextTransition.string8 || createTypeTransition(nextTransition, 'string8');
+					else
+						transition = nextTransition.latin8 || createTypeTransition(nextTransition, 'latin8');
+					target[position++] = strOffset;
+				} else {
+					if (isNotAscii)
+						transition = nextTransition.string16 || createTypeTransition(nextTransition, 'string16');
+					else
+						transition = nextTransition.latin16 || createTypeTransition(nextTransition, 'latin16');
+					targetView.setUint16(position, strOffset);
+					position += 2;
+				}
+				strOffset += strPosition - strStart;
 				break;
 			case 'object':
 				if (value) {
@@ -198,24 +252,37 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 		return 0;
 		// newRecord(transition, transition.__keys__ || Object.keys(object), newTransitions, true)
 	}
-	let dataStart = position;
-	let stringLength = stringData.length;
-	if (stringData) {
-		if (position + stringLength > safeEnd) {
-			target = makeRoom(position + stringLength);
+	let dataStart = position - start;
+	if ((position - start) < stringsOffset) {
+		// adjust positioning
+		target.copyWithin(position, stringsOffset + start, strOffset + start);
+		structs.lastStringStart = stringsOffset = position - start;
+		console.log('structs.lastStringStart', structs.lastStringStart)
+	} else if ((position - start) > stringsOffset) {
+
+		RestartEncoding();
+	}
+	position = strOffset + stringsOffset + start;
+/*	if (latinStrLength > 0) {
+		if (position + latinStrLength > safeEnd) {
+			target = makeRoom(position + latinStrLength);
 			position -= start;
 			targetView = target.dataView;
 			start = 0;
 			dataStart = position;
 		}
-		if (stringLength > 0x40)
-			position += target.latin1Write(stringData, position, 0xffffffff);
+		if (latinStrLength > 0x40)
+			position += target.latin1Write(latinArray.join(''), position, 0xffffffff);
 		else {
-			for (let i = 0; i < stringLength; i++) {
-				target[position++] = stringData.charCodeAt(i);
+			for (let i = 0; i < latinStrCount; i++) {
+				let str = latinArray[i];
+				for (let j = 0, l = str.length; j < l; j++) {
+					target[position++] = str.charCodeAt(j);
+				}
 			}
 		}
-	}
+	}*/
+
 	target[start] = 0x38; // indicator for one-byte record id
 	target[start + 1] = recordId;
 	/*if (queuedStringReferences) {
@@ -346,7 +413,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 			property.offset = currentOffset;
 			let get;
 			switch(type) {
-				case 'latin8':
+				case 'latin8':case 'string8':
 					currentOffset++;
 					// fall through
 				case 'latin0':

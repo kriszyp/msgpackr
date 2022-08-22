@@ -141,7 +141,7 @@ suite('msgpackr basic tests', function(){
 				var serialized = packr.pack(data)
 				var deserialized = packr.unpack(serialized);
 				for (let key in deserialized) {
-					console.log(key, deserialized[key]);
+					console.log(key, deserialized[key], deserialized[key] === data[key]);
 				}
 				assert.deepEqual(deserialized, data)
 			}

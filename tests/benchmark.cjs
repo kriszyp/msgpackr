@@ -65,6 +65,7 @@ if (msgpackr) {
   packr = new msgpackr.Packr({ structures: [],randomAccessStructure: true, saveStructure(id, structure) {
       console.log('saved',{id, structure});
     } })
+  console.log('starting')
   buf = bench('msgpackr w/ random access structures: packr.pack(obj);', value => packr.pack(value), data);
   //buf = bench('msgpackr w/ shared structures: packr.pack(obj);', data => {let result = packr.pack(data); packr.resetMemory(); return result;}, data);
   console.log('buffer size', buf.length);
