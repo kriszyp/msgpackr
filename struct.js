@@ -41,7 +41,7 @@ const ASCII = 3; // the MIBenum from https://www.iana.org/assignments/character-
 const NUMBER = 0;
 const UTF8 = 2;
 const OBJECT_DATA = 1;
-const TYPE_NAMES = ['number', 'object', 'string', 'ascii'];
+const TYPE_NAMES = ['num', 'object', 'string', 'ascii'];
 const float32Headers = [false, true, true, false, false, true, true, false];
 let updatedPosition;
 const hasNodeBuffer = typeof Buffer !== 'undefined'
@@ -64,11 +64,23 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 	if (!typedStructs) {
 		typedStructs = packr.typedStructs = [];
 	}
+	let targetView = target.dataView;
 	let refsStartPosition = (typedStructs.lastStringStart || 100) + position;
+	let safeEnd = target.length - 10;
+	let start = position;
+	if (position > safeEnd) {
+		let lastStart = start;
+		target = makeRoom(position);
+		targetView = target.dataView;
+		position -= lastStart;
+		refsStartPosition -= lastStart;
+		start = 0;
+		safeEnd = target.length - 10
+	}
+
 	let refOffset, refPosition = refsStartPosition;
 
 	let transition = typedStructs.transitions || (typedStructs.transitions = Object.create(null));
-	let start = position;
 	let nextId = typedStructs.nextId || typedStructs.length;
 	let headerSize =
 		nextId < 0xf ? 1 :
@@ -79,8 +91,6 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 		return 0;
 	position += headerSize;
 	let queuedReferences = [];
-	let targetView = target.dataView;
-	let safeEnd = target.length - 10;
 	let usedLatin0;
 	let keyIndex = 0;
 	for (let key in object) {
@@ -103,6 +113,7 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 		if (position > safeEnd) {
 			let lastStart = start;
 			target = makeRoom(position);
+			targetView = target.dataView;
 			position -= lastStart;
 			refsStartPosition -= lastStart;
 			refPosition -= lastStart;
@@ -141,6 +152,17 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 			case 'string':
 				let strLength = value.length;
 				refOffset = refPosition - refsStartPosition;
+				if ((strLength << 2) + position > safeEnd) {
+					let lastStart = start;
+					target = makeRoom(position);
+					targetView = target.dataView;
+					position -= lastStart;
+					refsStartPosition -= lastStart;
+					refPosition -= lastStart;
+					start = 0;
+					safeEnd = target.length - 10
+
+				}
 				if (strLength > ((0xff00 + refOffset) >> 2)) {
 					queuedReferences.push(key, value, position - start);
 					break;
@@ -243,25 +265,30 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 		}
 		transition = nextTransition.object16 || createTypeTransition(nextTransition, OBJECT_DATA, 2);
 		let newPosition;
-		/*if (typeof value === 'string') { // TODO: we could re-enable long strings
-			if (position + value.length * 3 > safeEnd) {
-				target = makeRoom(position + value.length * 3);
-				position -= start;
-				targetView = target.dataView;
-				start = 0;
-			}
-			newPosition = position + target.utf8Write(value, position, 0xffffffff);
-		} else { */
+		if (value) {
+			/*if (typeof value === 'string') { // TODO: we could re-enable long strings
+				if (position + value.length * 3 > safeEnd) {
+					target = makeRoom(position + value.length * 3);
+					position -= start;
+					targetView = target.dataView;
+					start = 0;
+				}
+				newPosition = position + target.utf8Write(value, position, 0xffffffff);
+			} else { */
+			refOffset = refPosition - refsStartPosition;
 			newPosition = pack(value, refPosition);
-		//}
-		if (typeof newPosition === 'object') {
-			// re-allocated
-			refPosition = newPosition.position;
-			targetView = newPosition.targetView;
-			start = 0;
-		} else
-			refPosition = newPosition;
-		targetView.setUint16(position, refPosition, true);
+			//}
+			if (typeof newPosition === 'object') {
+				// re-allocated
+				refPosition = newPosition.position;
+				targetView = newPosition.targetView;
+				start = 0;
+			} else
+				refPosition = newPosition;
+			targetView.setUint16(position, refOffset, true);
+		} else {
+			targetView.setInt16(position, value === null ? -10 : -9, true);
+		}
 		position += 2;
 		keyIndex++;
 	}
@@ -519,16 +546,17 @@ function readStruct(src, position, srcEnd, unpackr) {
 						let position = source.position;
 						let refStart = currentOffset + position;
 						let ref = getRef(source, position);
-						if (!(ref > -1)) return toConstant(ref);
+						if (typeof ref !== 'number') return ref;
 
 						let end, next = property.next;
-						do {
+						while(next) {
 							end = next.getRef(source, position);
-							if (end > -1)
+							if (typeof end === 'number')
 								break;
 							else
 								end = null;
-						} while ((next = next.next));
+							next = next.next;
+						}
 						if (end == null)
 							end = srcEnd - refStart;
 						if (source.srcString) {
@@ -565,8 +593,10 @@ function readStruct(src, position, srcEnd, unpackr) {
 					lastRefProperty = property;
 					get = function() {
 						let source = this[sourceSymbol];
+						let position = source.position;
+						let refStart = currentOffset + position;
 						let ref = getRef(source, position);
-						if (!(ref > -1)) return toConstant(ref);
+						if (typeof ref !== 'number') return ref;
 						let src = source.src;
 
 						/*if (src[ref] == 62) {
@@ -576,19 +606,20 @@ function readStruct(src, position, srcEnd, unpackr) {
 							end = dataView.getUint32(ref + 4) + refStart;
 						} */
 						let end, next = property.next;
-						do {
+						while(next) {
 							end = next.getRef(source, position);
-							if (end > -1)
+							if (typeof end === 'number')
 								break;
 							else
 								end = null;
-						} while ((next = next.next));
+							next = next.next;
+						}
 						if (end == null)
-							end = srcEnd - currentOffset - position;
+							end = srcEnd - refStart;
 						if (type === UTF8) {
-							return src.toString('utf8', ref, end);
+							return src.toString('utf8', ref + refStart, end + refStart);
 						} else {
-							return unpackr.unpack(src, { start: ref, end }); // could reuse this object
+							return unpackr.unpack(src, { start: ref + refStart, end: end  + refStart }); // could reuse this object
 						}
 					};
 					break;
