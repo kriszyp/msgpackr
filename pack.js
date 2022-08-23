@@ -292,7 +292,7 @@ export class Packr extends Unpackr {
 			} else if (type === 'number') {
 				if (value >>> 0 === value) {// positive integer, 32-bit or less
 					// positive uint
-					if (value < 0x40 || (value < 0x80 && this.useRecords === false)) {
+					if (value < 0x20 || (value < 0x80 && this.useRecords === false) || (value < 0x40 && !this.randomAccessStructure)) {
 						target[position++] = value
 					} else if (value < 0x100) {
 						target[position++] = 0xcc

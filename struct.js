@@ -1,69 +1,47 @@
-// first four bits
-// 0000 - unsigned int
-// 0010 - float32
-// 0011 - float32
-// 0100 - float32
-// 0101 - float32
-// 0110 - latin string reference
-// 0111 - plain reference
-// 1000 - structure reference
-// 1001 - random access structure reference
-// 1010 - float32
-// 1011 - float32
-// 1100 - float32
-// 1101 - float32
-// 1110 - constants and 3-byte strings
-// 1111 - negative int
-
-// first three bits
-// 000 - unsigned int
-// 001 - float32
-// 010 - float32
-// 011 - latin string reference
-// 100 - reference
-// 101 - float32
-// 110 - float32
-// 111 - constants and 3-byte strings
 
 /*
 
-short slot: for small positive ints and booleans
-string slot: for strings, references END of string
-object slot: for data references, references START of data
-number byte slot: float32 or uint32
-double byte slot: float64
+For "any-data":
+32-55 - record with record ids (-32)
+56 - 8-bit record ids
+57 - 16-bit record ids
+58 - 24-bit record ids
+59 - 32-bit record ids
+250-255 - followed by typed fixed width values
+64-250 msgpackr/cbor/paired data
+arrays and strings within arrays are handled by paired encoding
 
-storage layout:
+Structure encoding:
+(type - string (using paired encoding))+
 
-header - 32 bits or 64 bits
-property slots
-16-bit addressable strings
-32-bit string references
-32-bit addressable strings
-object data
-32-bit object references
+Type encoding
+encoding byte - fixed width byte - next reference+
 
-string header
-00 - standard ref (32K)
-10 - reference ref
-11 - latin string ref
+Encoding byte:
+first bit:
+	0 - inline
+	1 - reference
+second bit:
+	0 - data or number
+	1 - string
 
+remaining bits:
+	character encoding - ISO-8859-x
 
-object reference
-0 - standard ref (32K)
-1 - reference ref
 
 null (0xff)+ 0xf6
 null (0xff)+ 0xf7
-
-
 
 */
 
 
 import { setWriteStructSlots, RECORD_SYMBOL } from './pack.js'
-import { setReadStruct, unpack, mult10 } from './unpack.js';
-const hasNonLatin = /[\u0080-\uFFFF]/;
+import {setReadStruct, unpack, mult10, loadStructures} from './unpack.js';
+const ASCII = 3; // the MIBenum from https://www.iana.org/assignments/character-sets/character-sets.xhtml (and other character encodings could be referenced by MIBenum)
+const NUMBER = 0;
+const UTF8 = 2;
+const OBJECT_DATA = 1;
+const TYPE_NAMES = ['number', 'object', 'string', 'ascii'];
 const float32Headers = [false, true, true, false, false, true, true, false];
 let updatedPosition;
 const hasNodeBuffer = typeof Buffer !== 'undefined'
@@ -82,16 +60,29 @@ const TYPE = Symbol('type');
 const PARENT = Symbol('parent');
 setWriteStructSlots(writeStruct);
 function writeStruct(object, target, position, structures, makeRoom, pack, packr) {
-	let structs = packr.structs || (packr.structs = []);
-	let stringsOffset = structs.lastStringStart || 100;
-	let strOffset = 0;
-	let transition = structs.transitions || (structs.transitions = Object.create(null));
+	let typedStructs = packr.typedStructs;
+	if (!typedStructs) {
+		typedStructs = packr.typedStructs = [];
+	}
+	let refsStartPosition = (typedStructs.lastStringStart || 100) + position;
+	let refOffset, refPosition = refsStartPosition;
+
+	let transition = typedStructs.transitions || (typedStructs.transitions = Object.create(null));
 	let start = position;
-	position += 2;
+	let nextId = typedStructs.nextId || typedStructs.length;
+	let headerSize =
+		nextId < 0xf ? 1 :
+			nextId < 0xf0 ? 2 :
+				nextId < 0xf000 ? 3 :
+					nextId < 0xf00000 ? 4 : 0;
+	if (headerSize === 0)
+		return 0;
+	position += headerSize;
 	let queuedReferences = [];
 	let targetView = target.dataView;
 	let safeEnd = target.length - 10;
 	let usedLatin0;
+	let keyIndex = 0;
 	for (let key in object) {
 		let value = object[key];
 		let nextTransition = transition[key];
@@ -99,8 +90,9 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 			transition[key] = nextTransition = {
 				key,
 				parent: transition,
-				latin0: null,
-				latin8: null,
+				enumerationOffset: 0,
+				ascii0: null,
+				ascii8: null,
 				num8: null,
 				string16: null,
 				object16: null,
@@ -109,10 +101,12 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 			};
 		}
 		if (position > safeEnd) {
-			let newPosition = position - start;
-			target = makeRoom(position)
-			position = newPosition;
-			start = 0
+			let lastStart = start;
+			target = makeRoom(position);
+			position -= lastStart;
+			refsStartPosition -= lastStart;
+			refPosition -= lastStart;
+			start = 0;
 			safeEnd = target.length - 10
 		}
 		switch (typeof value) {
@@ -120,10 +114,10 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 				let number = value;
 				if (number >> 0 === number && number < 0x20000000 && number > -0x1f000000) {
 					if (number < 0xf6 && number >= 0 && (nextTransition.num8 || number < 0x20 && !nextTransition.num32)) {
-						transition = nextTransition.num8 || createTypeTransition(nextTransition, 'num8');
+						transition = nextTransition.num8 || createTypeTransition(nextTransition, NUMBER, 1);
 						target[position++] = number;
 					} else {
-						transition = nextTransition.num32 || createTypeTransition(nextTransition, 'num32');
+						transition = nextTransition.num32 || createTypeTransition(nextTransition, NUMBER, 4);
 						targetView.setUint32(position, number, true);
 						position += 4;
 					}
@@ -134,35 +128,35 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 						let xShifted
 						// this checks for rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
 						if (((xShifted = number * mult10[((target[position + 3] & 0x7f) << 1) | (target[position + 2] >> 7)]) >> 0) === xShifted) {
-							transition = nextTransition.num32 || createTypeTransition(nextTransition, 'num32');
+							transition = nextTransition.num32 || createTypeTransition(nextTransition, NUMBER, 4);
 							position += 4;
 							break;
 						}
 					}
 				}
-				transition = nextTransition.float64 || createTypeTransition(nextTransition, 'float64');
+				transition = nextTransition.num64 || createTypeTransition(nextTransition, NUMBER, 8);
 				targetView.setFloat64(position, number, true);
 				position += 8;
 				break;
 			case 'string':
 				let strLength = value.length;
-				if (strLength > ((0xff00 - strOffset) >> 2)) {
-					queuedReferences.push(value, position - start);
+				refOffset = refPosition - refsStartPosition;
+				if (strLength > ((0xff00 + refOffset) >> 2)) {
+					queuedReferences.push(key, value, position - start);
 					break;
 				}
-				let strPosition = strOffset + stringsOffset + start;
 				let isNotAscii
-				let strStart = strPosition;
+				let strStart = refPosition;
 				if (strLength < 0x40) {
 					let i, c1, c2, isNotAscii
 					for (i = 0; i < strLength; i++) {
 						c1 = value.charCodeAt(i)
 						if (c1 < 0x80) {
-							target[strPosition++] = c1
+							target[refPosition++] = c1
 						} else if (c1 < 0x800) {
 							isNotAscii = true;
-							target[strPosition++] = c1 >> 6 | 0xc0
-							target[strPosition++] = c1 & 0x3f | 0x80
+							target[refPosition++] = c1 >> 6 | 0xc0
+							target[refPosition++] = c1 & 0x3f | 0x80
 						} else if (
 							(c1 & 0xfc00) === 0xd800 &&
 							((c2 = value.charCodeAt(i + 1)) & 0xfc00) === 0xdc00
@@ -170,121 +164,206 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 							isNotAscii = true;
 							c1 = 0x10000 + ((c1 & 0x03ff) << 10) + (c2 & 0x03ff)
 							i++
-							target[strPosition++] = c1 >> 18 | 0xf0
-							target[strPosition++] = c1 >> 12 & 0x3f | 0x80
-							target[strPosition++] = c1 >> 6 & 0x3f | 0x80
-							target[strPosition++] = c1 & 0x3f | 0x80
+							target[refPosition++] = c1 >> 18 | 0xf0
+							target[refPosition++] = c1 >> 12 & 0x3f | 0x80
+							target[refPosition++] = c1 >> 6 & 0x3f | 0x80
+							target[refPosition++] = c1 & 0x3f | 0x80
 						} else {
 							isNotAscii = true;
-							target[strPosition++] = c1 >> 12 | 0xe0
-							target[strPosition++] = c1 >> 6 & 0x3f | 0x80
-							target[strPosition++] = c1 & 0x3f | 0x80
+							target[refPosition++] = c1 >> 12 | 0xe0
+							target[refPosition++] = c1 >> 6 & 0x3f | 0x80
+							target[refPosition++] = c1 & 0x3f | 0x80
 						}
 					}
 				} else {
-					strPosition += encodeUtf8(target, value, strPosition);
-					isNotAscii = strPosition - strStart > strLength;
+					refPosition += encodeUtf8(target, value, refPosition);
+					isNotAscii = refPosition - strStart > strLength;
 				}
-
-				if (strOffset < 0x100) {
+				if (refOffset < 0x100) {
 					if (isNotAscii)
-						transition = nextTransition.string8 || createTypeTransition(nextTransition, 'string8');
+						transition = nextTransition.string8 || createTypeTransition(nextTransition, UTF8, 1);
 					else
-						transition = nextTransition.latin8 || createTypeTransition(nextTransition, 'latin8');
-					target[position++] = strOffset;
+						transition = nextTransition.ascii8 || createTypeTransition(nextTransition, ASCII, 1);
+					target[position++] = refOffset;
 				} else {
 					if (isNotAscii)
-						transition = nextTransition.string16 || createTypeTransition(nextTransition, 'string16');
+						transition = nextTransition.string16 || createTypeTransition(nextTransition, UTF8, 2);
 					else
-						transition = nextTransition.latin16 || createTypeTransition(nextTransition, 'latin16');
-					targetView.setUint16(position, strOffset);
+						transition = nextTransition.ascii16 || createTypeTransition(nextTransition, ASCII, 2);
+					targetView.setUint16(position, refOffset, true);
 					position += 2;
 				}
-				strOffset += strPosition - strStart;
 				break;
 			case 'object':
 				if (value) {
-					transition = nextTransition.object16 || createTypeTransition(nextTransition, 'object16');
-					queuedReferences.push(value, position - start);
-					position += 2;
-					continue;
+					//transition = nextTransition.object16 || createTypeTransition(nextTransition, OBJECT_DATA, 2);
+					queuedReferences.push(key, value, keyIndex);
+					break;
 				} else { // null
-					transition = anyType(nextTransition, position, targetView, -10); // match CBOR with this
-					position = updatedPosition;
+					nextTransition = anyType(nextTransition, position, targetView, -10); // match CBOR with this
+					if (nextTransition) {
+						transition = nextTransition;
+						position = updatedPosition;
+					} else queuedReferences.push(key, value, keyIndex);
 				}
 				break;
 			case 'boolean':
-				transition = nextTransition.num8 || nextTransition.latin8 || createTypeTransition(nextTransition, 'num8');
+				transition = nextTransition.num8 || nextTransition.ascii8 || createTypeTransition(nextTransition, NUMBER, 1);
 				target[position++] = value ? 0xf9 : 0xf8; // match CBOR with these
 				break;
 			case 'undefined':
-				transition = anyType(nextTransition, position, targetView, -9); // match CBOR with this
-				position = updatedPosition;
+				nextTransition = anyType(nextTransition, position, targetView, -9); // match CBOR with this
+				if (nextTransition) {
+					transition = nextTransition;
+					position = updatedPosition;
+				} else queuedReferences.push(key, value, keyIndex);
 				break;
 		}
+		keyIndex++;
 	}
+
+	for (let i = 0, l = queuedReferences.length; i < l;) {
+		let key = queuedReferences[i++];
+		let value = queuedReferences[i++];
+		let propertyIndex = queuedReferences[i++];
+		let nextTransition = transition[key];
+		if (!nextTransition) {
+			transition[key] = nextTransition = {
+				key,
+				parent: transition,
+				enumerationOffset: propertyIndex - keyIndex,
+				ascii0: null,
+				ascii8: null,
+				num8: null,
+				string16: null,
+				object16: null,
+				num32: null,
+				float64: null
+			};
+		}
+		transition = nextTransition.object16 || createTypeTransition(nextTransition, OBJECT_DATA, 2);
+		let newPosition;
+		/*if (typeof value === 'string') { // TODO: we could re-enable long strings
+			if (position + value.length * 3 > safeEnd) {
+				target = makeRoom(position + value.length * 3);
+				position -= start;
+				targetView = target.dataView;
+				start = 0;
+			}
+			newPosition = position + target.utf8Write(value, position, 0xffffffff);
+		} else { */
+			newPosition = pack(value, refPosition);
+		//}
+		if (typeof newPosition === 'object') {
+			// re-allocated
+			refPosition = newPosition.position;
+			targetView = newPosition.targetView;
+			start = 0;
+		} else
+			refPosition = newPosition;
+		targetView.setUint16(position, refPosition, true);
+		position += 2;
+		keyIndex++;
+	}
+
+
 	let recordId = transition[RECORD_SYMBOL];
 	if (recordId == null) {
-		while(true) {
-			recordId = packr.structs.length;
-			let structure = [];
-			let nextTransition = transition;
-			let key, type;
-			while((type = nextTransition.__type)) {
-				nextTransition = nextTransition.__parent;
-				key = nextTransition.key;
-				structure.push([ key, type ]);
-				nextTransition = nextTransition.parent;
-			}
-			structure.reverse();
-			packr.structs[recordId] = structure;
-			transition[RECORD_SYMBOL] = recordId;
-			if (packr.saveStructure(recordId, structure) === false) {
-				while(packr.getStructure(++recordId)) {
-				}
-			}
-			else break;
+		recordId = packr.typedStructs.length;
+		let structure = [];
+		let nextTransition = transition;
+		let key, type, prevStrProp, prevDataProp, firstDataIndex, lastStrProp;
+		while((type = nextTransition.__type) !== undefined) {
+			let size = nextTransition.__size;
+			nextTransition = nextTransition.__parent;
+			key = nextTransition.key;
+			structure.push({ key, type, size });
+			nextTransition = nextTransition.parent;
 		}
+		structure.reverse();
+		for (let i = 0; i < structure.length; i++) {
+			let property = structure[i];
+			if (property.type === ASCII || property.type === UTF8) {
+				if (prevStrProp)
+					prevStrProp.next = i;
+				prevStrProp = property;
+				lastStrProp = property;
+			}
+			if (property.type === OBJECT_DATA) {
+				if (prevDataProp)
+					prevDataProp.next = i;
+				if (firstDataIndex === undefined)
+					firstDataIndex = i;
+				prevDataProp = property;
+			}
+		}
+		if (lastStrProp)
+			lastStrProp.next = firstDataIndex;
+
+		if (packr.saveStructures({ typed: packr.typedStructs, named: packr.structures }) === false) {
+			loadStructures();
+			return writeStruct(object, target, position, structures, makeRoom, pack, packr);
+		}
+		transition[RECORD_SYMBOL] = recordId;
+		packr.typedStructs[recordId] = structure;
 	}
 
-	if (!(recordId < 0x10000000)) {
-		// for now just punt and go back to writeObject
-		return 0;
-		// newRecord(transition, transition.__keys__ || Object.keys(object), newTransitions, true)
+
+	switch(headerSize) {
+		case 1:
+			if (recordId >= 0x10) return 0;
+			target[start] = recordId + 0x20;
+			break;
+		case 2:
+			if (recordId >= 0x100) return 0;
+			target[start] = 0x30;
+			target[start + 1] = recordId;
+			break;
+		case 3:
+			if (recordId >= 0x10000) return 0;
+			target[start] = 0x31;
+			target.setUint16(start + 1, recordId, true);
+			break;
+		case 4:
+			if (recordId >= 0x1000000) return 0;
+			target.setUint32(start, (recordId << 8) + 0x32, true);
+			break;
 	}
-	let dataStart = position - start;
-	if ((position - start) < stringsOffset) {
+
+	if (position < refsStartPosition) {
+		if (refsStartPosition === refPosition) // no refs
+			return position;
 		// adjust positioning
-		target.copyWithin(position, stringsOffset + start, strOffset + start);
-		structs.lastStringStart = stringsOffset = position - start;
-		console.log('structs.lastStringStart', structs.lastStringStart)
-	} else if ((position - start) > stringsOffset) {
-
-		RestartEncoding();
+		target.copyWithin(position, refsStartPosition, refPosition);
+		refPosition += position - refsStartPosition;
+		typedStructs.lastStringStart = position - start;
+		console.log('typedStructs.lastStringStart', typedStructs.lastStringStart)
+	} else if (position > refsStartPosition) {
+		if (refsStartPosition === refPosition) // no refs
+			return position;
+		typedStructs.lastStringStart = position - start;
+		return writeStruct(object, target, position, structures, makeRoom, pack, packr);
 	}
-	position = strOffset + stringsOffset + start;
-/*	if (latinStrLength > 0) {
-		if (position + latinStrLength > safeEnd) {
-			target = makeRoom(position + latinStrLength);
+	return refPosition;
+/*	if (asciiStrLength > 0) {
+		if (position + asciiStrLength > safeEnd) {
+			target = makeRoom(position + asciiStrLength);
 			position -= start;
 			targetView = target.dataView;
 			start = 0;
 			dataStart = position;
 		}
-		if (latinStrLength > 0x40)
-			position += target.latin1Write(latinArray.join(''), position, 0xffffffff);
+		if (asciiStrLength > 0x40)
+			position += target.ascii1Write(asciiArray.join(''), position, 0xffffffff);
 		else {
-			for (let i = 0; i < latinStrCount; i++) {
-				let str = latinArray[i];
+			for (let i = 0; i < asciiStrCount; i++) {
+				let str = asciiArray[i];
 				for (let j = 0, l = str.length; j < l; j++) {
 					target[position++] = str.charCodeAt(j);
 				}
 			}
 		}
 	}*/
-
-	target[start] = 0x38; // indicator for one-byte record id
-	target[start + 1] = recordId;
 	/*if (queuedStringReferences) {
 		let stringCount = queuedStringReferences.length;
 		let stringStart = position + (stringCount << 2);
@@ -296,33 +375,6 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 			targetView.setUint32(position, stringPosition - stringStart, true);
 		}
 	}*/
-	let queued32BitReferences;
-	for (let i = 0, l = queuedReferences.length; i < l;) {
-		let value = queuedReferences[i];
-		let offset = position - dataStart;
-		let newPosition;
-		if (typeof value === 'string') {
-			if (position + value.length * 3 > safeEnd) {
-				target = makeRoom(position + value.length * 3);
-				position -= start;
-				targetView = target.dataView;
-				start = 0;
-			}
-			newPosition = position + target.utf8Write(value, position, 0xffffffff);
-		} else {
-			newPosition = pack(value, position);
-		}
-		queuedReferences[i++] = offset;
-		if (typeof newPosition === 'object') {
-			// re-allocated
-			position = newPosition.position;
-			targetView = newPosition.targetView;
-			start = 0;
-		} else
-			position = newPosition;
-		let slotOffset = queuedReferences[i++] + start;
-		targetView.setUint16(slotOffset, offset, true);
-	}
 	/*
 	if (position > 0xc000) {
 		// TODO: Repack so we can reference everything properly
@@ -333,13 +385,13 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 			targetView.setUint32(position, ref.offset, true);
 			position += 4;
 		}
-	}*/
+	}
 
-	return position;
+	return position;*/
 }
 function anyType(transition, position, targetView, value) {
 	let nextTransition;
-	if ((nextTransition = transition.latin8 || transition.num8)) {
+	if ((nextTransition = transition.ascii8 || transition.num8)) {
 		targetView.setInt8(position++, value, true);
 		return nextTransition;
 	}
@@ -354,21 +406,20 @@ function anyType(transition, position, targetView, value) {
 		return nextTransition;
 	}
 	// transition.float64
-	if (nextTransition = transition.float64) {
+	if (nextTransition = transition.num64) {
 		targetView.setFloat64(position, NaN, true);
 		targetView.setInt8(position, value);
 		updatedPosition = position + 8;
 		return nextTransition;
 	}
 	// TODO: can we do an any type where we defer the decision?
-	nextTransition = createTypeTransition(transition, 'object16');
-	targetView.setInt16(position, value, true);
-	updatedPosition = position + 2;
-	return nextTransition;
+	return;
 }
-function createTypeTransition(transition, type) {
-	let newTransition = transition[type] = Object.create(null);
+function createTypeTransition(transition, type, size) {
+	let typeName = TYPE_NAMES[type] + (size << 3);
+	let newTransition = transition[typeName] = Object.create(null);
 	newTransition.__type = type;
+	newTransition.__size = size;
 	newTransition.__parent = transition;
 	return newTransition;
 }
@@ -385,9 +436,17 @@ function loadStruct(id, structure, transition) {
 var sourceSymbol = Symbol('source')
 function readStruct(src, position, srcEnd, unpackr) {
 //	var stringLength = (src[position++] << 8) | src[position++];
-	position++;
-	let recordId = src[position++];
-	let structure = unpackr.structs[recordId];
+	let recordId = src[position++] - 0x20;
+	if (recordId >= 24) {
+		switch(recordId) {
+			case 24: recordId = src[position++]; break;
+			// little endian:
+			case 25: recordId = src[position++] + (src[position++] << 8); break;
+			case 26: recordId = src[position++] + (src[position++] << 8) + (src[position++] << 16); break;
+			case 27: recordId = src[position++] + (src[position++] << 8) + (src[position++] << 16) + (src[position++] << 24); break;
+		}
+	}
+	let structure = unpackr.typedStructs[recordId];
 	var construct = structure.construct;
 	if (!construct) {
 		construct = structure.construct = function() {
@@ -406,65 +465,89 @@ function readStruct(src, position, srcEnd, unpackr) {
 			// not enumerable or anything 
 		});
 		let currentOffset = 0;
-		let lastRefProperty, lastLatinProperty, firstRefProperty;
+		let lastRefProperty, firstRefProperty;
+		let properties = [];
 		for (let i = 0, l = structure.length; i < l; i++) {
-			let property = structure[i];
-			let [ key, type ] = property;
-			property.offset = currentOffset;
+			let definition = structure[i];
+			let { key, type, size, enumerationOffset } = definition;
+			let property = {
+				key,
+				offset: currentOffset,
+			}
+			if (enumerationOffset)
+				properties.splice(i + enumerationOffset, 0, property);
+			else
+				properties.push(property);
+			let getRef;
+			switch(size) { // TODO: Move into a separate function
+				case 0: getRef = () => 0; break;
+				case 1:
+					getRef = (source, position) => {
+						let ref = source.src[position + property.offset];
+						return ref >= 0xf6 ? toConstant(ref) : ref;
+					};
+					break;
+				case 2:
+					getRef = (source, position) => {
+						let src = source.src;
+						let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
+						let ref = dataView.getUint16(position + property.offset, true);
+						return ref >= 0xff00 ? toConstant(ref & 0xff) : ref;
+					};
+					break;
+				case 4:
+					getRef = (source, position) => {
+						let src = source.src;
+						let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
+						let ref = dataView.getUint32(position + property.offset, true);
+						return ref >= 0xffffff00 ? toConstant(ref & 0xff) : ref;
+					};
+					break;
+			}
+			property.getRef = getRef;
+			currentOffset += size;
 			let get;
 			switch(type) {
-				case 'latin8':case 'string8':
-					currentOffset++;
-					// fall through
-				case 'latin0':
+				case ASCII:
+					if (lastRefProperty && !lastRefProperty.next)
+						lastRefProperty.next = property;
+					lastRefProperty = property;
 					property.multiGetCount = 0;
-					if (lastLatinProperty)
-						lastLatinProperty.next = property;
-					lastLatinProperty = property;
 					get = function() {
 						let source = this[sourceSymbol];
 						let src = source.src;
-						let refStart = currentOffset + source.position;
-						let ref = type === 'latin0' ? 0 : src[source.position + property.offset];
-						if (ref >= 0xf6) return toConstant(ref);
-						let end, next = property;
-						while ((next = next.next)) {
-							end = src[source.position + next.offset];
-							if (end < 0xf6)
+						let position = source.position;
+						let refStart = currentOffset + position;
+						let ref = getRef(source, position);
+						if (!(ref > -1)) return toConstant(ref);
+
+						let end, next = property.next;
+						do {
+							end = next.getRef(source, position);
+							if (end > -1)
 								break;
 							else
 								end = null;
-						}
-						if (end == null) {
-							next = firstRefProperty;
-							let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
-							do {
-								end = dataView.getUint16(source.position + next.offset, true);
-								if (end < 0xff00)
-									break;
-								else
-									end = null;
-							} while((next = next.next));
-						}
+						} while ((next = next.next));
 						if (end == null)
 							end = srcEnd - refStart;
 						if (source.srcString) {
 							return source.srcString.slice(ref, end);
 						}
-						if (property.multiGetCount > 0) {
-							let latinEnd;
+						/*if (property.multiGetCount > 0) {
+							let asciiEnd;
 							next = firstRefProperty;
 							let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
 							do {
-								latinEnd = dataView.getUint16(source.position + next.offset, true);
-								if (latinEnd < 0xff00)
+								asciiEnd = dataView.getUint16(source.position + next.offset, true);
+								if (asciiEnd < 0xff00)
 									break;
 								else
-									latinEnd = null;
+									asciiEnd = null;
 							} while((next = next.next));
-							if (latinEnd == null)
-								latinEnd = srcEnd - refStart
-							source.srcString = src.toString('latin1', refStart, refStart + latinEnd);
+							if (asciiEnd == null)
+								asciiEnd = srcEnd - refStart
+							source.srcString = src.toString('latin1', refStart, refStart + asciiEnd);
 							return source.srcString.slice(ref, end);
 						}
 						if (source.prevStringGet) {
@@ -472,98 +555,92 @@ function readStruct(src, position, srcEnd, unpackr) {
 						} else {
 							source.prevStringGet = property;
 							property.multiGetCount--;
-						}
+						}*/
 						return src.toString('latin1', ref + refStart, end + refStart);
 					};
 					break;
-				case 'string16': case 'object16':
-					if (lastRefProperty)
+				case UTF8: case OBJECT_DATA:
+					if (lastRefProperty && !lastRefProperty.next)
 						lastRefProperty.next = property;
 					lastRefProperty = property;
-					if (!firstRefProperty)
-						firstRefProperty = property;
 					get = function() {
 						let source = this[sourceSymbol];
+						let ref = getRef(source, position);
+						if (!(ref > -1)) return toConstant(ref);
 						let src = source.src;
-						let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
-						let ref = dataView.getUint16(source.position + property.offset, true);
-						let refStart = currentOffset + source.position;
-						if (ref >= 0xff00) return toConstant(ref & 0xff);
-						ref += refStart; // adjust to after the fixed slots
-						let end;
 
-						if (src[ref] < 12) {
+						/*if (src[ref] == 62) {
 							// read the 32-bit reference
+							let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
 							ref = dataView.getUint32(ref) + refStart;
 							end = dataView.getUint32(ref + 4) + refStart;
-						} else {
-							// if we have a recursive fixed structure, we also don't need to proactively
-							// get the end, but would need to
-							let next = property;
-							while ((next = next.next)) {
-								let nextRef = dataView.getUint16(source.position + next.offset, true);
-								if (nextRef < 0xff00) {
-									end = nextRef + refStart;
-									break;
-								}
-							}
-							if (!end) end = source.srcEnd;
-						}
-						if (type === 'string16') {
+						} */
+						let end, next = property.next;
+						do {
+							end = next.getRef(source, position);
+							if (end > -1)
+								break;
+							else
+								end = null;
+						} while ((next = next.next));
+						if (end == null)
+							end = srcEnd - currentOffset - position;
+						if (type === UTF8) {
 							return src.toString('utf8', ref, end);
 						} else {
-							return unpackr.unpack(src.slice(ref, end));
+							return unpackr.unpack(src, { start: ref, end }); // could reuse this object
 						}
 					};
-					currentOffset += 2;
 					break;
-				case 'num32':
-					get = function() {
-						let source = this[sourceSymbol];
-						let src = source.src;
-						let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
-						let position = source.position + property.offset;
-						let value = dataView.getInt32(position, true)
-						if (value < 0x20000000) {
-							if (value > -0x1f000000)
+				case NUMBER:
+					switch(size) {
+						case 4:
+							get = function () {
+								let source = this[sourceSymbol];
+								let src = source.src;
+								let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
+								let position = source.position + property.offset;
+								let value = dataView.getInt32(position, true)
+								if (value < 0x20000000) {
+									if (value > -0x1f000000)
+										return value;
+									if (value > -0x20000000)
+										return toConstant(value & 0xff);
+								}
+								let fValue = dataView.getFloat32(position, true);
+								// this does rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
+								let multiplier = mult10[((src[position + 3] & 0x7f) << 1) | (src[position + 2] >> 7)]
+								return ((multiplier * fValue + (fValue > 0 ? 0.5 : -0.5)) >> 0) / multiplier;
+							};
+							break;
+						case 8:
+							get = function () {
+								let source = this[sourceSymbol];
+								let src = source.src;
+								let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
+								let value = dataView.getFloat64(source.position + property.offset, true);
+								if (isNaN(value)) {
+									let byte = src[source.position + property.offset];
+									if (byte >= 0xf6)
+										return toConstant(byte);
+								}
 								return value;
-							if (value > -0x20000000)
-								return toConstant(value & 0xff);
-						}
-						let fValue = dataView.getFloat32(position, true);
-						// this does rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
-						let multiplier = mult10[((src[position + 3] & 0x7f) << 1) | (src[position + 2] >> 7)]
-						return ((multiplier * fValue + (fValue > 0 ? 0.5 : -0.5)) >> 0) / multiplier;
-					};
-					currentOffset += 4;
-					break;
-				case 'float64':
-					get = function() {
-						let source = this[sourceSymbol];
-						let src = source.src;
-						let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
-						let value = dataView.getFloat64(source.position + property.offset, true);
-						if (isNaN(value) ) {
-							let byte = src[source.position + property.offset];
-							if (byte >= 0xf6)
-								return toConstant(byte);
-						}
-						return value;
-					};
-					currentOffset += 8;
-					break;
-				case 'num8':
-					get = function() {
-						let source = this[sourceSymbol];
-						let src = source.src;
-						let value = src[source.position + property.offset];
-						return value < 0xf6 ? value : toConstant(value);
-					};
-					currentOffset += 1;
-					break;
+							};
+							break;
+						case 1:
+							get = function () {
+								let source = this[sourceSymbol];
+								let src = source.src;
+								let value = src[source.position + property.offset];
+								return value < 0xf6 ? value : toConstant(value);
+							};
+							break;
+					}
 			}
-			Object.defineProperty(prototype, key, { get, enumerable: true });
+			property.get = get;
 		}
+		for (let property of properties) // assign in enumeration order
+			Object.defineProperty(prototype, property.key, { get: property.get, enumerable: true });
 	}
 	var instance = new construct();
 	instance[sourceSymbol] = {

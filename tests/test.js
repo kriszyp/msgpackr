@@ -132,10 +132,10 @@ suite('msgpackr basic tests', function(){
 		test.only('pack/unpack sample data with random access structures ' + snippet, function() {
 			var data = sampleData
 			let structures = []
-			let packr = new Packr({ structures, useRecords: true, randomAccessStructure: true, freezeData: true, saveStructure(id, structure) {
-				console.log('saved',{id, structure});
-			}, getStructure(id) {
-				console.log('get',{id});
+			let packr = new Packr({ structures, useRecords: true, randomAccessStructure: true, freezeData: true, saveStructures(structures) {
+				console.log('saved',{structures});
+			}, getStructures() {
+				console.log('getStructures');
 			} })
 			for (let i = 0; i < 20; i++) {
 				var serialized = packr.pack(data)

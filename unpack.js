@@ -58,16 +58,21 @@ export class Unpackr {
 		}
 		Object.assign(this, options)
 	}
-	unpack(source, end) {
+	unpack(source, options) {
 		if (src) {
 			// re-entrant execution, save the state and restore it after we do this unpack
 			return saveState(() => {
 				clearSource()
-				return this ? this.unpack(source, end) : Unpackr.prototype.unpack.call(defaultOptions, source, end)
+				return this ? this.unpack(source, options) : Unpackr.prototype.unpack.call(defaultOptions, source, options)
 			})
 		}
-		srcEnd = end > -1 ? end : source.length
-		position = 0
+		if (typeof options === 'object') {
+			srcEnd = options.end || source.length
+			position = options.start || 0
+		} else {
+			position = 0
+			srcEnd = options > -1 ? options : source.length
+		}
 		stringPosition = 0
 		srcStringEnd = 0
 		srcString = null
@@ -134,6 +139,10 @@ export class Unpackr {
 		}
 	}
 	_mergeStructures(loadedStructures, existingStructures) {
+		if (loadedStructures?.named) {
+			this.typedStructs = loadedStructures.typed || []
+			loadedStructures = loadedStructures.named;
+		}
 		loadedStructures = loadedStructures || []
 		for (let i = 0, l = loadedStructures.length; i < l; i++) {
 			let structure = loadedStructures[i]
@@ -172,7 +181,7 @@ export function checkedRead() {
 				currentStructures.length = sharedLength
 		}
 		let result
-		if (currentUnpackr.randomAccessStructure && src[position] < 0x40 && readStruct) {
+		if (currentUnpackr.randomAccessStructure && src[position] < 0x40 && src[position] >= 0x20 && readStruct) {
 			result = readStruct(src, position, srcEnd, currentUnpackr)
 			position = srcEnd
 		} else
@@ -503,7 +512,7 @@ const createSecondByteReader = (firstId, read0) => {
 	}
 }
 
-function loadStructures() {
+export function loadStructures() {
 	let loadedStructures = saveState(() => {
 		// save the state in case getStructures modifies our buffer
 		src = null
