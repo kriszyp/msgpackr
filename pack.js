@@ -480,7 +480,7 @@ export class Packr extends Unpackr {
 
 		const writeObject = this.useRecords === false ? this.variableMapSize ? (object) => {
 			// this method is slightly slower, but generates "preferred serialization" (optimally small for smaller objects)
-			let keys = Object.keys(object)
+			let keys = this.sparse ? sparseKeys(object) : Object.keys(object)
 			let length = keys.length
 			if (length < 0x10) {
 				target[position++] = 0x80 | length
@@ -505,7 +505,7 @@ export class Packr extends Unpackr {
 			position += 2
 			let size = 0
 			for (let key in object) {
-				if (safePrototype || object.hasOwnProperty(key)) {
+				if ((safePrototype || object.hasOwnProperty(key)) && (!this.sparse || object[key] != null)) {
 					pack(key)
 					pack(object[key])
 					size++
@@ -520,13 +520,13 @@ export class Packr extends Unpackr {
 			let objectOffset = position++ - start
 			let wroteKeys
 			for (let key in object) {
-				if (safePrototype || object.hasOwnProperty(key)) {
+				if ((safePrototype || object.hasOwnProperty(key)) && (!this.sparse || object[key] != null)) {
 					nextTransition = transition[key]
 					if (nextTransition)
 						transition = nextTransition
 					else {
 						// record doesn't exist, create full new record and insert it
-						let keys = Object.keys(object)
+						let keys = this.sparse ? sparseKeys(object) : Object.keys(object)
 						let lastTransition = transition
 						transition = structures.transitions
 						let newTransitions = 0
@@ -556,13 +556,13 @@ export class Packr extends Unpackr {
 				if (recordId)
 					target[objectOffset + start] = recordId
 				else
-					insertNewRecord(transition, Object.keys(object), objectOffset, 0)
+					insertNewRecord(transition, this.sparse ? sparseKeys : Object.keys(object), objectOffset, 0)
 			}
 		} :
 		(object, safePrototype) => {
 			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null))
 			let newTransitions = 0
-			for (let key in object) if (safePrototype || object.hasOwnProperty(key)) {
+			for (let key in object) if ((safePrototype || object.hasOwnProperty(key)) && (!this.sparse || object[key] != null)) {
 				nextTransition = transition[key]
 				if (!nextTransition) {
 					nextTransition = transition[key] = Object.create(null)
@@ -578,11 +578,11 @@ export class Packr extends Unpackr {
 				} else
 					target[position++] = recordId
 			} else {
-				newRecord(transition, transition.__keys__ || Object.keys(object), newTransitions)
+				newRecord(transition, transition.__keys__ || (this.sparse ? sparseKeys(object) : Object.keys(object)), newTransitions)
 			}
 			// now write the values
 			for (let key in object)
-				if (safePrototype || object.hasOwnProperty(key))
+				if ((safePrototype || object.hasOwnProperty(key)) && (!this.sparse || object[key] != null))
 					pack(object[key])
 		}
 		const makeRoom = (end) => {
@@ -700,10 +700,11 @@ export class Packr extends Unpackr {
 	}
 }
 
-function copyBinary(source, target, targetOffset, offset, endOffset) {
-	while (offset < endOffset) {
-		target[targetOffset++] = source[offset++]
-	}
+// Object keys with null and undefined removed
+function sparseKeys(object) {
+	const keys = [];
+	for (let key in object) if(object.hasOwnProperty(key) && object[key] != null) keys.push(key)
+	return keys
 }
 
 extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/, C1Type ]
