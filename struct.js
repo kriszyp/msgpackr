@@ -170,7 +170,7 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 				let isNotAscii
 				let strStart = refPosition;
 				if (strLength < 0x40) {
-					let i, c1, c2, isNotAscii
+					let i, c1, c2;
 					for (i = 0; i < strLength; i++) {
 						c1 = value.charCodeAt(i)
 						if (c1 < 0x80) {
@@ -263,7 +263,6 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 				float64: null
 			};
 		}
-		transition = nextTransition.object16 || createTypeTransition(nextTransition, OBJECT_DATA, 2);
 		let newPosition;
 		if (value) {
 			/*if (typeof value === 'string') { // TODO: we could re-enable long strings
@@ -275,21 +274,46 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 				}
 				newPosition = position + target.utf8Write(value, position, 0xffffffff);
 			} else { */
+			let size;
 			refOffset = refPosition - refsStartPosition;
+			if (refOffset < 0xff00) {
+				transition = nextTransition.object16;
+				if (transition)
+					size = 2;
+				else if ((transition = nextTransition.object32))
+					size = 4;
+				else {
+					transition = createTypeTransition(nextTransition, OBJECT_DATA, 2);
+					size = 2;
+				}
+			} else {
+				transition = nextTransition.object32 || createTypeTransition(nextTransition, OBJECT_DATA, 4);
+				size = 4;
+			}
 			newPosition = pack(value, refPosition);
 			//}
 			if (typeof newPosition === 'object') {
 				// re-allocated
 				refPosition = newPosition.position;
 				targetView = newPosition.targetView;
+				target = newPosition.target;
+				refsStartPosition -= start;
+				position -= start;
 				start = 0;
 			} else
 				refPosition = newPosition;
-			targetView.setUint16(position, refOffset, true);
+			if (size === 2) {
+				targetView.setUint16(position, refOffset, true);
+				position += 2;
+			} else {
+				targetView.setUint32(position, refOffset, true);
+				position += 4;
+			}
 		} else {
+			transition = nextTransition.object16 || createTypeTransition(nextTransition, OBJECT_DATA, 2);
 			targetView.setInt16(position, value === null ? -10 : -9, true);
+			position += 2;
 		}
-		position += 2;
 		keyIndex++;
 	}
 
@@ -304,32 +328,14 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 			let size = nextTransition.__size;
 			nextTransition = nextTransition.__parent;
 			key = nextTransition.key;
-			structure.push({ key, type, size });
+			structure.push({ key, type, size, enumerationOffset: nextTransition.enumerationOffset });
 			nextTransition = nextTransition.parent;
 		}
 		structure.reverse();
-		for (let i = 0; i < structure.length; i++) {
-			let property = structure[i];
-			if (property.type === ASCII || property.type === UTF8) {
-				if (prevStrProp)
-					prevStrProp.next = i;
-				prevStrProp = property;
-				lastStrProp = property;
-			}
-			if (property.type === OBJECT_DATA) {
-				if (prevDataProp)
-					prevDataProp.next = i;
-				if (firstDataIndex === undefined)
-					firstDataIndex = i;
-				prevDataProp = property;
-			}
-		}
-		if (lastStrProp)
-			lastStrProp.next = firstDataIndex;
 
 		if (packr.saveStructures({ typed: packr.typedStructs, named: packr.structures }) === false) {
 			loadStructures();
-			return writeStruct(object, target, position, structures, makeRoom, pack, packr);
+			return writeStruct(object, target, start, structures, makeRoom, pack, packr);
 		}
 		transition[RECORD_SYMBOL] = recordId;
 		packr.typedStructs[recordId] = structure;
@@ -343,17 +349,17 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 			break;
 		case 2:
 			if (recordId >= 0x100) return 0;
-			target[start] = 0x30;
+			target[start] = 0x38;
 			target[start + 1] = recordId;
 			break;
 		case 3:
 			if (recordId >= 0x10000) return 0;
-			target[start] = 0x31;
+			target[start] = 0x39;
 			target.setUint16(start + 1, recordId, true);
 			break;
 		case 4:
 			if (recordId >= 0x1000000) return 0;
-			target.setUint32(start, (recordId << 8) + 0x32, true);
+			target.setUint32(start, (recordId << 8) + 0x3a, true);
 			break;
 	}
 
@@ -369,7 +375,7 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 		if (refsStartPosition === refPosition) // no refs
 			return position;
 		typedStructs.lastStringStart = position - start;
-		return writeStruct(object, target, position, structures, makeRoom, pack, packr);
+		return writeStruct(object, target, start, structures, makeRoom, pack, packr);
 	}
 	return refPosition;
 /*	if (asciiStrLength > 0) {
@@ -419,7 +425,8 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 function anyType(transition, position, targetView, value) {
 	let nextTransition;
 	if ((nextTransition = transition.ascii8 || transition.num8)) {
-		targetView.setInt8(position++, value, true);
+		targetView.setInt8(position, value, true);
+		updatedPosition = position + 1;
 		return nextTransition;
 	}
 	if ((nextTransition = transition.string16 || transition.object16)) {
@@ -439,7 +446,8 @@ function anyType(transition, position, targetView, value) {
 		updatedPosition = position + 8;
 		return nextTransition;
 	}
-	// TODO: can we do an any type where we defer the decision?
+	updatedPosition = position;
+	// TODO: can we do an "any" type where we defer the decision?
 	return;
 }
 function createTypeTransition(transition, type, size) {

@@ -16,6 +16,13 @@ function tryRequire(module) {
 		return {}
 	}
 }
+
+let seed = 0;
+function random() {
+	seed++;
+	let a = seed * 15485863;
+	return (a * a * a % 2038074743) / 2038074743;
+}
 //if (typeof chai === 'undefined') { chai = require('chai') }
 var assert = chai.assert
 //if (typeof msgpackr === 'undefined') { msgpackr = require('..') }
@@ -117,6 +124,37 @@ suite('msgpackr basic tests', function(){
 		var deserialized = unpack(serialized)
 		assert.equal(deserialized, data)
 	})
+	test.only('pack/unpack varying data with random access structures', function() {
+		let structures = []
+		let packr = new Packr({ structures, useRecords: true, randomAccessStructure: true, freezeData: true, saveStructures(structures) {
+				console.log('saved',{structures});
+			}, getStructures() {
+				console.log('getStructures');
+			} })
+		for (let i = 0; i < 20; i++) {
+			let data = {};
+			let props = ['foo', 'bar', 'a', 'b', 'c','name', 'age', 'd'];
+			function makeString() {
+				let str = '';
+				while (random() < 0.9) {
+					str += random() < 0.8 ? 'hello world' : String.fromCharCode(300);
+				}
+				return str;
+			}
+			for (let i = 0; i < random() * 20; i++) {
+				data[props[Math.floor(random() * 8)]] =
+					random() < 0.3 ? Math.floor(random() * 400) / 2 :
+						random() < 0.3 ? makeString() : random() < 0.3 ? true : random() < 0.3 ? sampleData : null;
+			}
+			var serialized = packr.pack(data)
+			var deserialized = packr.unpack(serialized);
+			for (let key in deserialized) {
+				console.log(key, deserialized[key], deserialized[key] === data[key]);
+			}
+			assert.deepEqual(deserialized, data)
+		}
+	})
+
 	for (let sampleData of allSampleData) {
 		let snippet = JSON.stringify(sampleData).slice(0, 20) + '...';
 		test('pack/unpack sample data ' + snippet, function(){
@@ -129,7 +167,7 @@ suite('msgpackr basic tests', function(){
 			var deserialized = unpack(serialized)
 			assert.deepEqual(deserialized, data)
 		})
-		test.only('pack/unpack sample data with random access structures ' + snippet, function() {
+		test('pack/unpack sample data with random access structures ' + snippet, function() {
 			var data = sampleData
 			let structures = []
 			let packr = new Packr({ structures, useRecords: true, randomAccessStructure: true, freezeData: true, saveStructures(structures) {
