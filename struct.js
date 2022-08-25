@@ -35,8 +35,8 @@ null (0xff)+ 0xf7
 */
 
 
-import { setWriteStructSlots, RECORD_SYMBOL } from './pack.js'
-import {setReadStruct, unpack, mult10, loadStructures} from './unpack.js';
+import {setWriteStructSlots, RECORD_SYMBOL, addExtension} from './pack.js'
+import {setReadStruct, unpack, mult10, loadStructures, unpackMultiple} from './unpack.js';
 const ASCII = 3; // the MIBenum from https://www.iana.org/assignments/character-sets/character-sets.xhtml (and other character encodings could be referenced by MIBenum)
 const NUMBER = 0;
 const UTF8 = 2;
@@ -58,11 +58,12 @@ const encodeUtf8 = hasNodeBuffer ? function(target, string, position) {
 
 const TYPE = Symbol('type');
 const PARENT = Symbol('parent');
-setWriteStructSlots(writeStruct);
+setWriteStructSlots(writeStruct, prepareStructures);
 function writeStruct(object, target, position, structures, makeRoom, pack, packr) {
 	let typedStructs = packr.typedStructs;
 	if (!typedStructs) {
-		typedStructs = packr.typedStructs = [];
+		loadStructures();
+		typedStructs = packr.typedStructs;
 	}
 	let targetView = target.dataView;
 	let refsStartPosition = (typedStructs.lastStringStart || 100) + position;
@@ -96,7 +97,7 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 	for (let key in object) {
 		let value = object[key];
 		let nextTransition = transition[key];
-		if (!nextTransition){
+		if (!nextTransition) {
 			transition[key] = nextTransition = {
 				key,
 				parent: transition,
@@ -323,26 +324,25 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 		recordId = packr.typedStructs.length;
 		let structure = [];
 		let nextTransition = transition;
-		let key, type, prevStrProp, prevDataProp, firstDataIndex, lastStrProp;
-		while((type = nextTransition.__type) !== undefined) {
+		let key, type;
+		while ((type = nextTransition.__type) !== undefined) {
 			let size = nextTransition.__size;
 			nextTransition = nextTransition.__parent;
 			key = nextTransition.key;
-			structure.push({ key, type, size, enumerationOffset: nextTransition.enumerationOffset });
+			let property = [type, size, key];
+			if (nextTransition.enumerationOffset)
+				property.push(nextTransition.enumerationOffset);
+			structure.push(property);
 			nextTransition = nextTransition.parent;
 		}
 		structure.reverse();
-
-		if (packr.saveStructures({ typed: packr.typedStructs, named: packr.structures }) === false) {
-			loadStructures();
-			return writeStruct(object, target, start, structures, makeRoom, pack, packr);
-		}
 		transition[RECORD_SYMBOL] = recordId;
 		packr.typedStructs[recordId] = structure;
+		pack(null, 0, true); // special call to notify that structures have been updated
 	}
 
 
-	switch(headerSize) {
+	switch (headerSize) {
 		case 1:
 			if (recordId >= 0x10) return 0;
 			target[start] = recordId + 0x20;
@@ -364,63 +364,19 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 	}
 
 	if (position < refsStartPosition) {
-		if (refsStartPosition === refPosition) // no refs
-			return position;
-		// adjust positioning
-		target.copyWithin(position, refsStartPosition, refPosition);
-		refPosition += position - refsStartPosition;
-		typedStructs.lastStringStart = position - start;
-		console.log('typedStructs.lastStringStart', typedStructs.lastStringStart)
+		if (refsStartPosition !== refPosition) { // no refs
+			// adjust positioning
+			target.copyWithin(position, refsStartPosition, refPosition);
+			refPosition += position - refsStartPosition;
+			typedStructs.lastStringStart = position - start;
+		}
 	} else if (position > refsStartPosition) {
-		if (refsStartPosition === refPosition) // no refs
-			return position;
-		typedStructs.lastStringStart = position - start;
-		return writeStruct(object, target, start, structures, makeRoom, pack, packr);
+		if (refsStartPosition !== refPosition) { // no refs
+			typedStructs.lastStringStart = position - start;
+			return writeStruct(object, target, start, structures, makeRoom, pack, packr);
+		}
 	}
 	return refPosition;
-/*	if (asciiStrLength > 0) {
-		if (position + asciiStrLength > safeEnd) {
-			target = makeRoom(position + asciiStrLength);
-			position -= start;
-			targetView = target.dataView;
-			start = 0;
-			dataStart = position;
-		}
-		if (asciiStrLength > 0x40)
-			position += target.ascii1Write(asciiArray.join(''), position, 0xffffffff);
-		else {
-			for (let i = 0; i < asciiStrCount; i++) {
-				let str = asciiArray[i];
-				for (let j = 0, l = str.length; j < l; j++) {
-					target[position++] = str.charCodeAt(j);
-				}
-			}
-		}
-	}*/
-	/*if (queuedStringReferences) {
-		let stringCount = queuedStringReferences.length;
-		let stringStart = position + (stringCount << 2);
-		let stringPosition = stringStart;
-		for (let i = 0; i < stringCount; i++) {
-			let string = queuedStringReferences[i];
-			let bytesWritten = target.utf8Write(string, stringPosition, 0xffffffff);
-			stringPosition += bytesWritten;
-			targetView.setUint32(position, stringPosition - stringStart, true);
-		}
-	}*/
-	/*
-	if (position > 0xc000) {
-		// TODO: Repack so we can reference everything properly
-		// TODO: makeRoom
-		for (let i = 0, l = queued32BitReferences.length; i < l; i++) {
-			let ref = queued32BitReferences[i];
-			targetView.setUint32(ref.slotOffset, 0xa0000000 - ((l - i) << 2), true);
-			targetView.setUint32(position, ref.offset, true);
-			position += 4;
-		}
-	}
-
-	return position;*/
 }
 function anyType(transition, position, targetView, value) {
 	let nextTransition;
@@ -452,21 +408,44 @@ function anyType(transition, position, targetView, value) {
 }
 function createTypeTransition(transition, type, size) {
 	let typeName = TYPE_NAMES[type] + (size << 3);
-	let newTransition = transition[typeName] = Object.create(null);
+	let newTransition = transition[typeName] || (transition[typeName] = Object.create(null));
 	newTransition.__type = type;
 	newTransition.__size = size;
 	newTransition.__parent = transition;
 	return newTransition;
 }
-function loadStruct(id, structure, transition) {
-	for (let [ key, type ] of structure) {
-		transition = transition[key] || (transition[key] = Object.create(null, {
-			key: {value: key},
-			parent: {value: transition},
-		}));
-		transition = transition[type] || createTypeTransition(transition, type);
+function onLoadedStructures(sharedData) {
+	if (!(sharedData instanceof Map))
+		return sharedData;
+	let typed = sharedData.get('typed') || [];
+	let named = sharedData.get('named');
+	let transitions = Object.create(null);
+	for (let i = 0, l = typed.length; i < l; i++) {
+		let structure = typed[i];
+		let transition = transitions;
+		for (let [type, size, key] of structure) {
+			let nextTransition = transition[key];
+			if (!nextTransition) {
+				transition[key] = nextTransition = {
+					key,
+					parent: transition,
+					enumerationOffset: 0,
+					ascii0: null,
+					ascii8: null,
+					num8: null,
+					string16: null,
+					object16: null,
+					num32: null,
+					float64: null
+				};
+			}
+			transition = createTypeTransition(nextTransition, type, size);
+		}
+		transition[RECORD_SYMBOL] = i;
 	}
-	transition[RECORD_SYMBOL] = id;
+	typed.transitions = transitions;
+	this.typedStructs = typed;
+	return named;
 }
 var sourceSymbol = Symbol('source')
 function readStruct(src, position, srcEnd, unpackr) {
@@ -481,7 +460,13 @@ function readStruct(src, position, srcEnd, unpackr) {
 			case 27: recordId = src[position++] + (src[position++] << 8) + (src[position++] << 16) + (src[position++] << 24); break;
 		}
 	}
-	let structure = unpackr.typedStructs[recordId];
+	let structure = unpackr.typedStructs?.[recordId];
+	if (!structure) {
+		loadStructures();
+		structure = unpackr.typedStructs[recordId];
+		if (!structure)
+			throw new Error('Could not find typed structure ' + recordId)
+	}
 	var construct = structure.construct;
 	if (!construct) {
 		construct = structure.construct = function() {
@@ -500,11 +485,11 @@ function readStruct(src, position, srcEnd, unpackr) {
 			// not enumerable or anything 
 		});
 		let currentOffset = 0;
-		let lastRefProperty, firstRefProperty;
+		let lastRefProperty;
 		let properties = [];
 		for (let i = 0, l = structure.length; i < l; i++) {
 			let definition = structure[i];
-			let { key, type, size, enumerationOffset } = definition;
+			let [ type, size, key, enumerationOffset ] = definition;
 			let property = {
 				key,
 				offset: currentOffset,
@@ -699,4 +684,71 @@ function toConstant(code) {
 	}
 	throw new Error('Unknown constant');
 }
-setReadStruct(readStruct)
+function prepareStructures(packr) {
+	let structMap = new Map();
+	structMap.set('named', packr.structures);
+	structMap.set('typed', packr.typedStructs);
+	structMap.isCompatible = existing => {
+		if (existing instanceof Map) {
+			let named = existing.get('named') || [];
+			if (named.length !== (packr.lastNamedStructuresLength || 0))
+				return false;
+			let typed = existing.get('typed') || [];
+			if (typed.length !== (packr.lastTypedStructuresLength || 0))
+				return false;
+		} else if (existing instanceof Array) {
+			if (existing.length !== (packr.lastNamedStructuresLength || 0))
+				return false;
+		}
+		return true;
+	};
+	return structMap;
+}
+
+/*
+class SharedStructures {
+	constructor(packr) {
+		this.named = packr.structures;
+		this.typed = packr.typedStructs;
+	}
+	isCompatible(existing) {
+
+	}
+}
+addExtension({
+	Class: SharedStructures,
+	pack(value, allocateForWrite, pack){
+		let typed = value.typed;
+		for (let property of typed) {
+			let { target, targetView, position} = allocateForWrite(6);
+
+	},
+	unpack(src, read) {
+		let typed = [];
+		let named;
+		let position = 0;
+		do{
+			let byte = src[position++];
+			if (byte === 255) {
+				named = unpack(src.slice(position));
+				break;
+			}
+			if (byte === undefined)
+				break;
+			let property = { type: byte };
+			let size = src[position++];
+			if (size >= 128) {
+				property.enumerationOffset = 0x100 - size;
+				size = src[position++];
+			}
+			property.size = size;
+			property.key = read();
+			typed.push(property);
+		} while(true);
+		return new SharedStructures({
+			typedStructs: typed, structures: named || []
+		});
+	}
+})*/
+setReadStruct(readStruct, onLoadedStructures);
+

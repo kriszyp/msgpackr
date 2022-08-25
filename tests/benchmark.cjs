@@ -21,7 +21,7 @@ msgpack_codec = msgpack_codec && msgpack_codec.msgpack;
 what_the_pack = what_the_pack && what_the_pack.initialize(2**20);
 
 var pkg = require("../package.json");
-var data = require("./example5.json");
+var data = require("./example.json");
 var packed = msgpack_lite && msgpack_lite.encode(data);
 var expected = JSON.stringify(data);
 
@@ -62,8 +62,8 @@ if (msgpackr) {
   }, buf);
   test(obj);
 
-  packr = new msgpackr.Packr({ structures: [],randomAccessStructure: true, saveStructure(id, structure) {
-      console.log('saved',{id, structure});
+  packr = new msgpackr.Packr({ structures: [],randomAccessStructure: true, saveStructures(structures) {
+      console.log('saved',{structures});
     } })
   console.log('starting')
   buf = bench('msgpackr w/ random access structures: packr.pack(obj);', value => packr.pack(value), data);

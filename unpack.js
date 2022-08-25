@@ -28,7 +28,7 @@ export const C1 = new C1Type()
 C1.name = 'MessagePack 0xC1'
 var sequentialMode = false
 var inlineObjectReadThreshold = 2
-var readStruct
+var readStruct, onLoadedStructures
 try {
 	new Function('')
 } catch(error) {
@@ -139,10 +139,8 @@ export class Unpackr {
 		}
 	}
 	_mergeStructures(loadedStructures, existingStructures) {
-		if (loadedStructures?.named) {
-			this.typedStructs = loadedStructures.typed || []
-			loadedStructures = loadedStructures.named;
-		}
+		if (onLoadedStructures)
+			loadedStructures = onLoadedStructures.call(this, loadedStructures);
 		loadedStructures = loadedStructures || []
 		for (let i = 0, l = loadedStructures.length; i < l; i++) {
 			let structure = loadedStructures[i]
@@ -838,7 +836,15 @@ function readBin(length) {
 function readExt(length) {
 	let type = src[position++]
 	if (currentExtensions[type]) {
-		return currentExtensions[type](src.subarray(position, position += length))
+		let end
+		return currentExtensions[type](src.subarray(position, end = (position += length)), (readPosition) => {
+			position = readPosition;
+			try {
+				return read();
+			} finally {
+				position = end;
+			}
+		})
 	}
 	else
 		throw new Error('Unknown extension type ' + type)
@@ -1081,6 +1087,7 @@ export function roundFloat32(float32Number) {
 	let multiplier = mult10[((u8Array[3] & 0x7f) << 1) | (u8Array[2] >> 7)]
 	return ((multiplier * float32Number + (float32Number > 0 ? 0.5 : -0.5)) >> 0) / multiplier
 }
-export function setReadStruct(func) {
-	readStruct = func;
+export function setReadStruct(updatedReadStruct, loadedStructs) {
+	readStruct = updatedReadStruct;
+	onLoadedStructures = loadedStructs;
 }

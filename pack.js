@@ -15,7 +15,7 @@ let targetView
 let position = 0
 let safeEnd
 let bundledStrings = null
-let writeStructSlots
+let writeStructSlots, prepareStructures
 const MAX_BUNDLE_SIZE = 0xf000
 const hasNonLatin = /[\u0080-\uFFFF]/
 export const RECORD_SYMBOL = Symbol('record-id')
@@ -28,7 +28,6 @@ export class Packr extends Unpackr {
 		let hasSharedUpdate
 		let structures
 		let referenceMap
-		let lastSharedStructuresLength = 0
 		let encodeUtf8 = ByteArray.prototype.utf8Write ? function(string, position) {
 			return target.utf8Write(string, position, 0xffffffff)
 		} : (textEncoder && textEncoder.encodeInto) ?
@@ -114,7 +113,7 @@ export class Packr extends Unpackr {
 						}
 						transition[RECORD_SYMBOL] = i + 0x40
 					}
-					lastSharedStructuresLength = sharedLength
+					this.lastNamedStructuresLength = sharedLength
 				}
 				if (!isSequential) {
 					structures.nextId = sharedLength + 0x40
@@ -169,12 +168,13 @@ export class Packr extends Unpackr {
 					if (hasSharedUpdate && packr.saveStructures) {
 						// we can't rely on start/end with REUSE_BUFFER_MODE since they will (probably) change when we save
 						let returnBuffer = target.subarray(start, position)
-						if (packr.saveStructures(structures, lastSharedStructuresLength) === false) {
+						let newSharedData = prepareStructures ? prepareStructures(packr) : structures;
+						if (packr.saveStructures(newSharedData, newSharedData.isCompatible || packr.lastNamedStructuresLength || 0) === false) {
 							// get updated structures and try again if the update failed
 							packr._mergeStructures(packr.getStructures())
 							return packr.pack(value)
 						}
-						lastSharedStructuresLength = sharedLength
+						packr.lastNamedStructuresLength = sharedLength
 						return returnBuffer
 					}
 				}
@@ -692,7 +692,9 @@ export class Packr extends Unpackr {
 			}
 		}
 		const writeStruct = (object, safePrototype) => {
-			let newPosition = writeStructSlots(object, target, position, structures, makeRoom, (value, newPosition) => {
+			let newPosition = writeStructSlots(object, target, position, structures, makeRoom, (value, newPosition, notifySharedUpdate) => {
+				if (notifySharedUpdate)
+					hasSharedUpdate = true;
 				position = newPosition;
 				if (start > 0) {
 					pack(value);
@@ -716,6 +718,8 @@ export class Packr extends Unpackr {
 	clearSharedData() {
 		if (this.structures)
 			this.structures = []
+		if (this.typedStructs)
+			this.typedStructs = []
 	}
 }
 
@@ -942,8 +946,9 @@ export function addExtension(extension) {
 	}
 	unpackAddExtension(extension)
 }
-export function setWriteStructSlots(func) {
-	writeStructSlots = func;
+export function setWriteStructSlots(writeSlots, makeStructures) {
+	writeStructSlots = writeSlots;
+	prepareStructures = makeStructures;
 }
 
 let defaultPackr = new Packr({ useRecords: false })
