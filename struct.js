@@ -62,8 +62,9 @@ setWriteStructSlots(writeStruct, prepareStructures);
 function writeStruct(object, target, position, structures, makeRoom, pack, packr) {
 	let typedStructs = packr.typedStructs;
 	if (!typedStructs) {
-		loadStructures();
-		typedStructs = packr.typedStructs;
+		packr._mergeStructures(packr.getStructures());
+		typedStructs = packr.typedStructs || (packr.typedStructs = []);
+		packr.lastTypedStructuresLength = typedStructs.length;
 	}
 	let targetView = target.dataView;
 	let refsStartPosition = (typedStructs.lastStringStart || 100) + position;
@@ -462,10 +463,17 @@ function readStruct(src, position, srcEnd, unpackr) {
 	}
 	let structure = unpackr.typedStructs?.[recordId];
 	if (!structure) {
-		loadStructures();
+		// copy src buffer because getStructures will override it
+		src = Uint8Array.prototype.slice.call(src, position, srcEnd);
+		srcEnd -= position;
+		position = 0;
+		unpackr._mergeStructures(unpackr.getStructures());
+		if (!unpackr.typedStructs)
+			throw new Error('Could not find any shared typed structures');
+		unpackr.lastTypedStructuresLength = unpackr.typedStructs.length;
 		structure = unpackr.typedStructs[recordId];
 		if (!structure)
-			throw new Error('Could not find typed structure ' + recordId)
+			throw new Error('Could not find typed structure ' + recordId);
 	}
 	var construct = structure.construct;
 	if (!construct) {
@@ -688,13 +696,14 @@ function prepareStructures(packr) {
 	let structMap = new Map();
 	structMap.set('named', packr.structures);
 	structMap.set('typed', packr.typedStructs);
+	let lastTypedStructuresLength = packr.lastTypedStructuresLength || 0;
 	structMap.isCompatible = existing => {
 		if (existing instanceof Map) {
 			let named = existing.get('named') || [];
 			if (named.length !== (packr.lastNamedStructuresLength || 0))
 				return false;
 			let typed = existing.get('typed') || [];
-			if (typed.length !== (packr.lastTypedStructuresLength || 0))
+			if (typed.length !== lastTypedStructuresLength)
 				return false;
 		} else if (existing instanceof Array) {
 			if (existing.length !== (packr.lastNamedStructuresLength || 0))
@@ -702,6 +711,7 @@ function prepareStructures(packr) {
 		}
 		return true;
 	};
+	packr.lastTypedStructuresLength = packr.typedStructs?.length;
 	return structMap;
 }
 
