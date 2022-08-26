@@ -124,7 +124,7 @@ suite('msgpackr basic tests', function(){
 		var deserialized = unpack(serialized)
 		assert.equal(deserialized, data)
 	})
-	test.only('pack/unpack varying data with random access structures', function() {
+	test('pack/unpack varying data with random access structures', function() {
 		let structures = []
 		let packr = new Packr({ structures, useRecords: true, randomAccessStructure: true, freezeData: true, saveStructures(structures) {
 				console.log('saved',{structures});

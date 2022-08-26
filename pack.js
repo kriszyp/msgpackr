@@ -168,7 +168,7 @@ export class Packr extends Unpackr {
 					if (hasSharedUpdate && packr.saveStructures) {
 						// we can't rely on start/end with REUSE_BUFFER_MODE since they will (probably) change when we save
 						let returnBuffer = target.subarray(start, position)
-						let newSharedData = prepareStructures ? prepareStructures(packr) : structures;
+						let newSharedData = prepareStructures ? prepareStructures(structures, packr) : structures;
 						if (packr.saveStructures(newSharedData, newSharedData.isCompatible || packr.lastNamedStructuresLength || 0) === false) {
 							// get updated structures and try again if the update failed
 							packr._mergeStructures(packr.getStructures())

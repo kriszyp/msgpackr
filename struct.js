@@ -60,12 +60,9 @@ const TYPE = Symbol('type');
 const PARENT = Symbol('parent');
 setWriteStructSlots(writeStruct, prepareStructures);
 function writeStruct(object, target, position, structures, makeRoom, pack, packr) {
-	let typedStructs = packr.typedStructs;
-	if (!typedStructs) {
-		packr._mergeStructures(packr.getStructures());
-		typedStructs = packr.typedStructs || (packr.typedStructs = []);
-		packr.lastTypedStructuresLength = typedStructs.length;
-	}
+	let typedStructs = packr.typedStructs || (packr.typedStructs = []);
+	// note that we rely on pack.js to load stored structures before we get to this point
+	packr.lastTypedStructuresLength = typedStructs.length;
 	let targetView = target.dataView;
 	let refsStartPosition = (typedStructs.lastStringStart || 100) + position;
 	let safeEnd = target.length - 10;
@@ -686,9 +683,11 @@ function toConstant(code) {
 	}
 	throw new Error('Unknown constant');
 }
-function prepareStructures(packr) {
+function prepareStructures(structures, packr) {
+	if (!packr.typedStructs)
+		return structures;
 	let structMap = new Map();
-	structMap.set('named', packr.structures);
+	structMap.set('named', structures);
 	structMap.set('typed', packr.typedStructs);
 	let lastTypedStructuresLength = packr.lastTypedStructuresLength || 0;
 	structMap.isCompatible = existing => {
