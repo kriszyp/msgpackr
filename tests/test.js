@@ -127,7 +127,6 @@ suite('msgpackr basic tests', function(){
 	test('pack/unpack varying data with random access structures', function() {
 		let structures = []
 		let packr = new Packr({ structures, useRecords: true, randomAccessStructure: true, freezeData: true, saveStructures(structures) {
-				console.log('saved',{structures});
 			}, getStructures() {
 				console.log('getStructures');
 			} })
@@ -149,7 +148,7 @@ suite('msgpackr basic tests', function(){
 			var serialized = packr.pack(data)
 			var deserialized = packr.unpack(serialized);
 			for (let key in deserialized) {
-				console.log(key, deserialized[key], deserialized[key] === data[key]);
+				let a = deserialized[key];
 			}
 			assert.deepEqual(deserialized, data)
 		}
@@ -171,17 +170,17 @@ suite('msgpackr basic tests', function(){
 			var data = sampleData
 			let structures = []
 			let packr = new Packr({ structures, useRecords: true, randomAccessStructure: true, freezeData: true, saveStructures(structures) {
-				console.log('saved',{structures});
 			}, getStructures() {
 				console.log('getStructures');
 			} })
 			for (let i = 0; i < 20; i++) {
 				var serialized = packr.pack(data)
 				var deserialized = packr.unpack(serialized);
+				var copied = {}
 				for (let key in deserialized) {
-					console.log(key, deserialized[key], deserialized[key] === data[key]);
+					copied[key] = deserialized[key];
 				}
-				assert.deepEqual(deserialized, data)
+				assert.deepEqual(copied, data)
 			}
 		})
 		test('pack/unpack sample data with bundled strings ' + snippet, function(){
@@ -191,6 +190,7 @@ suite('msgpackr basic tests', function(){
 			var deserialized = packr.unpack(serialized)
 			assert.deepEqual(deserialized, data)
 		})
+		break;
 	}
 
 	test('pack/unpack empty data with bundled strings', function(){

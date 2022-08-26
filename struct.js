@@ -153,14 +153,13 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 				refOffset = refPosition - refsStartPosition;
 				if ((strLength << 2) + position > safeEnd) {
 					let lastStart = start;
-					target = makeRoom(position);
+					target = makeRoom(refPosition);
 					targetView = target.dataView;
 					position -= lastStart;
 					refsStartPosition -= lastStart;
 					refPosition -= lastStart;
 					start = 0;
 					safeEnd = target.length - 10
-
 				}
 				if (strLength > ((0xff00 + refOffset) >> 2)) {
 					queuedReferences.push(key, value, position - start);
