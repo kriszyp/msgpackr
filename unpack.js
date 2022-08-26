@@ -616,6 +616,16 @@ function readStringJS(length) {
 
 	return result
 }
+export function readString(source, start, length) {
+	let existingSrc = src;
+	src = source;
+	position = start;
+	try {
+		return readStringJS(length);
+	} finally {
+		src = existingSrc;
+	}
+}
 
 function readArray(length) {
 	let array = new Array(length)

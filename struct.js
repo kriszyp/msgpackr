@@ -36,7 +36,7 @@ null (0xff)+ 0xf7
 
 
 import {setWriteStructSlots, RECORD_SYMBOL, addExtension} from './pack.js'
-import {setReadStruct, unpack, mult10, loadStructures, unpackMultiple} from './unpack.js';
+import {setReadStruct, mult10, readString} from './unpack.js';
 const ASCII = 3; // the MIBenum from https://www.iana.org/assignments/character-sets/character-sets.xhtml (and other character encodings could be referenced by MIBenum)
 const NUMBER = 0;
 const UTF8 = 2;
@@ -365,17 +365,17 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 	}
 
 	if (position < refsStartPosition) {
-		if (refsStartPosition !== refPosition) { // no refs
-			// adjust positioning
-			target.copyWithin(position, refsStartPosition, refPosition);
-			refPosition += position - refsStartPosition;
-			typedStructs.lastStringStart = position - start;
-		}
+		if (refsStartPosition === refPosition)
+			return position; // no refs
+		// adjust positioning
+		target.copyWithin(position, refsStartPosition, refPosition);
+		refPosition += position - refsStartPosition;
+		typedStructs.lastStringStart = position - start;
 	} else if (position > refsStartPosition) {
-		if (refsStartPosition !== refPosition) { // no refs
-			typedStructs.lastStringStart = position - start;
-			return writeStruct(object, target, start, structures, makeRoom, pack, packr);
-		}
+		if (refsStartPosition === refPosition)
+			return position; // no refs
+		typedStructs.lastStringStart = position - start;
+		return writeStruct(object, target, start, structures, makeRoom, pack, packr);
 	}
 	return refPosition;
 }
@@ -585,7 +585,8 @@ function readStruct(src, position, srcEnd, unpackr) {
 							source.prevStringGet = property;
 							property.multiGetCount--;
 						}*/
-						return src.toString('latin1', ref + refStart, end + refStart);
+						return readString(src, ref + refStart, end - ref);
+						//return src.toString('latin1', ref + refStart, end + refStart);
 					};
 					break;
 				case UTF8: case OBJECT_DATA:
@@ -599,13 +600,6 @@ function readStruct(src, position, srcEnd, unpackr) {
 						let ref = getRef(source, position);
 						if (typeof ref !== 'number') return ref;
 						let src = source.src;
-
-						/*if (src[ref] == 62) {
-							// read the 32-bit reference
-							let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
-							ref = dataView.getUint32(ref) + refStart;
-							end = dataView.getUint32(ref + 4) + refStart;
-						} */
 						let end, next = property.next;
 						while(next) {
 							end = next.getRef(source, position);
@@ -715,50 +709,5 @@ function prepareStructures(packr) {
 	return structMap;
 }
 
-/*
-class SharedStructures {
-	constructor(packr) {
-		this.named = packr.structures;
-		this.typed = packr.typedStructs;
-	}
-	isCompatible(existing) {
-
-	}
-}
-addExtension({
-	Class: SharedStructures,
-	pack(value, allocateForWrite, pack){
-		let typed = value.typed;
-		for (let property of typed) {
-			let { target, targetView, position} = allocateForWrite(6);
-
-	},
-	unpack(src, read) {
-		let typed = [];
-		let named;
-		let position = 0;
-		do{
-			let byte = src[position++];
-			if (byte === 255) {
-				named = unpack(src.slice(position));
-				break;
-			}
-			if (byte === undefined)
-				break;
-			let property = { type: byte };
-			let size = src[position++];
-			if (size >= 128) {
-				property.enumerationOffset = 0x100 - size;
-				size = src[position++];
-			}
-			property.size = size;
-			property.key = read();
-			typed.push(property);
-		} while(true);
-		return new SharedStructures({
-			typedStructs: typed, structures: named || []
-		});
-	}
-})*/
 setReadStruct(readStruct, onLoadedStructures);
 
