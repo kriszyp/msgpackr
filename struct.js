@@ -62,7 +62,6 @@ setWriteStructSlots(writeStruct, prepareStructures);
 function writeStruct(object, target, position, structures, makeRoom, pack, packr) {
 	let typedStructs = packr.typedStructs || (packr.typedStructs = []);
 	// note that we rely on pack.js to load stored structures before we get to this point
-	packr.lastTypedStructuresLength = typedStructs.length;
 	let targetView = target.dataView;
 	let refsStartPosition = (typedStructs.lastStringStart || 100) + position;
 	let safeEnd = target.length - 10;
@@ -415,6 +414,8 @@ function onLoadedStructures(sharedData) {
 	if (!(sharedData instanceof Map))
 		return sharedData;
 	let typed = sharedData.get('typed') || [];
+	if (Object.isFrozen(typed))
+		typed = typed.map(structure => structure.slice(0));
 	let named = sharedData.get('named');
 	let transitions = Object.create(null);
 	for (let i = 0, l = typed.length; i < l; i++) {
@@ -442,6 +443,7 @@ function onLoadedStructures(sharedData) {
 	}
 	typed.transitions = transitions;
 	this.typedStructs = typed;
+	this.lastTypedStructuresLength = typed.length;
 	return named;
 }
 var sourceSymbol = Symbol('source')
@@ -473,7 +475,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 	}
 	var construct = structure.construct;
 	if (!construct) {
-		construct = structure.construct = function() {
+		construct = structure.construct = function LazyObject() {
 		}
 		var prototype = construct.prototype;
 		Object.defineProperty(prototype, 'toJSON', {
@@ -555,7 +557,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 							next = next.next;
 						}
 						if (end == null)
-							end = srcEnd - refStart;
+							end = source.srcEnd - refStart;
 						if (source.srcString) {
 							return source.srcString.slice(ref, end);
 						}
@@ -571,7 +573,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 									asciiEnd = null;
 							} while((next = next.next));
 							if (asciiEnd == null)
-								asciiEnd = srcEnd - refStart
+								asciiEnd = source.srcEnd - refStart
 							source.srcString = src.toString('latin1', refStart, refStart + asciiEnd);
 							return source.srcString.slice(ref, end);
 						}
@@ -606,7 +608,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 							next = next.next;
 						}
 						if (end == null)
-							end = srcEnd - refStart;
+							end = source.srcEnd - refStart;
 						if (type === UTF8) {
 							return src.toString('utf8', ref + refStart, end + refStart);
 						} else {
@@ -690,18 +692,21 @@ function prepareStructures(structures, packr) {
 	structMap.set('typed', packr.typedStructs);
 	let lastTypedStructuresLength = packr.lastTypedStructuresLength || 0;
 	structMap.isCompatible = existing => {
+		let compatible = true;
 		if (existing instanceof Map) {
 			let named = existing.get('named') || [];
 			if (named.length !== (packr.lastNamedStructuresLength || 0))
-				return false;
+				compatible = false;
 			let typed = existing.get('typed') || [];
 			if (typed.length !== lastTypedStructuresLength)
-				return false;
+				compatible = false;
 		} else if (existing instanceof Array) {
 			if (existing.length !== (packr.lastNamedStructuresLength || 0))
-				return false;
+				compatible = false;
 		}
-		return true;
+		if (!compatible)
+			packr._mergeStructures(existing);
+		return compatible;
 	};
 	packr.lastTypedStructuresLength = packr.typedStructs?.length;
 	return structMap;

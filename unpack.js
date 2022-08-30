@@ -142,6 +142,8 @@ export class Unpackr {
 		if (onLoadedStructures)
 			loadedStructures = onLoadedStructures.call(this, loadedStructures);
 		loadedStructures = loadedStructures || []
+		if (Object.isFrozen(loadedStructures))
+			loadedStructures = loadedStructures.map(structure => structure.slice(0))
 		for (let i = 0, l = loadedStructures.length; i < l; i++) {
 			let structure = loadedStructures[i]
 			if (structure) {

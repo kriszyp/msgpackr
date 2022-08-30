@@ -15,7 +15,7 @@ let targetView
 let position = 0
 let safeEnd
 let bundledStrings = null
-let writeStructSlots, prepareStructures
+let writeStructSlots
 const MAX_BUNDLE_SIZE = 0xf000
 const hasNonLatin = /[\u0080-\uFFFF]/
 export const RECORD_SYMBOL = Symbol('record-id')
@@ -149,7 +149,7 @@ export class Packr extends Unpackr {
 				if (structures) {
 					if (serializationsSinceTransitionRebuild < 10)
 						serializationsSinceTransitionRebuild++
-					let sharedLength = structures.sharedLength || maxSharedStructures
+					let sharedLength = structures.sharedLength || 0
 					if (structures.length > sharedLength)
 						structures.length = sharedLength
 					if (transitionsCount > 10000) {
@@ -168,10 +168,9 @@ export class Packr extends Unpackr {
 					if (hasSharedUpdate && packr.saveStructures) {
 						// we can't rely on start/end with REUSE_BUFFER_MODE since they will (probably) change when we save
 						let returnBuffer = target.subarray(start, position)
-						let newSharedData = prepareStructures ? prepareStructures(structures, packr) : structures;
-						if (packr.saveStructures(newSharedData, newSharedData.isCompatible || packr.lastNamedStructuresLength || 0) === false) {
+						let newSharedData = prepareStructures(structures, packr);
+						if (packr.saveStructures(newSharedData, newSharedData.isCompatible) === false) {
 							// get updated structures and try again if the update failed
-							packr._mergeStructures(packr.getStructures())
 							return packr.pack(value)
 						}
 						packr.lastNamedStructuresLength = sharedLength
@@ -694,7 +693,7 @@ export class Packr extends Unpackr {
 		const writeStruct = (object, safePrototype) => {
 			let newPosition = writeStructSlots(object, target, position, structures, makeRoom, (value, newPosition, notifySharedUpdate) => {
 				if (notifySharedUpdate)
-					hasSharedUpdate = true;
+					return hasSharedUpdate = true;
 				position = newPosition;
 				if (start > 0) {
 					pack(value);
@@ -945,6 +944,15 @@ export function addExtension(extension) {
 		extensions.unshift(extension)
 	}
 	unpackAddExtension(extension)
+}
+function prepareStructures(structures, packr) {
+	structures.isCompatible = (existingStructures) => {
+		let compatible = !existingStructures || ((packr.lastNamedStructuresLength || 0) === existingStructures.length)
+		if (!compatible) // we want to merge these existing structures immediately since we already have it and we are in the right transaction
+			packr._mergeStructures(existingStructures);
+		return compatible;
+	}
+	return structures
 }
 export function setWriteStructSlots(writeSlots, makeStructures) {
 	writeStructSlots = writeSlots;
