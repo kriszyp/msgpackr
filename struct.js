@@ -478,12 +478,13 @@ function readStruct(src, position, srcEnd, unpackr) {
 		construct = structure.construct = function LazyObject() {
 		}
 		var prototype = construct.prototype;
+		let properties = [];
 		Object.defineProperty(prototype, 'toJSON', {
-			get() {
+			value() {
 				// return an enumerable object with own properties to JSON stringify
 				let resolved = {};
-				for (let i = 0, l = structure.length; i < l; i++) {
-					let key = structure[i];
+				for (let i = 0, l = properties.length; i < l; i++) {
+					let key = properties[i].key;
 					resolved[key] = this[key];
 				}
 				return resolved;
@@ -492,7 +493,6 @@ function readStruct(src, position, srcEnd, unpackr) {
 		});
 		let currentOffset = 0;
 		let lastRefProperty;
-		let properties = [];
 		for (let i = 0, l = structure.length; i < l; i++) {
 			let definition = structure[i];
 			let [ type, size, key, enumerationOffset ] = definition;
@@ -685,13 +685,14 @@ function toConstant(code) {
 	throw new Error('Unknown constant');
 }
 function prepareStructures(structures, packr) {
-	if (!packr.typedStructs)
-		return structures;
-	let structMap = new Map();
-	structMap.set('named', structures);
-	structMap.set('typed', packr.typedStructs);
+	if (packr.typedStructs) {
+		let structMap = new Map();
+		structMap.set('named', structures);
+		structMap.set('typed', packr.typedStructs);
+		structures = structMap;
+	}
 	let lastTypedStructuresLength = packr.lastTypedStructuresLength || 0;
-	structMap.isCompatible = existing => {
+	structures.isCompatible = existing => {
 		let compatible = true;
 		if (existing instanceof Map) {
 			let named = existing.get('named') || [];
@@ -709,7 +710,7 @@ function prepareStructures(structures, packr) {
 		return compatible;
 	};
 	packr.lastTypedStructuresLength = packr.typedStructs?.length;
-	return structMap;
+	return structures;
 }
 
 setReadStruct(readStruct, onLoadedStructures);

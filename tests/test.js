@@ -175,7 +175,7 @@ suite('msgpackr basic tests', function(){
 			} })
 			for (let i = 0; i < 20; i++) {
 				var serialized = packr.pack(data)
-				var deserialized = packr.unpack(serialized);
+				var deserialized = packr.unpack(serialized, { lazy: true });
 				var copied = {}
 				for (let key in deserialized) {
 					copied[key] = deserialized[key];

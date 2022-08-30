@@ -95,7 +95,7 @@ export class Unpackr {
 			currentUnpackr = this
 			if (this.structures) {
 				currentStructures = this.structures
-				return checkedRead()
+				return checkedRead(options)
 			} else if (!currentStructures || currentStructures.length > 0) {
 				currentStructures = []
 			}
@@ -104,7 +104,7 @@ export class Unpackr {
 			if (!currentStructures || currentStructures.length > 0)
 				currentStructures = []
 		}
-		return checkedRead()
+		return checkedRead(options)
 	}
 	unpackMultiple(source, forEach) {
 		let values, lastPosition = 0
@@ -173,7 +173,7 @@ export class Unpackr {
 export function getPosition() {
 	return position
 }
-export function checkedRead() {
+export function checkedRead(options) {
 	try {
 		if (!currentUnpackr.trusted && !sequentialMode) {
 			let sharedLength = currentStructures.sharedLength || 0
@@ -183,6 +183,8 @@ export function checkedRead() {
 		let result
 		if (currentUnpackr.randomAccessStructure && src[position] < 0x40 && src[position] >= 0x20 && readStruct) {
 			result = readStruct(src, position, srcEnd, currentUnpackr)
+			if (!(options && options.lazy) && result)
+				result = result.toJSON()
 			position = srcEnd
 		} else
 			result = read()
