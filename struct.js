@@ -198,7 +198,7 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 					refPosition += encodeUtf8(target, value, refPosition);
 					isNotAscii = refPosition - strStart > strLength;
 				}
-				if (refOffset < 0x100) {
+				if (refOffset < 0xf6) {
 					if (isNotAscii)
 						transition = nextTransition.string8 || createTypeTransition(nextTransition, UTF8, 1);
 					else
@@ -306,7 +306,7 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 				targetView.setUint32(position, refOffset, true);
 				position += 4;
 			}
-		} else {
+		} else { // null or undefined
 			transition = nextTransition.object16 || createTypeTransition(nextTransition, OBJECT_DATA, 2);
 			targetView.setInt16(position, value === null ? -10 : -9, true);
 			position += 2;
