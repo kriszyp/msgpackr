@@ -8,6 +8,11 @@ let allSampleData = [];
 for (let i = 1; i < 6; i++) {
 	allSampleData.push(JSON.parse(readFileSync(new URL(`./example${i > 1 ? i : ''}.json`, import.meta.url))));
 }
+allSampleData.push({
+	name: 'some other types',
+	date: new Date(),
+	empty: '',
+})
 const sampleData = allSampleData[3];
 function tryRequire(module) {
 	try {
@@ -190,7 +195,6 @@ suite('msgpackr basic tests', function(){
 			var deserialized = packr.unpack(serialized)
 			assert.deepEqual(deserialized, data)
 		})
-		break;
 	}
 
 	test('pack/unpack empty data with bundled strings', function(){

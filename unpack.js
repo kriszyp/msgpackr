@@ -28,7 +28,7 @@ export const C1 = new C1Type()
 C1.name = 'MessagePack 0xC1'
 var sequentialMode = false
 var inlineObjectReadThreshold = 2
-var readStruct, onLoadedStructures
+var readStruct, onLoadedStructures, onSaveState
 try {
 	new Function('')
 } catch(error) {
@@ -208,7 +208,7 @@ export function checkedRead(options) {
 		// else more to read, but we are reading sequentially, so don't clear source yet
 		return result
 	} catch(error) {
-		if (currentStructures.restoreStructures)
+		if (currentStructures?.restoreStructures)
 			restoreStructures()
 		clearSource()
 		if (error instanceof RangeError || error.message.startsWith('Unexpected end of buffer') || position > srcEnd) {
@@ -1032,6 +1032,8 @@ currentExtensions[0xff] = (data) => {
 // currentExtensions[0x52] = () =>
 
 function saveState(callback) {
+	if (onSaveState)
+		onSaveState();
 	let savedSrcEnd = srcEnd
 	let savedPosition = position
 	let savedStringPosition = stringPosition
@@ -1101,7 +1103,8 @@ export function roundFloat32(float32Number) {
 	let multiplier = mult10[((u8Array[3] & 0x7f) << 1) | (u8Array[2] >> 7)]
 	return ((multiplier * float32Number + (float32Number > 0 ? 0.5 : -0.5)) >> 0) / multiplier
 }
-export function setReadStruct(updatedReadStruct, loadedStructs) {
+export function setReadStruct(updatedReadStruct, loadedStructs, saveState) {
 	readStruct = updatedReadStruct;
 	onLoadedStructures = loadedStructs;
+	onSaveState = saveState;
 }

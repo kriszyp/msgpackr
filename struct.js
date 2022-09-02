@@ -41,11 +41,13 @@ const ASCII = 3; // the MIBenum from https://www.iana.org/assignments/character-
 const NUMBER = 0;
 const UTF8 = 2;
 const OBJECT_DATA = 1;
+const DATE = 16;
 const TYPE_NAMES = ['num', 'object', 'string', 'ascii'];
+TYPE_NAMES[DATE] = 'date';
 const float32Headers = [false, true, true, false, false, true, true, false];
 let updatedPosition;
 const hasNodeBuffer = typeof Buffer !== 'undefined'
-let textEncoder
+let textEncoder, currentSource;
 try {
 	textEncoder = new TextEncoder()
 } catch (error) {}
@@ -89,7 +91,7 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 		return 0;
 	position += headerSize;
 	let queuedReferences = [];
-	let usedLatin0;
+	let usedAscii0;
 	let keyIndex = 0;
 	for (let key in object) {
 		let value = object[key];
@@ -105,7 +107,8 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 				string16: null,
 				object16: null,
 				num32: null,
-				float64: null
+				float64: null,
+				date64: null
 			};
 		}
 		if (position > safeEnd) {
@@ -198,25 +201,47 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 					refPosition += encodeUtf8(target, value, refPosition);
 					isNotAscii = refPosition - strStart > strLength;
 				}
-				if (refOffset < 0xf6) {
-					if (isNotAscii)
-						transition = nextTransition.string8 || createTypeTransition(nextTransition, UTF8, 1);
-					else
-						transition = nextTransition.ascii8 || createTypeTransition(nextTransition, ASCII, 1);
+				if (refOffset < 0xa0 || (refOffset < 0xf6 && (nextTransition.ascii8 || nextTransition.string8))) {
+					// short strings
+					if (isNotAscii) {
+						if (!(transition = nextTransition.string8)) {
+							if (typedStructs.length > 10 && (transition = nextTransition.ascii8)) {
+								// we can safely change ascii to utf8 in place since they are compatible
+								transition.__type = UTF8;
+								nextTransition.ascii8 = null;
+								nextTransition.string8 = transition;
+								pack(null, 0, true); // special call to notify that structures have been updated
+							} else {
+								transition = createTypeTransition(nextTransition, UTF8, 1);
+							}
+						}
+					} else if (refOffset === 0 && !usedAscii0) {
+						usedAscii0 = true;
+						transition = nextTransition.ascii0 || createTypeTransition(nextTransition, ASCII, 0);
+						break; // don't increment position
+					}// else ascii:
+					else if (!(transition = nextTransition.ascii8) && !(typedStructs.length > 10 && (transition = nextTransition.string8)))
+						transition = createTypeTransition(nextTransition, ASCII, 1);
 					target[position++] = refOffset;
 				} else {
-					if (isNotAscii)
+					// TODO: Enable ascii16 at some point, but get the logic right
+					//if (isNotAscii)
 						transition = nextTransition.string16 || createTypeTransition(nextTransition, UTF8, 2);
-					else
-						transition = nextTransition.ascii16 || createTypeTransition(nextTransition, ASCII, 2);
+					//else
+						//transition = nextTransition.ascii16 || createTypeTransition(nextTransition, ASCII, 2);
 					targetView.setUint16(position, refOffset, true);
 					position += 2;
 				}
 				break;
 			case 'object':
 				if (value) {
-					//transition = nextTransition.object16 || createTypeTransition(nextTransition, OBJECT_DATA, 2);
-					queuedReferences.push(key, value, keyIndex);
+					if (value.constructor === Date) {
+						transition = nextTransition.date64 || createTypeTransition(nextTransition, DATE, 8);
+						targetView.setFloat64(position, value.getTime(), true);
+						position += 8;
+					} else {
+						queuedReferences.push(key, value, keyIndex);
+					}
 					break;
 				} else { // null
 					nextTransition = anyType(nextTransition, position, targetView, -10); // match CBOR with this
@@ -434,7 +459,8 @@ function onLoadedStructures(sharedData) {
 					string16: null,
 					object16: null,
 					num32: null,
-					float64: null
+					float64: null,
+					date64: null,
 				};
 			}
 			transition = createTypeTransition(nextTransition, type, size);
@@ -612,7 +638,12 @@ function readStruct(src, position, srcEnd, unpackr) {
 						if (type === UTF8) {
 							return src.toString('utf8', ref + refStart, end + refStart);
 						} else {
-							return unpackr.unpack(src, { start: ref + refStart, end: end  + refStart }); // could reuse this object
+							currentSource = source;
+							try {
+								return unpackr.unpack(src, { start: ref + refStart, end: end + refStart });
+							} finally {
+								currentSource = null;
+							}
 						}
 					};
 					break;
@@ -660,6 +691,16 @@ function readStruct(src, position, srcEnd, unpackr) {
 							};
 							break;
 					}
+					break;
+				case DATE:
+					get = function () {
+						let source = this[sourceSymbol];
+						let src = source.src;
+						let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
+						return new Date(dataView.getFloat64(source.position + property.offset, true));
+					};
+					break;
+
 			}
 			property.get = get;
 		}
@@ -683,6 +724,14 @@ function toConstant(code) {
 		case 0xf9: return true;
 	}
 	throw new Error('Unknown constant');
+}
+
+function saveState() {
+	if (currentSource) {
+		currentSource.src = Uint8Array.prototype.slice.call(currentSource.src, currentSource.position, currentSource.srcEnd);
+		currentSource.position = 0;
+		currentSource.srcEnd = currentSource.src.length;
+	}
 }
 function prepareStructures(structures, packr) {
 	if (packr.typedStructs) {
@@ -713,5 +762,5 @@ function prepareStructures(structures, packr) {
 	return structures;
 }
 
-setReadStruct(readStruct, onLoadedStructures);
+setReadStruct(readStruct, onLoadedStructures, saveState);
 
