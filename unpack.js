@@ -930,7 +930,16 @@ function readKey() {
 
 // the registration of the record definition extension (as "r")
 const recordDefinition = (id, highByte) => {
-	var structure = read()
+	let structure
+	if (currentUnpackr.freezeData) {
+		currentUnpackr.freezeData = false;
+		try {
+			structure = read()
+		} finally {
+			currentUnpackr.freezeData = true;
+		}
+	} else
+		structure = read()
 	let firstByte = id
 	if (highByte !== undefined) {
 		id = id < 32 ? -((highByte << 5) + id) : ((highByte << 5) + id)
