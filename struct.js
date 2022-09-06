@@ -472,9 +472,8 @@ function onLoadedStructures(sharedData) {
 	this.lastTypedStructuresLength = typed.length;
 	return named;
 }
-var sourceSymbol = Symbol('source')
+var sourceSymbol = Symbol.for('source')
 function readStruct(src, position, srcEnd, unpackr) {
-//	var stringLength = (src[position++] << 8) | src[position++];
 	let recordId = src[position++] - 0x20;
 	if (recordId >= 24) {
 		switch(recordId) {
@@ -535,13 +534,13 @@ function readStruct(src, position, srcEnd, unpackr) {
 				case 0: getRef = () => 0; break;
 				case 1:
 					getRef = (source, position) => {
-						let ref = source.src[position + property.offset];
+						let ref = source.bytes[position + property.offset];
 						return ref >= 0xf6 ? toConstant(ref) : ref;
 					};
 					break;
 				case 2:
 					getRef = (source, position) => {
-						let src = source.src;
+						let src = source.bytes;
 						let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
 						let ref = dataView.getUint16(position + property.offset, true);
 						return ref >= 0xff00 ? toConstant(ref & 0xff) : ref;
@@ -549,7 +548,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 					break;
 				case 4:
 					getRef = (source, position) => {
-						let src = source.src;
+						let src = source.bytes;
 						let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
 						let ref = dataView.getUint32(position + property.offset, true);
 						return ref >= 0xffffff00 ? toConstant(ref & 0xff) : ref;
@@ -567,7 +566,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 					property.multiGetCount = 0;
 					get = function() {
 						let source = this[sourceSymbol];
-						let src = source.src;
+						let src = source.bytes;
 						let position = source.position;
 						let refStart = currentOffset + position;
 						let ref = getRef(source, position);
@@ -583,7 +582,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 							next = next.next;
 						}
 						if (end == null)
-							end = source.srcEnd - refStart;
+							end = source.bytesEnd - refStart;
 						if (source.srcString) {
 							return source.srcString.slice(ref, end);
 						}
@@ -599,7 +598,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 									asciiEnd = null;
 							} while((next = next.next));
 							if (asciiEnd == null)
-								asciiEnd = source.srcEnd - refStart
+								asciiEnd = source.bytesEnd - refStart
 							source.srcString = src.toString('latin1', refStart, refStart + asciiEnd);
 							return source.srcString.slice(ref, end);
 						}
@@ -623,7 +622,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 						let refStart = currentOffset + position;
 						let ref = getRef(source, position);
 						if (typeof ref !== 'number') return ref;
-						let src = source.src;
+						let src = source.bytes;
 						let end, next = property.next;
 						while(next) {
 							end = next.getRef(source, position);
@@ -634,7 +633,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 							next = next.next;
 						}
 						if (end == null)
-							end = source.srcEnd - refStart;
+							end = source.bytesEnd - refStart;
 						if (type === UTF8) {
 							return src.toString('utf8', ref + refStart, end + refStart);
 						} else {
@@ -652,7 +651,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 						case 4:
 							get = function () {
 								let source = this[sourceSymbol];
-								let src = source.src;
+								let src = source.bytes;
 								let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
 								let position = source.position + property.offset;
 								let value = dataView.getInt32(position, true)
@@ -671,7 +670,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 						case 8:
 							get = function () {
 								let source = this[sourceSymbol];
-								let src = source.src;
+								let src = source.bytes;
 								let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
 								let value = dataView.getFloat64(source.position + property.offset, true);
 								if (isNaN(value)) {
@@ -685,7 +684,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 						case 1:
 							get = function () {
 								let source = this[sourceSymbol];
-								let src = source.src;
+								let src = source.bytes;
 								let value = src[source.position + property.offset];
 								return value < 0xf6 ? value : toConstant(value);
 							};
@@ -695,7 +694,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 				case DATE:
 					get = function () {
 						let source = this[sourceSymbol];
-						let src = source.src;
+						let src = source.bytes;
 						let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
 						return new Date(dataView.getFloat64(source.position + property.offset, true));
 					};
@@ -709,10 +708,10 @@ function readStruct(src, position, srcEnd, unpackr) {
 	}
 	var instance = new construct();
 	instance[sourceSymbol] = {
-		src,
+		bytes: src,
 		position,
 		srcString: '',
-		srcEnd
+		bytesEnd: srcEnd
 	}
 	return instance;
 }
@@ -728,9 +727,9 @@ function toConstant(code) {
 
 function saveState() {
 	if (currentSource) {
-		currentSource.src = Uint8Array.prototype.slice.call(currentSource.src, currentSource.position, currentSource.srcEnd);
+		currentSource.bytes = Uint8Array.prototype.slice.call(currentSource.bytes, currentSource.position, currentSource.bytesEnd);
 		currentSource.position = 0;
-		currentSource.srcEnd = currentSource.src.length;
+		currentSource.bytesEnd = currentSource.bytes.length;
 	}
 }
 function prepareStructures(structures, packr) {
