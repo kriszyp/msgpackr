@@ -15,9 +15,10 @@ let targetView
 let position = 0
 let safeEnd
 let bundledStrings = null
+let writeStructSlots
 const MAX_BUNDLE_SIZE = 0xf000
 const hasNonLatin = /[\u0080-\uFFFF]/
-const RECORD_SYMBOL = Symbol('record-id')
+export const RECORD_SYMBOL = Symbol('record-id')
 export class Packr extends Unpackr {
 	constructor(options) {
 		super(options)
@@ -27,7 +28,6 @@ export class Packr extends Unpackr {
 		let hasSharedUpdate
 		let structures
 		let referenceMap
-		let lastSharedStructuresLength = 0
 		let encodeUtf8 = ByteArray.prototype.utf8Write ? function(string, position) {
 			return target.utf8Write(string, position, 0xffffffff)
 		} : (textEncoder && textEncoder.encodeInto) ?
@@ -67,14 +67,14 @@ export class Packr extends Unpackr {
 		this.pack = this.encode = function(value, encodeOptions) {
 			if (!target) {
 				target = new ByteArrayAllocate(8192)
-				targetView = new DataView(target.buffer, 0, 8192)
+				targetView = target.dataView = new DataView(target.buffer, 0, 8192)
 				position = 0
 			}
 			safeEnd = target.length - 10
 			if (safeEnd - position < 0x800) {
 				// don't start too close to the end, 
 				target = new ByteArrayAllocate(target.length)
-				targetView = new DataView(target.buffer, 0, target.length)
+				targetView = target.dataView = new DataView(target.buffer, 0, target.length)
 				safeEnd = target.length - 10
 				position = 0
 			} else
@@ -113,7 +113,7 @@ export class Packr extends Unpackr {
 						}
 						transition[RECORD_SYMBOL] = i + 0x40
 					}
-					lastSharedStructuresLength = sharedLength
+					this.lastNamedStructuresLength = sharedLength
 				}
 				if (!isSequential) {
 					structures.nextId = sharedLength + 0x40
@@ -122,7 +122,10 @@ export class Packr extends Unpackr {
 			if (hasSharedUpdate)
 				hasSharedUpdate = false
 			try {
-				pack(value)
+				if (packr.randomAccessStructure && value.constructor && value.constructor === Object)
+					writeStruct(value);
+				else
+					pack(value)
 				if (bundledStrings) {
 					writeBundles(start, pack)
 				}
@@ -146,7 +149,7 @@ export class Packr extends Unpackr {
 				if (structures) {
 					if (serializationsSinceTransitionRebuild < 10)
 						serializationsSinceTransitionRebuild++
-					let sharedLength = structures.sharedLength || maxSharedStructures
+					let sharedLength = structures.sharedLength || 0
 					if (structures.length > sharedLength)
 						structures.length = sharedLength
 					if (transitionsCount > 10000) {
@@ -165,12 +168,12 @@ export class Packr extends Unpackr {
 					if (hasSharedUpdate && packr.saveStructures) {
 						// we can't rely on start/end with REUSE_BUFFER_MODE since they will (probably) change when we save
 						let returnBuffer = target.subarray(start, position)
-						if (packr.saveStructures(structures, lastSharedStructuresLength) === false) {
+						let newSharedData = prepareStructures(structures, packr);
+						if (packr.saveStructures(newSharedData, newSharedData.isCompatible) === false) {
 							// get updated structures and try again if the update failed
-							packr._mergeStructures(packr.getStructures())
 							return packr.pack(value)
 						}
-						lastSharedStructuresLength = sharedLength
+						packr.lastNamedStructuresLength = sharedLength
 						return returnBuffer
 					}
 				}
@@ -288,7 +291,7 @@ export class Packr extends Unpackr {
 			} else if (type === 'number') {
 				if (value >>> 0 === value) {// positive integer, 32-bit or less
 					// positive uint
-					if (value < 0x40 || (value < 0x80 && this.useRecords === false)) {
+					if (value < 0x20 || (value < 0x80 && this.useRecords === false) || (value < 0x40 && !this.randomAccessStructure)) {
 						target[position++] = value
 					} else if (value < 0x100) {
 						target[position++] = 0xcc
@@ -596,7 +599,7 @@ export class Packr extends Unpackr {
 			} else // faster handling for smaller buffers
 				newSize = ((Math.max((end - start) << 2, target.length - 1) >> 12) + 1) << 12
 			let newBuffer = new ByteArrayAllocate(newSize)
-			targetView = new DataView(newBuffer.buffer, 0, newSize)
+			targetView = newBuffer.dataView = new DataView(newBuffer.buffer, 0, newSize)
 			end = Math.min(end, target.length)
 			if (target.copy)
 				target.copy(newBuffer, 0, start, end)
@@ -687,6 +690,23 @@ export class Packr extends Unpackr {
 				target[insertionOffset + start] = keysTarget[0]
 			}
 		}
+		const writeStruct = (object, safePrototype) => {
+			let newPosition = writeStructSlots(object, target, position, structures, makeRoom, (value, newPosition, notifySharedUpdate) => {
+				if (notifySharedUpdate)
+					return hasSharedUpdate = true;
+				position = newPosition;
+				if (start > 0) {
+					pack(value);
+					if (start == 0)
+						return { position, targetView, target }; // indicate the buffer was re-allocated
+				} else
+					pack(value);
+				return position;
+			}, this);
+			if (newPosition === 0) // bail and go to a msgpack object
+				return writeObject(object, true);
+			position = newPosition;
+		}
 	}
 	useBuffer(buffer) {
 		// this means we are finished using our own buffer and we can write over it safely
@@ -697,6 +717,8 @@ export class Packr extends Unpackr {
 	clearSharedData() {
 		if (this.structures)
 			this.structures = []
+		if (this.typedStructs)
+			this.typedStructs = []
 	}
 }
 
@@ -922,6 +944,19 @@ export function addExtension(extension) {
 		extensions.unshift(extension)
 	}
 	unpackAddExtension(extension)
+}
+function prepareStructures(structures, packr) {
+	structures.isCompatible = (existingStructures) => {
+		let compatible = !existingStructures || ((packr.lastNamedStructuresLength || 0) === existingStructures.length)
+		if (!compatible) // we want to merge these existing structures immediately since we already have it and we are in the right transaction
+			packr._mergeStructures(existingStructures);
+		return compatible;
+	}
+	return structures
+}
+export function setWriteStructSlots(writeSlots, makeStructures) {
+	writeStructSlots = writeSlots;
+	prepareStructures = makeStructures;
 }
 
 let defaultPackr = new Packr({ useRecords: false })

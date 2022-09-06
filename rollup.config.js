@@ -7,7 +7,8 @@ export default [
         output: [
             {
                 file: "dist/node.cjs",
-                format: "cjs"
+                format: "cjs",
+                sourcemap: true
             }
         ]
     },
@@ -16,7 +17,8 @@ export default [
         output: {
             file: "dist/index.js",
             format: "umd",
-            name: "msgpackr"
+            name: "msgpackr",
+            sourcemap: true
         }
     },    
     {
@@ -26,7 +28,8 @@ export default [
         output: {
             file: "dist/index.min.js",
             format: "umd",
-            name: "msgpackr"
+            name: "msgpackr",
+            sourcemap: true
         }
     },
     {
@@ -36,6 +39,7 @@ export default [
         output: {
             file: "dist/test.js",
             format: "iife",
+            sourcemap: true,
             globals: {
                 chai: 'chai',
                 './index.js': 'msgpackr',

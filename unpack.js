@@ -28,6 +28,7 @@ export const C1 = new C1Type()
 C1.name = 'MessagePack 0xC1'
 var sequentialMode = false
 var inlineObjectReadThreshold = 2
+var readStruct, onLoadedStructures, onSaveState
 try {
 	new Function('')
 } catch(error) {
@@ -57,16 +58,21 @@ export class Unpackr {
 		}
 		Object.assign(this, options)
 	}
-	unpack(source, end) {
+	unpack(source, options) {
 		if (src) {
 			// re-entrant execution, save the state and restore it after we do this unpack
 			return saveState(() => {
 				clearSource()
-				return this ? this.unpack(source, end) : Unpackr.prototype.unpack.call(defaultOptions, source, end)
+				return this ? this.unpack(source, options) : Unpackr.prototype.unpack.call(defaultOptions, source, options)
 			})
 		}
-		srcEnd = end > -1 ? end : source.length
-		position = 0
+		if (typeof options === 'object') {
+			srcEnd = options.end || source.length
+			position = options.start || 0
+		} else {
+			position = 0
+			srcEnd = options > -1 ? options : source.length
+		}
 		stringPosition = 0
 		srcStringEnd = 0
 		srcString = null
@@ -89,7 +95,7 @@ export class Unpackr {
 			currentUnpackr = this
 			if (this.structures) {
 				currentStructures = this.structures
-				return checkedRead()
+				return checkedRead(options)
 			} else if (!currentStructures || currentStructures.length > 0) {
 				currentStructures = []
 			}
@@ -98,7 +104,7 @@ export class Unpackr {
 			if (!currentStructures || currentStructures.length > 0)
 				currentStructures = []
 		}
-		return checkedRead()
+		return checkedRead(options)
 	}
 	unpackMultiple(source, forEach) {
 		let values, lastPosition = 0
@@ -133,7 +139,11 @@ export class Unpackr {
 		}
 	}
 	_mergeStructures(loadedStructures, existingStructures) {
+		if (onLoadedStructures)
+			loadedStructures = onLoadedStructures.call(this, loadedStructures);
 		loadedStructures = loadedStructures || []
+		if (Object.isFrozen(loadedStructures))
+			loadedStructures = loadedStructures.map(structure => structure.slice(0))
 		for (let i = 0, l = loadedStructures.length; i < l; i++) {
 			let structure = loadedStructures[i]
 			if (structure) {
@@ -163,14 +173,21 @@ export class Unpackr {
 export function getPosition() {
 	return position
 }
-export function checkedRead() {
+export function checkedRead(options) {
 	try {
 		if (!currentUnpackr.trusted && !sequentialMode) {
 			let sharedLength = currentStructures.sharedLength || 0
 			if (sharedLength < currentStructures.length)
 				currentStructures.length = sharedLength
 		}
-		let result = read()
+		let result
+		if (currentUnpackr.randomAccessStructure && src[position] < 0x40 && src[position] >= 0x20 && readStruct) {
+			result = readStruct(src, position, srcEnd, currentUnpackr)
+			if (!(options && options.lazy) && result)
+				result = result.toJSON()
+			position = srcEnd
+		} else
+			result = read()
 		if (bundledStrings) // bundled strings to skip past
 			position = bundledStrings.postBundlePosition
 
@@ -191,7 +208,7 @@ export function checkedRead() {
 		// else more to read, but we are reading sequentially, so don't clear source yet
 		return result
 	} catch(error) {
-		if (currentStructures.restoreStructures)
+		if (currentStructures?.restoreStructures)
 			restoreStructures()
 		clearSource()
 		if (error instanceof RangeError || error.message.startsWith('Unexpected end of buffer') || position > srcEnd) {
@@ -247,6 +264,8 @@ export function read() {
 			for (let i = 0; i < token; i++) {
 				array[i] = read()
 			}
+			if (currentUnpackr.freezeData)
+				return Object.freeze(array)
 			return array
 		}
 	} else if (token < 0xc0) {
@@ -457,7 +476,8 @@ function createStructureReader(structure, firstId) {
 	function readObject() {
 		// This initial function is quick to instantiate, but runs slower. After several iterations pay the cost to build the faster function
 		if (readObject.count++ > inlineObjectReadThreshold) {
-			let readObject = structure.read = (new Function('r', 'return function(){return {' + structure.map(key => validName.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '}}'))(read)
+			let readObject = structure.read = (new Function('r', 'return function(){return ' + (currentUnpackr.freezeData ? 'Object.freeze' : '') +
+				'({' + structure.map(key => validName.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '})}'))(read)
 			if (structure.highByte === 0)
 				structure.read = createSecondByteReader(firstId, structure.read)
 			return readObject() // second byte is already read, if there is one so immediately read object
@@ -467,6 +487,8 @@ function createStructureReader(structure, firstId) {
 			let key = structure[i]
 			object[key] = read()
 		}
+		if (currentUnpackr.freezeData)
+			return Object.freeze(object);
 		return object
 	}
 	readObject.count = 0
@@ -492,7 +514,7 @@ const createSecondByteReader = (firstId, read0) => {
 	}
 }
 
-function loadStructures() {
+export function loadStructures() {
 	let loadedStructures = saveState(() => {
 		// save the state in case getStructures modifies our buffer
 		src = null
@@ -598,12 +620,24 @@ function readStringJS(length) {
 
 	return result
 }
+export function readString(source, start, length) {
+	let existingSrc = src;
+	src = source;
+	position = start;
+	try {
+		return readStringJS(length);
+	} finally {
+		src = existingSrc;
+	}
+}
 
 function readArray(length) {
 	let array = new Array(length)
 	for (let i = 0; i < length; i++) {
 		array[i] = read()
 	}
+	if (currentUnpackr.freezeData)
+		return Object.freeze(array)
 	return array
 }
 
@@ -816,7 +850,15 @@ function readBin(length) {
 function readExt(length) {
 	let type = src[position++]
 	if (currentExtensions[type]) {
-		return currentExtensions[type](src.subarray(position, position += length))
+		let end
+		return currentExtensions[type](src.subarray(position, end = (position += length)), (readPosition) => {
+			position = readPosition;
+			try {
+				return read();
+			} finally {
+				position = end;
+			}
+		})
 	}
 	else
 		throw new Error('Unknown extension type ' + type)
@@ -888,7 +930,16 @@ function readKey() {
 
 // the registration of the record definition extension (as "r")
 const recordDefinition = (id, highByte) => {
-	var structure = read()
+	let structure
+	if (currentUnpackr.freezeData) {
+		currentUnpackr.freezeData = false;
+		try {
+			structure = read()
+		} finally {
+			currentUnpackr.freezeData = true;
+		}
+	} else
+		structure = read()
 	let firstByte = id
 	if (highByte !== undefined) {
 		id = id < 32 ? -((highByte << 5) + id) : ((highByte << 5) + id)
@@ -990,6 +1041,8 @@ currentExtensions[0xff] = (data) => {
 // currentExtensions[0x52] = () =>
 
 function saveState(callback) {
+	if (onSaveState)
+		onSaveState();
 	let savedSrcEnd = srcEnd
 	let savedPosition = position
 	let savedStringPosition = stringPosition
@@ -1058,4 +1111,9 @@ export function roundFloat32(float32Number) {
 	f32Array[0] = float32Number
 	let multiplier = mult10[((u8Array[3] & 0x7f) << 1) | (u8Array[2] >> 7)]
 	return ((multiplier * float32Number + (float32Number > 0 ? 0.5 : -0.5)) >> 0) / multiplier
+}
+export function setReadStruct(updatedReadStruct, loadedStructs, saveState) {
+	readStruct = updatedReadStruct;
+	onLoadedStructures = loadedStructs;
+	onSaveState = saveState;
 }

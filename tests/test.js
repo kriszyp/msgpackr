@@ -1,14 +1,32 @@
 import * as msgpackr from '../index.js'
+import '../struct.js'
 import chai from 'chai'
-//import inspector  from 'inspector'; inspector.open(9330, null, true); debugger
+import inspector  from 'inspector';
+//inspector.open(9229, null, true); debugger
 import { readFileSync } from 'fs'
-const sampleData = JSON.parse(readFileSync(new URL('./example4.json', import.meta.url)))
+let allSampleData = [];
+for (let i = 1; i < 6; i++) {
+	allSampleData.push(JSON.parse(readFileSync(new URL(`./example${i > 1 ? i : ''}.json`, import.meta.url))));
+}
+allSampleData.push({
+	name: 'some other types',
+	date: new Date(),
+	empty: '',
+})
+const sampleData = allSampleData[3];
 function tryRequire(module) {
 	try {
 		return require(module)
 	} catch(error) {
 		return {}
 	}
+}
+
+let seed = 0;
+function random() {
+	seed++;
+	let a = seed * 15485863;
+	return (a * a * a % 2038074743) / 2038074743;
 }
 //if (typeof chai === 'undefined') { chai = require('chai') }
 var assert = chai.assert
@@ -111,32 +129,74 @@ suite('msgpackr basic tests', function(){
 		var deserialized = unpack(serialized)
 		assert.equal(deserialized, data)
 	})
+	test('pack/unpack varying data with random access structures', function() {
+		let structures = []
+		let packr = new Packr({ structures, useRecords: true, randomAccessStructure: true, freezeData: true, saveStructures(structures) {
+			}, getStructures() {
+				console.log('getStructures');
+			} })
+		for (let i = 0; i < 20; i++) {
+			let data = {};
+			let props = ['foo', 'bar', 'a', 'b', 'c','name', 'age', 'd'];
+			function makeString() {
+				let str = '';
+				while (random() < 0.9) {
+					str += random() < 0.8 ? 'hello world' : String.fromCharCode(300);
+				}
+				return str;
+			}
+			for (let i = 0; i < random() * 20; i++) {
+				data[props[Math.floor(random() * 8)]] =
+					random() < 0.3 ? Math.floor(random() * 400) / 2 :
+						random() < 0.3 ? makeString() : random() < 0.3 ? true : random() < 0.3 ? sampleData : null;
+			}
+			var serialized = packr.pack(data)
+			var deserialized = packr.unpack(serialized);
+			for (let key in deserialized) {
+				let a = deserialized[key];
+			}
+			assert.deepEqual(deserialized, data)
+		}
+	})
 
-	test('pack/unpack sample data', function(){
-		var data = sampleData
-		let structures = []
-		var serialized = pack(data)
-		var deserialized = unpack(serialized)
-		assert.deepEqual(deserialized, data)
-		var serialized = pack(data)
-		var deserialized = unpack(serialized)
-		assert.deepEqual(deserialized, data)
-	})
-	test('pack/unpack sample data with records', function(){
-		var data = sampleData
-		let structures = []
-		let packr = new Packr({ structures, useRecords: true })
-		var serialized = packr.pack(data)
-		var deserialized = packr.unpack(serialized)
-		assert.deepEqual(deserialized, data)
-	})
-	test('pack/unpack sample data with bundled strings', function(){
-		var data = sampleData
-		let packr = new Packr({ /*structures,*/ useRecords: false, bundleStrings: true })
-		var serialized = packr.pack(data)
-		var deserialized = packr.unpack(serialized)
-		assert.deepEqual(deserialized, data)
-	})
+	for (let sampleData of allSampleData) {
+		let snippet = JSON.stringify(sampleData).slice(0, 20) + '...';
+		test('pack/unpack sample data ' + snippet, function(){
+			var data = sampleData
+			let structures = []
+			var serialized = pack(data)
+			var deserialized = unpack(serialized)
+			assert.deepEqual(deserialized, data)
+			var serialized = pack(data)
+			var deserialized = unpack(serialized)
+			assert.deepEqual(deserialized, data)
+		})
+		test('pack/unpack sample data with random access structures ' + snippet, function() {
+			var data = sampleData
+			let structures = []
+			let packr = new Packr({ structures, useRecords: true, randomAccessStructure: true, freezeData: true, saveStructures(structures) {
+			}, getStructures() {
+				console.log('getStructures');
+			} })
+			for (let i = 0; i < 20; i++) {
+				var serialized = packr.pack(data)
+				var deserialized = packr.unpack(serialized, { lazy: true });
+				var copied = {}
+				for (let key in deserialized) {
+					copied[key] = deserialized[key];
+				}
+				assert.deepEqual(copied, data)
+			}
+		})
+		test('pack/unpack sample data with bundled strings ' + snippet, function(){
+			var data = sampleData
+			let packr = new Packr({ /*structures,*/ useRecords: false, bundleStrings: true })
+			var serialized = packr.pack(data)
+			var deserialized = packr.unpack(serialized)
+			assert.deepEqual(deserialized, data)
+		})
+	}
+
 	test('pack/unpack empty data with bundled strings', function(){
 		var data = {}
 		let packr = new Packr({ bundleStrings: true })
@@ -357,6 +417,18 @@ suite('msgpackr basic tests', function(){
 		var serialized = pack(data)
 		var deserialized = unpack(serialized)
 		assert.deepEqual(deserialized, data)
+	})
+
+	test('separate instances', function() {
+		const packr = new Packr({
+			structures: [['m', 'e'], ['action', 'share']]
+		});
+		const packr2 = new Packr({
+			structures: [['m', 'e'], ['action', 'share']]
+		});
+		let packed = packr.pack([{m: 1, e: 2}, {action: 3, share: 4}]);
+		// also tried directly decoding this without the first Packr instance packed = new Uint8Array([0x92, 0x40, 0x01, 0x02, 0x41, 0x03, 0x04]);
+		console.log(packr2.unpack(packed));
 	})
 
 	test('many shared structures', function() {
