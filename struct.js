@@ -45,6 +45,14 @@ const DATE = 16;
 const TYPE_NAMES = ['num', 'object', 'string', 'ascii'];
 TYPE_NAMES[DATE] = 'date';
 const float32Headers = [false, true, true, false, false, true, true, false];
+let evalSupported;
+try {
+	new Function('');
+	evalSupported = true;
+} catch(error) {
+	// if eval variants are not supported, do not create inline object readers ever
+}
+
 let updatedPosition;
 const hasNodeBuffer = typeof Buffer !== 'undefined'
 let textEncoder, currentSource;
@@ -504,18 +512,6 @@ function readStruct(src, position, srcEnd, unpackr) {
 		}
 		var prototype = construct.prototype;
 		let properties = [];
-		Object.defineProperty(prototype, 'toJSON', {
-			value() {
-				// return an enumerable object with own properties to JSON stringify
-				let resolved = {};
-				for (let i = 0, l = properties.length; i < l; i++) {
-					let key = properties[i].key;
-					resolved[key] = this[key];
-				}
-				return resolved;
-			},
-			// not enumerable or anything 
-		});
 		let currentOffset = 0;
 		let lastRefProperty;
 		for (let i = 0, l = structure.length; i < l; i++) {
@@ -564,8 +560,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 						lastRefProperty.next = property;
 					lastRefProperty = property;
 					property.multiGetCount = 0;
-					get = function() {
-						let source = this[sourceSymbol];
+					get = function(source) {
 						let src = source.bytes;
 						let position = source.position;
 						let refStart = currentOffset + position;
@@ -616,8 +611,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 					if (lastRefProperty && !lastRefProperty.next)
 						lastRefProperty.next = property;
 					lastRefProperty = property;
-					get = function() {
-						let source = this[sourceSymbol];
+					get = function(source) {
 						let position = source.position;
 						let refStart = currentOffset + position;
 						let ref = getRef(source, position);
@@ -649,8 +643,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 				case NUMBER:
 					switch(size) {
 						case 4:
-							get = function () {
-								let source = this[sourceSymbol];
+							get = function (source) {
 								let src = source.bytes;
 								let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
 								let position = source.position + property.offset;
@@ -668,8 +661,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 							};
 							break;
 						case 8:
-							get = function () {
-								let source = this[sourceSymbol];
+							get = function (source) {
 								let src = source.bytes;
 								let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
 								let value = dataView.getFloat64(source.position + property.offset, true);
@@ -682,8 +674,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 							};
 							break;
 						case 1:
-							get = function () {
-								let source = this[sourceSymbol];
+							get = function (source) {
 								let src = source.bytes;
 								let value = src[source.position + property.offset];
 								return value < 0xf6 ? value : toConstant(value);
@@ -692,8 +683,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 					}
 					break;
 				case DATE:
-					get = function () {
-						let source = this[sourceSymbol];
+					get = function (source) {
 						let src = source.bytes;
 						let dataView = src.dataView || (src.dataView = new DataView(src.buffer, src.byteOffset, src.byteLength));
 						return new Date(dataView.getFloat64(source.position + property.offset, true));
@@ -703,8 +693,37 @@ function readStruct(src, position, srcEnd, unpackr) {
 			}
 			property.get = get;
 		}
-		for (let property of properties) // assign in enumeration order
-			Object.defineProperty(prototype, property.key, { get: property.get, enumerable: true });
+		// TODO: load the srcString for faster string decoding on toJSON
+		if (evalSupported) {
+			let objectLiteralProperties = [];
+			let args = [];
+			let i = 0;
+			for (let property of properties) { // assign in enumeration order
+				Object.defineProperty(prototype, property.key, { get: withSource(property.get), enumerable: true });
+				let valueFunction = 'v' + i++;
+				args.push(valueFunction);
+				objectLiteralProperties.push('[' + JSON.stringify(property.key) + ']:' + valueFunction + '(s)');
+			}
+			let toObject = (new Function(...args, 'return function(s){return{' + objectLiteralProperties.join(',') + '}}')).apply(null, properties.map(prop => prop.get));
+			Object.defineProperty(prototype, 'toJSON', {
+				value() {
+					return toObject(this[sourceSymbol]);
+				}
+			});
+		} else {
+			Object.defineProperty(prototype, 'toJSON', {
+				value() {
+					// return an enumerable object with own properties to JSON stringify
+					let resolved = {};
+					for (let i = 0, l = properties.length; i < l; i++) {
+						let key = properties[i].key;
+						resolved[key] = this[key];
+					}
+					return resolved;
+				},
+				// not enumerable or anything
+			});
+		}
 	}
 	var instance = new construct();
 	instance[sourceSymbol] = {
@@ -723,6 +742,11 @@ function toConstant(code) {
 		case 0xf9: return true;
 	}
 	throw new Error('Unknown constant');
+}
+function withSource(get) {
+	return function() {
+		return get(this[sourceSymbol]);
+	}
 }
 
 function saveState() {
