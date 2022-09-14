@@ -281,6 +281,17 @@ suite('msgpackr basic tests', function(){
 		assert.deepEqual(data, deserialized)
 		assert.equal(deserialized.extendedInstance.getDouble(), 8)
 	})
+	test.only('proto handling', function() {
+		var objectWithProto = JSON.parse('{"__proto__":{"foo":3}}');
+		var decoded = unpack(pack(objectWithProto));
+		assert(!decoded.foo);
+		var objectsWithProto = [objectWithProto, objectWithProto, objectWithProto, objectWithProto, objectWithProto, objectWithProto];
+		let packr = new Packr();
+		var decoded = packr.unpack(packr.pack(objectsWithProto));
+		for (let object of decoded) {
+			assert(!decoded.foo);
+		}
+	});
 
 	test.skip('text decoder', function() {
 			let td = new TextDecoder('ISO-8859-15')
