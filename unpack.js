@@ -248,7 +248,10 @@ export function read() {
 			if (currentUnpackr.mapsAsObjects) {
 				let object = {}
 				for (let i = 0; i < token; i++) {
-					object[readKey()] = read()
+					let key = readKey()
+					if (key === '__proto__')
+						key = '__proto_'
+					object[key] = read()
 				}
 				return object
 			} else {
@@ -477,7 +480,7 @@ function createStructureReader(structure, firstId) {
 		// This initial function is quick to instantiate, but runs slower. After several iterations pay the cost to build the faster function
 		if (readObject.count++ > inlineObjectReadThreshold) {
 			let readObject = structure.read = (new Function('r', 'return function(){return ' + (currentUnpackr.freezeData ? 'Object.freeze' : '') +
-				'({' + structure.map(key => validName.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '})}'))(read)
+				'({' + structure.map(key => key === '__proto__' ? '__proto_' : validName.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '})}'))(read)
 			if (structure.highByte === 0)
 				structure.read = createSecondByteReader(firstId, structure.read)
 			return readObject() // second byte is already read, if there is one so immediately read object
@@ -485,6 +488,8 @@ function createStructureReader(structure, firstId) {
 		let object = {}
 		for (let i = 0, l = structure.length; i < l; i++) {
 			let key = structure[i]
+			if (key === '__proto__')
+				key = '__proto_'
 			object[key] = read()
 		}
 		if (currentUnpackr.freezeData)
@@ -645,7 +650,10 @@ function readMap(length) {
 	if (currentUnpackr.mapsAsObjects) {
 		let object = {}
 		for (let i = 0; i < length; i++) {
-			object[readKey()] = read()
+			let key = readKey()
+			if (key === '__proto__')
+				key = '__proto_';
+			object[key] = read()
 		}
 		return object
 	} else {
