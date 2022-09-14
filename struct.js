@@ -517,6 +517,8 @@ function readStruct(src, position, srcEnd, unpackr) {
 		for (let i = 0, l = structure.length; i < l; i++) {
 			let definition = structure[i];
 			let [ type, size, key, enumerationOffset ] = definition;
+			if (key === '__proto__')
+				key = '__proto_';
 			let property = {
 				key,
 				offset: currentOffset,
@@ -717,6 +719,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 					let resolved = {};
 					for (let i = 0, l = properties.length; i < l; i++) {
 						let key = properties[i].key;
+
 						resolved[key] = this[key];
 					}
 					return resolved;
