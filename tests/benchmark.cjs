@@ -14,6 +14,7 @@ var avro = tryRequire('avsc')
 var cbor = tryRequire('cbor')
 var inspector  = require('inspector');
 //inspector.open(9229, null, true); debugger
+const LAZY = { lazy: true };
 
 
 msgpack5 = msgpack5 && msgpack5();
@@ -21,7 +22,7 @@ msgpack_codec = msgpack_codec && msgpack_codec.msgpack;
 what_the_pack = what_the_pack && what_the_pack.initialize(2**20);
 
 var pkg = require("../package.json");
-var data = require("./example.json");
+var data = require("./example5.json");
 var packed = msgpack_lite && msgpack_lite.encode(data);
 var expected = JSON.stringify(data);
 
@@ -55,10 +56,11 @@ if (msgpackr) {
   //buf = bench('msgpackr w/ shared structures: packr.pack(obj);', data => {let result = packr.pack(data); packr.resetMemory(); return result;}, data);
   obj = bench('msgpackr w/ shared structures: packr.unpack(buf);', value => {
 	let o = packr.unpack(value);
-	for (let i of keys) {
+    return o.biggerNum;
+/*	for (let i of keys) {
 		last = o[i];
 	}
-	return last;
+	return last;*/
   }, buf);
   test(obj);
 
@@ -71,10 +73,11 @@ if (msgpackr) {
   console.log('buffer size', buf.length);
   obj = bench('msgpackr w/ random access structures: packr.unpack(buf);', value => {
 	let o = packr.unpack(value);
-	for (let i of keys) {
+  return o.biggerNum;
+/*	for (let i of keys) {
 		last = o[i];
 	}
-	return last;
+	return last;*/
   }, buf);
   test(obj);
 
