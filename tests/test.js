@@ -281,7 +281,7 @@ suite('msgpackr basic tests', function(){
 		assert.deepEqual(data, deserialized)
 		assert.equal(deserialized.extendedInstance.getDouble(), 8)
 	})
-	test.only('proto handling', function() {
+	test('proto handling', function() {
 		var objectWithProto = JSON.parse('{"__proto__":{"foo":3}}');
 		var decoded = unpack(pack(objectWithProto));
 		assert(!decoded.foo);
