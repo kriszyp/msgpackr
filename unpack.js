@@ -182,6 +182,7 @@ export function checkedRead(options) {
 		let result
 		if (currentUnpackr.randomAccessStructure && src[position] < 0x40 && src[position] >= 0x20 && readStruct) {
 			result = readStruct(src, position, srcEnd, currentUnpackr)
+			src = null // dispose of this so that recursive unpack calls don't save state
 			if (!(options && options.lazy) && result)
 				result = result.toJSON()
 			position = srcEnd
@@ -192,7 +193,7 @@ export function checkedRead(options) {
 
 		if (position == srcEnd) {
 			// finished reading this source, cleanup references
-			if (currentStructures.restoreStructures)
+			if (currentStructures?.restoreStructures)
 				restoreStructures()
 			currentStructures = null
 			src = null
