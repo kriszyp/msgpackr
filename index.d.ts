@@ -9,9 +9,9 @@ export {
 	clearSource,
 	roundFloat32,
 	isNativeAccelerationEnabled,
-} from './unpack'
-import { Options } from './unpack'
-export { Packr, Encoder, pack, encode } from './pack'
+} from './unpack.js'
+import { Options } from './unpack.js'
+export { Packr, Encoder, pack, encode } from './pack.js'
 import { Transform, Readable } from 'stream'
 
 export as namespace msgpackr;
