@@ -1,4 +1,3 @@
-"use strict"
 var decoder
 try {
 	decoder = new TextDecoder()

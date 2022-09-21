@@ -1,4 +1,3 @@
-"use strict"
 import { Unpackr, mult10, C1Type, typedArrays, addExtension as unpackAddExtension } from './unpack.js'
 let textEncoder
 try {
