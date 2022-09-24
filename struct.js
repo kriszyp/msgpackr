@@ -492,7 +492,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 			case 27: recordId = src[position++] + (src[position++] << 8) + (src[position++] << 16) + (src[position++] << 24); break;
 		}
 	}
-	let structure = unpackr.typedStructs?.[recordId];
+	let structure = unpackr.typedStructs && unpackr.typedStructs[recordId];
 	if (!structure) {
 		// copy src buffer because getStructures will override it
 		src = Uint8Array.prototype.slice.call(src, position, srcEnd);
@@ -784,7 +784,7 @@ function prepareStructures(structures, packr) {
 			packr._mergeStructures(existing);
 		return compatible;
 	};
-	packr.lastTypedStructuresLength = packr.typedStructs?.length;
+	packr.lastTypedStructuresLength = packr.typedStructs && packr.typedStructs.length;
 	return structures;
 }
 
