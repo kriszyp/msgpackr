@@ -125,12 +125,11 @@ export class Packr extends Unpackr {
 					writeStruct(value);
 				else
 					pack(value)
-				if (bundledStrings) {
-					writeBundles(start, pack)
-				}
-				packr.offset = position // update the offset so next serialization doesn't write over our buffer, but can continue writing to same buffer sequentially
 				if (referenceMap && referenceMap.idsToInsert) {
-					position += referenceMap.idsToInsert.length * 6
+					let incrementPosition = referenceMap.idsToInsert.length * 6;
+					if (bundledStrings)
+						writeBundles(start, pack, incrementPosition)
+					position += incrementPosition
 					if (position > safeEnd)
 						makeRoom(position)
 					packr.offset = position
@@ -138,6 +137,9 @@ export class Packr extends Unpackr {
 					referenceMap = null
 					return serialized
 				}
+				if (bundledStrings)
+					writeBundles(start, pack, 0)
+				packr.offset = position // update the offset so next serialization doesn't write over our buffer, but can continue writing to same buffer sequentially
 				if (encodeOptions & REUSE_BUFFER_MODE) {
 					target.start = start
 					target.end = position
@@ -922,12 +924,11 @@ function insertIds(serialized, idsToInsert) {
 	return serialized
 }
 
-function writeBundles(start, pack) {
+function writeBundles(start, pack, incrementPosition) {
 	if (bundledStrings.length > 0) {
-		targetView.setUint32(bundledStrings.position + start, position - bundledStrings.position - start)
+		targetView.setUint32(bundledStrings.position + start, position + incrementPosition - bundledStrings.position - start)
 		let writeStrings = bundledStrings
 		bundledStrings = null
-		let startPosition = position
 		pack(writeStrings[0])
 		pack(writeStrings[1])
 	}

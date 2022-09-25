@@ -422,6 +422,23 @@ suite('msgpackr basic tests', function(){
 		assert.equal(deserialized.uint16Array[1], 4)
 	})
 
+	test('structured clone with bundled strings', function() {
+		const packer = new Packr({
+			structuredClone: true, // both options must be enabled
+			bundleStrings: true,
+		});
+
+		const v = {};
+
+		const shared = {
+			name1: v,
+			name2: v, // one key has to be named `data`
+		};
+
+		let deserialized = packer.unpack(packer.pack(shared));
+		assert.equal(deserialized.name1, deserialized.name2);
+	})
+
 	test('object without prototype', function(){
 		var data = Object.create(null)
 		data.test = 3
