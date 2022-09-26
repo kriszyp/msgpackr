@@ -869,7 +869,7 @@ function readExt(length) {
 		})
 	}
 	else
-		throw new Error('Unknown extension type ' + type)
+		throw new Error('Unknown extension type ' + type)``
 }
 
 var keyCache = new Array(4096)
@@ -884,7 +884,7 @@ function readKey() {
 			return readFixedString(length)
 	} else { // not cacheable, go back and do a standard read
 		position--
-		return read()
+		return read().toString()
 	}
 	let key = ((length << 5) ^ (length > 1 ? dataView.getUint16(position) : length > 0 ? src[position] : 0)) & 0xfff
 	let entry = keyCache[key]
@@ -938,16 +938,7 @@ function readKey() {
 
 // the registration of the record definition extension (as "r")
 const recordDefinition = (id, highByte) => {
-	let structure
-	if (currentUnpackr.freezeData) {
-		currentUnpackr.freezeData = false;
-		try {
-			structure = read()
-		} finally {
-			currentUnpackr.freezeData = true;
-		}
-	} else
-		structure = read()
+	let structure = read().map(property => property.toString()) // ensure that all keys are strings and that the array is mutable
 	let firstByte = id
 	if (highByte !== undefined) {
 		id = id < 32 ? -((highByte << 5) + id) : ((highByte << 5) + id)
