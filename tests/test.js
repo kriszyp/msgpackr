@@ -421,7 +421,25 @@ suite('msgpackr basic tests', function(){
 		assert.equal(deserialized.uint16Array[0], 3)
 		assert.equal(deserialized.uint16Array[1], 4)
 	})
+	test('big bundledStrings', function() {
+		const MSGPACK_OPTIONS = {bundleStrings: true}
+		const packer = new Packr(MSGPACK_OPTIONS)
+		const unpacker = new Unpackr(MSGPACK_OPTIONS)
 
+		const payload = {
+			output: [
+				{
+					url: 'https://www.example.com/',
+				},
+			],
+		}
+
+		for (let i = 0; i < 10_000; i++) {
+			payload.output.push(payload.output[0])
+		}
+		let deserialized = unpacker.unpack(packer.pack(payload));
+		assert.equal(deserialized.output[0].url, payload.output[0].url);
+	})
 	test('structured clone with bundled strings', function() {
 		const packer = new Packr({
 			structuredClone: true, // both options must be enabled

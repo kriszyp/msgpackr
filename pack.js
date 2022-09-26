@@ -196,13 +196,13 @@ export class Packr extends Unpackr {
 						let maxBytes = (bundledStrings[0] ? bundledStrings[0].length * 3 + bundledStrings[1].length : 0) + 10
 						if (position + maxBytes > safeEnd)
 							target = makeRoom(position + maxBytes)
-						if (bundledStrings.position) { // here we use the 0x62 extension to write the last bundle and reserve sapce for the reference pointer to the next/current bundle
+						if (bundledStrings.position) { // here we use the 0x62 extension to write the last bundle and reserve space for the reference pointer to the next/current bundle
 							target[position] = 0xc8 // ext 16
 							position += 3 // reserve for the writing bundle size
 							target[position++] = 0x62 // 'b'
 							extStart = position - start
 							position += 4 // reserve for writing bundle reference
-							writeBundles(start, pack) // write the last bundles
+							writeBundles(start, pack, 0) // write the last bundles
 							targetView.setUint16(extStart + start - 3, position - start - extStart)
 						} else { // here we use the 0x62 extension just to reserve the space for the reference pointer to the bundle (will be updated once the bundle is written)
 							target[position++] = 0xd6 // fixext 4
