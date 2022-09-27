@@ -448,13 +448,19 @@ suite('msgpackr basic tests', function(){
 
 		const v = {};
 
-		const shared = {
+		let shared = {
 			name1: v,
-			name2: v, // one key has to be named `data`
+			name2: v,
 		};
 
 		let deserialized = packer.unpack(packer.pack(shared));
 		assert.equal(deserialized.name1, deserialized.name2);
+
+		shared = {};
+		shared.aaaa = shared; // key length >= 4
+
+		deserialized = packer.unpack(packer.pack(shared));
+		assert.equal(deserialized.aaaa, deserialized);
 	})
 
 	test('object without prototype', function(){

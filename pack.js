@@ -125,20 +125,44 @@ export class Packr extends Unpackr {
 					writeStruct(value);
 				else
 					pack(value)
+				let lastBundle = bundledStrings;
+				if (bundledStrings)
+					writeBundles(start, pack, 0)
 				if (referenceMap && referenceMap.idsToInsert) {
-					let incrementPosition = referenceMap.idsToInsert.length * 6;
-					if (bundledStrings)
-						writeBundles(start, pack, incrementPosition)
-					position += incrementPosition
+					let idsToInsert = referenceMap.idsToInsert.sort((a, b) => a.offset > b.offset ? 1 : -1);
+					let i = idsToInsert.length;
+					let incrementPosition = -1;
+					while (lastBundle && i > 0) {
+						let insertionPoint = idsToInsert[--i].offset + start;
+						if (insertionPoint < (lastBundle.stringsPosition + start) && incrementPosition === -1)
+							incrementPosition = 0;
+						if (insertionPoint > (lastBundle.position + start)) {
+							if (incrementPosition >= 0)
+								incrementPosition += 6;
+						} else {
+							if (incrementPosition >= 0) {
+								// update the bundle reference now
+								targetView.setUint32(lastBundle.position + start,
+									targetView.getUint32(lastBundle.position + start) + incrementPosition)
+								incrementPosition = -1; // reset
+							}
+							lastBundle = lastBundle.previous;
+							i++;
+						}
+					}
+					if (incrementPosition >= 0 && lastBundle) {
+						// update the bundle reference now
+						targetView.setUint32(lastBundle.position + start,
+							targetView.getUint32(lastBundle.position + start) + incrementPosition)
+					}
+					position += idsToInsert.length * 6;
 					if (position > safeEnd)
 						makeRoom(position)
 					packr.offset = position
-					let serialized = insertIds(target.subarray(start, position), referenceMap.idsToInsert)
+					let serialized = insertIds(target.subarray(start, position), idsToInsert)
 					referenceMap = null
 					return serialized
 				}
-				if (bundledStrings)
-					writeBundles(start, pack, 0)
 				packr.offset = position // update the offset so next serialization doesn't write over our buffer, but can continue writing to same buffer sequentially
 				if (encodeOptions & REUSE_BUFFER_MODE) {
 					target.start = start
@@ -196,7 +220,9 @@ export class Packr extends Unpackr {
 						let maxBytes = (bundledStrings[0] ? bundledStrings[0].length * 3 + bundledStrings[1].length : 0) + 10
 						if (position + maxBytes > safeEnd)
 							target = makeRoom(position + maxBytes)
+						let lastBundle
 						if (bundledStrings.position) { // here we use the 0x62 extension to write the last bundle and reserve space for the reference pointer to the next/current bundle
+							lastBundle = bundledStrings
 							target[position] = 0xc8 // ext 16
 							position += 3 // reserve for the writing bundle size
 							target[position++] = 0x62 // 'b'
@@ -211,6 +237,7 @@ export class Packr extends Unpackr {
 							position += 4 // reserve for writing bundle reference
 						}
 						bundledStrings = ['', ''] // create new ones
+						bundledStrings.previous = lastBundle;
 						bundledStrings.size = 0
 						bundledStrings.position = extStart
 					}
@@ -906,7 +933,6 @@ function insertIds(serialized, idsToInsert) {
 	let nextId
 	let distanceToMove = idsToInsert.length * 6
 	let lastEnd = serialized.length - distanceToMove
-	idsToInsert.sort((a, b) => a.offset > b.offset ? 1 : -1)
 	while (nextId = idsToInsert.pop()) {
 		let offset = nextId.offset
 		let id = nextId.id
@@ -927,6 +953,7 @@ function insertIds(serialized, idsToInsert) {
 function writeBundles(start, pack, incrementPosition) {
 	if (bundledStrings.length > 0) {
 		targetView.setUint32(bundledStrings.position + start, position + incrementPosition - bundledStrings.position - start)
+		bundledStrings.stringsPosition = position - start;
 		let writeStrings = bundledStrings
 		bundledStrings = null
 		pack(writeStrings[0])
