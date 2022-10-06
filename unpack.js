@@ -188,8 +188,10 @@ export function checkedRead(options) {
 			position = srcEnd
 		} else
 			result = read()
-		if (bundledStrings) // bundled strings to skip past
+		if (bundledStrings) { // bundled strings to skip past
 			position = bundledStrings.postBundlePosition
+			bundledStrings = null
+		}
 
 		if (position == srcEnd) {
 			// finished reading this source, cleanup references
@@ -869,7 +871,7 @@ function readExt(length) {
 		})
 	}
 	else
-		throw new Error('Unknown extension type ' + type)``
+		throw new Error('Unknown extension type ' + type)
 }
 
 var keyCache = new Array(4096)
