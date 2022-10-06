@@ -388,7 +388,7 @@ export class Packr extends Unpackr {
 					let constructor = value.constructor
 					if (constructor === Object) {
 						writeObject(value, true)
-					} else if (constructor === Array) {
+					} else if (constructor === Array || Array.isArray(value)) {
 						length = value.length
 						if (length < 0x10) {
 							target[position++] = 0x90 | length
