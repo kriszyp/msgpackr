@@ -776,7 +776,7 @@ function prepareStructures(structures, packr) {
 			let typed = existing.get('typed') || [];
 			if (typed.length !== lastTypedStructuresLength)
 				compatible = false;
-		} else if (existing instanceof Array) {
+		} else if (existing instanceof Array || Array.isArray(existing)) {
 			if (existing.length !== (packr.lastNamedStructuresLength || 0))
 				compatible = false;
 		}
