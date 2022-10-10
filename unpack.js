@@ -359,6 +359,8 @@ export function read() {
 				if (currentUnpackr.int64AsNumber) {
 					value = dataView.getUint32(position) * 0x100000000
 					value += dataView.getUint32(position + 4)
+				} else if (currentUnpackr.int64AsString) {
+					value = dataView.getBigUint64(position).toString()
 				} else
 					value = dataView.getBigUint64(position)
 				position += 8
@@ -379,6 +381,8 @@ export function read() {
 				if (currentUnpackr.int64AsNumber) {
 					value = dataView.getInt32(position) * 0x100000000
 					value += dataView.getUint32(position + 4)
+				} else if (currentUnpackr.int64AsString) {
+					value = dataView.getBigInt64(position).toString()
 				} else
 					value = dataView.getBigInt64(position)
 				position += 8

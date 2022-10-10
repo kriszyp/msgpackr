@@ -714,6 +714,17 @@ suite('msgpackr basic tests', function() {
 		var deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized.a, 325283295382932843)
 	})
+	test('bigint to string', function() {
+		var data = {
+			a: 325283295382932843n,
+		}
+		let packr = new Packr({
+			int64AsString: true
+		})
+		var serialized = packr.pack(data)
+		var deserialized = packr.unpack(serialized)
+		assert.deepEqual(deserialized.a, '325283295382932843')
+	})
 	test('numbers', function(){
 		var data = {
 			bigEncodable: 48978578104322,
