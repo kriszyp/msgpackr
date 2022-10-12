@@ -1,9 +1,8 @@
-import * as msgpackr from '../index.js'
-import '../struct.js'
-import chai from 'chai'
-import inspector  from 'inspector';
+import chai from 'chai';
+import * as msgpackr from '../index.js';
+import '../struct.js';
 //inspector.open(9229, null, true); debugger
-import { readFileSync } from 'fs'
+import { readFileSync } from 'fs';
 let allSampleData = [];
 for (let i = 1; i < 6; i++) {
 	allSampleData.push(JSON.parse(readFileSync(new URL(`./example${i > 1 ? i : ''}.json`, import.meta.url))));
@@ -703,7 +702,29 @@ suite('msgpackr basic tests', function() {
 		var deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized, data)
 	})
+	test('int64/uint64 should be bigints by default', function() {
+		var data = {
+			a: 325283295382932843n
+		}
+
+		let packr = new Packr()
+		var serialized = packr.pack(data)
+		var deserialized = packr.unpack(serialized)
+		assert.deepEqual(deserialized.a, 325283295382932843n)
+	})
 	test('bigint to float', function() {
+		var data = {
+			a: 325283295382932843n
+		}
+		let packr = new Packr({
+			int64AsType: 'number'
+		})
+		var serialized = packr.pack(data)
+		var deserialized = packr.unpack(serialized)
+		assert.deepEqual(deserialized.a, 325283295382932843)
+	})
+	test('int64AsNumber compatibility', function() {
+		// https://github.com/kriszyp/msgpackr/pull/85
 		var data = {
 			a: 325283295382932843n
 		}
@@ -719,7 +740,7 @@ suite('msgpackr basic tests', function() {
 			a: 325283295382932843n,
 		}
 		let packr = new Packr({
-			int64AsString: true
+			int64AsType: 'string'
 		})
 		var serialized = packr.pack(data)
 		var deserialized = packr.unpack(serialized)

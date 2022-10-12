@@ -170,8 +170,7 @@ The following options properties can be provided to the Packr or Unpackr constru
 * `sequential` - Encode structures in serialized data, and reference previously encoded structures with expectation that decoder will read the encoded structures in the same order as encoded, with `unpackMultiple`.
 * `largeBigIntToFloat` - If a bigint needs to be encoded that is larger than will fit in 64-bit integers, it will be encoded as a float-64 (otherwise will throw a RangeError).
 * `encodeUndefinedAsNil` - Encodes a value of `undefined` as a MessagePack `nil`, the same as a `null`.
-* `int64AsNumber` - This will decode uint64 and int64 numbers as standard JS numbers rather than as bigint numbers.
-* `int64AsString` - This will decode uint64 and int64 numbers as strings rather than as bigint numbers.
+* `int64AsType` - This will decode uint64 and int64 numbers as the specified type. The type can be `bigint` (default), `number`, or `string`. 
 * `onInvalidDate` - This can be provided as function that will be called when an invalid date is provided. The function can throw an error, or return a value that will be encoded in place of the invalid date. If not provided, an invalid date will be encoded as an invalid timestamp (which decodes with msgpackr back to an invalid date).
 
 ### 32-bit Float Options
