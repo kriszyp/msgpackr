@@ -54,6 +54,9 @@ export class Unpackr {
 				(options.structures = []).uninitialized = true // this is what we use to denote an uninitialized structures
 				options.structures.sharedLength = 0
 			}
+			if (options.int64AsNumber) {
+				options.int64AsType = 'number'
+			}
 		}
 		Object.assign(this, options)
 	}
@@ -356,9 +359,11 @@ export function read() {
 				position += 4
 				return value
 			case 0xcf:
-				if (currentUnpackr.int64AsNumber) {
+				if (currentUnpackr.int64AsType === 'number') {
 					value = dataView.getUint32(position) * 0x100000000
 					value += dataView.getUint32(position + 4)
+				} else if (currentUnpackr.int64AsType === 'string') {
+					value = dataView.getBigUint64(position).toString()
 				} else
 					value = dataView.getBigUint64(position)
 				position += 8
@@ -376,9 +381,11 @@ export function read() {
 				position += 4
 				return value
 			case 0xd3:
-				if (currentUnpackr.int64AsNumber) {
+				if (currentUnpackr.int64AsType === 'number') {
 					value = dataView.getInt32(position) * 0x100000000
 					value += dataView.getUint32(position + 4)
+				} else if (currentUnpackr.int64AsType === 'string') {
+					value = dataView.getBigInt64(position).toString()
 				} else
 					value = dataView.getBigInt64(position)
 				position += 8
