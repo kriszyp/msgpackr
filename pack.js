@@ -66,14 +66,14 @@ export class Packr extends Unpackr {
 		this.pack = this.encode = function(value, encodeOptions) {
 			if (!target) {
 				target = new ByteArrayAllocate(8192)
-				targetView = target.dataView = new DataView(target.buffer, 0, 8192)
+				targetView = target.dataView || (target.dataView = new DataView(target.buffer, 0, 8192))
 				position = 0
 			}
 			safeEnd = target.length - 10
 			if (safeEnd - position < 0x800) {
 				// don't start too close to the end, 
 				target = new ByteArrayAllocate(target.length)
-				targetView = target.dataView = new DataView(target.buffer, 0, target.length)
+				targetView = target.dataView || (target.dataView = new DataView(target.buffer, 0, target.length))
 				safeEnd = target.length - 10
 				position = 0
 			} else
@@ -627,7 +627,7 @@ export class Packr extends Unpackr {
 			} else // faster handling for smaller buffers
 				newSize = ((Math.max((end - start) << 2, target.length - 1) >> 12) + 1) << 12
 			let newBuffer = new ByteArrayAllocate(newSize)
-			targetView = newBuffer.dataView = new DataView(newBuffer.buffer, 0, newSize)
+			targetView = newBuffer.dataView || (newBuffer.dataView = new DataView(newBuffer.buffer, 0, newSize))
 			end = Math.min(end, target.length)
 			if (target.copy)
 				target.copy(newBuffer, 0, start, end)
