@@ -69,6 +69,9 @@ For module-based development, it is recommended that you directly import the mod
 import { unpack } from 'msgpackr/unpack' // if you only need to unpack
 ```
 
+The package also includes a minified bundle in index.min.js. 
+Additionally, the package includes a version that excludes dynamic code evaluation called index-no-eval.js, for situations where Content Security Policy (CSP) forbids eval/Function in code. The dynamic evaluation provides important performance optimizations (for records), so is not recommended unless required by CSP policy.
+
 ## Structured Cloning
 You can also use msgpackr for [structured cloning](https://html.spec.whatwg.org/multipage/structured-data.html). By enabling the `structuredClone` option, you can include references to other objects or cyclic references, and object identity will be preserved. Structured cloning also enables preserving certain typed objects like `Error`, `Set`, `RegExp` and TypedArray instances. For example:
 ```js

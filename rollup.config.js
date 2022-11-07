@@ -1,5 +1,6 @@
 import minify from "rollup-plugin-babel-minify";
-import json  from "@rollup/plugin-json";
+import json from "@rollup/plugin-json";
+import replace from "@rollup/plugin-replace";
 
 export default [
     {
@@ -20,13 +21,39 @@ export default [
             name: "msgpackr",
             sourcemap: true
         }
-    },    
+    },
     {
         input: "index.js",
-        plugins: [minify({
-        })],
+        plugins: [
+            replace({ Function: 'BlockedFunction '})
+        ],
+        output: {
+            file: "dist/index-no-eval.js",
+            format: "umd",
+            name: "msgpackr",
+            sourcemap: true
+        },
+    },
+    {
+        input: "index.js",
+        plugins: [
+           minify({})
+        ],
         output: {
             file: "dist/index.min.js",
+            format: "umd",
+            name: "msgpackr",
+            sourcemap: true
+        }
+    },
+    {
+        input: "index.js",
+        plugins: [
+           replace({ Function: 'BlockedFunction '}),
+           minify({})
+        ],
+        output: {
+            file: "dist/index-no-eval.min.js",
             format: "umd",
             name: "msgpackr",
             sourcemap: true

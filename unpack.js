@@ -28,6 +28,8 @@ C1.name = 'MessagePack 0xC1'
 var sequentialMode = false
 var inlineObjectReadThreshold = 2
 var readStruct, onLoadedStructures, onSaveState
+var BlockedFunction // we use search and replace to change the next call to BlockedFunction to avoid CSP issues for
+// no-eval build
 try {
 	new Function('')
 } catch(error) {
