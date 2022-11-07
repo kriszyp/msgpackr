@@ -161,9 +161,9 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 			case 'string':
 				let strLength = value.length;
 				refOffset = refPosition - refsStartPosition;
-				if ((strLength << 2) + position > safeEnd) {
+				if ((strLength << 2) + refPosition > safeEnd) {
 					let lastStart = start;
-					target = makeRoom(refPosition);
+					target = makeRoom((strLength << 2) + refPosition);
 					targetView = target.dataView;
 					position -= lastStart;
 					refsStartPosition -= lastStart;
