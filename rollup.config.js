@@ -1,4 +1,4 @@
-import minify from "rollup-plugin-babel-minify";
+import terser from '@rollup/plugin-terser';
 import json from "@rollup/plugin-json";
 import replace from "@rollup/plugin-replace";
 
@@ -37,7 +37,7 @@ export default [
     {
         input: "index.js",
         plugins: [
-           minify({})
+            terser({})
         ],
         output: {
             file: "dist/index.min.js",
@@ -49,8 +49,8 @@ export default [
     {
         input: "index.js",
         plugins: [
-           replace({ Function: 'BlockedFunction '}),
-           minify({})
+            replace({ Function: 'BlockedFunction '}),
+            terser({})
         ],
         output: {
             file: "dist/index-no-eval.min.js",
