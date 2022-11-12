@@ -1,5 +1,5 @@
 import chai from 'chai';
-import * as msgpackr from '../index.js';
+import * as msgpackr from '../node-index.js';
 import '../struct.js';
 //inspector.open(9229, null, true); debugger
 import { readFileSync } from 'fs';
@@ -168,6 +168,17 @@ suite('msgpackr basic tests', function() {
 			var data = sampleData
 			let structures = []
 			var serialized = pack(data)
+			var deserialized = unpack(serialized)
+			assert.deepEqual(deserialized, data)
+			var serialized = pack(data)
+			var deserialized = unpack(serialized)
+			assert.deepEqual(deserialized, data)
+		})
+		test('pack/unpack sample data with Uint8Array encoding' + snippet, function () {
+			var data = sampleData
+			let structures = []
+			var serialized = pack(data)
+			serialized = new Uint8Array(serialized)
 			var deserialized = unpack(serialized)
 			assert.deepEqual(deserialized, data)
 			var serialized = pack(data)
