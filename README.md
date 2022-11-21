@@ -303,9 +303,9 @@ The record struction extension uses extension id 0x72 ("r") to declare the use o
 
 Once a record identifier and record field names have been defined, the parser/decoder should proceed to read the next value. Any subsequent use of the record identifier as a value in the block or stream should parsed as a record instance, and the next n values, where is n is the number of fields (as defined in the array of field names), should be read as the values of the fields. For example, here we have defined a structure with fields "foo" and "bar", with the record identifier 0x40, and then read a record instance that defines the field values of 4 and 2, respectively:
 ```
-+--------+--------+--------+~~~~~~~~~~~~~~~~~~~~~~~~~+--------+--------+--------+
-|  0xd4  |  0x72  |  0x40  | array: [ "foo", "bar" ] |  0x40  |  0x04  |  0x02  |
-+--------+--------+--------+~~~~~~~~~~~~~~~~~~~~~~~~~+--------+--------+--------+
++--------+--------+--------+~~~~~~~~~~~~~~~~~~~~~~~~~+--------+--------+
+|  0xd4  |  0x72  |  0x40  | array: [ "foo", "bar" ] |  0x04  |  0x02  |
++--------+--------+--------+~~~~~~~~~~~~~~~~~~~~~~~~~+--------+--------+
 ```
 Which should generate an object that would correspond to JSON:
 ```js
