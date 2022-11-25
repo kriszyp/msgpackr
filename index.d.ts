@@ -34,6 +34,7 @@ interface Extension {
 	pack?(value: any): Buffer | Uint8Array
 	unpack?(messagePack: Buffer | Uint8Array): any	
 	read?(datum: any): any
+	writeAs?: 'object' | 'array'
 	write?(instance: any): any
 }
 export class Unpackr {
