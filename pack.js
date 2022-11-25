@@ -206,6 +206,23 @@ export class Packr extends Unpackr {
 					position = start
 			}
 		}
+		const packArray = (value) => {
+			var length = value.length
+			if (length < 0x10) {
+				target[position++] = 0x90 | length
+			} else if (length < 0x10000) {
+				target[position++] = 0xdc
+				target[position++] = length >> 8
+				target[position++] = length & 0xff
+			} else {
+				target[position++] = 0xdd
+				targetView.setUint32(position, length)
+				position += 4
+			}
+			for (let i = 0; i < length; i++) {
+				pack(value[i])
+			}
+		}
 		const pack = (value) => {
 			if (position > safeEnd)
 				target = makeRoom(position)
@@ -388,22 +405,8 @@ export class Packr extends Unpackr {
 					let constructor = value.constructor
 					if (constructor === Object) {
 						writeObject(value, true)
-					} else if (constructor === Array || Array.isArray(value)) {
-						length = value.length
-						if (length < 0x10) {
-							target[position++] = 0x90 | length
-						} else if (length < 0x10000) {
-							target[position++] = 0xdc
-							target[position++] = length >> 8
-							target[position++] = length & 0xff
-						} else {
-							target[position++] = 0xdd
-							targetView.setUint32(position, length)
-							position += 4
-						}
-						for (let i = 0; i < length; i++) {
-							pack(value[i])
-						}
+					} else if (constructor === Array) {
+						packArray(value)
 					} else if (constructor === Map) {
 						length = value.size
 						if (length < 0x10) {
@@ -469,8 +472,13 @@ export class Packr extends Unpackr {
 								return
 							}
 						}
-						// no extension found, write as object
-						writeObject(value, !value.hasOwnProperty) // if it doesn't have hasOwnProperty, don't do hasOwnProperty checks
+						// check isArray after extensions, because extensions can extend Array
+						if (Array.isArray(value)) {
+							packArray(value)
+						} else {
+							// no extension found, write as object
+							writeObject(value, !value.hasOwnProperty) // if it doesn't have hasOwnProperty, don't do hasOwnProperty checks
+						}
 					}
 				}
 			} else if (type === 'boolean') {
