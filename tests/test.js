@@ -51,6 +51,16 @@ try {
 
 var ITERATIONS = 4000
 
+class ExtendArray extends Array {
+}
+
+class ExtendArray2 extends Array {
+}
+
+class ExtendObject {
+}
+
+
 suite('msgpackr basic tests', function() {
 	test('pack/unpack data', function () {
 		var data = {
@@ -320,6 +330,73 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(data, deserialized)
 		assert.equal(deserialized.extendedInstance.getDouble(), 8)
 	})
+
+	test('extended Array class read/write', function(){
+		var instance = new ExtendArray()
+		instance.push(0);
+		instance.push(1);
+		instance.push(2);
+		var data = {
+			prop1: 'has multi-byte: ᾜ',
+			extendedInstance: instance,
+			prop2: 'more string',
+			num: 3,
+		}
+		let packr = new Packr()
+		addExtension({
+			Class: ExtendArray,
+			type: 12,
+			read: function(data) {
+				Object.setPrototypeOf(data, ExtendArray.prototype)
+				return data
+			},
+			write: function(instance) {
+				return [...instance]
+			}
+		})
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.strictEqual(Object.getPrototypeOf(deserialized.extendedInstance), ExtendArray.prototype)
+		assert.deepEqual(data, deserialized)
+	})
+
+
+	test('unregistered extended Array class read/write', function(){
+		var instance = new ExtendArray2()
+		instance.push(0);
+		instance.push(1);
+		instance.push(2);
+		var data = {
+			prop1: 'has multi-byte: ᾜ',
+			extendedInstance: instance,
+			prop2: 'more string',
+			num: 3,
+		}
+		let packr = new Packr()
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.strictEqual(Object.getPrototypeOf(deserialized.extendedInstance), Array.prototype)
+		assert.deepEqual(data, deserialized)
+	})
+
+
+	test('unregistered extended Object class read/write', function(){
+		var instance = new ExtendObject()
+		instance.test1 = "string";
+		instance.test2 = 3421321;
+		var data = {
+			prop1: 'has multi-byte: ᾜ',
+			extendedInstance: instance,
+			prop2: 'more string',
+			num: 3,
+		}
+		let packr = new Packr()
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.strictEqual(Object.getPrototypeOf(deserialized.extendedInstance), Object.prototype)
+		assert.deepEqual(data, deserialized)
+	})
+
 	test('extended class pack/unpack custom size', function(){
 		function TestClass() {
 
