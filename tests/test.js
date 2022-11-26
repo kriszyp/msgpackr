@@ -454,7 +454,7 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(data, deserialized)
 		assert.equal(deserialized.extendedInstance.getDouble(), 8)
 	})
-	test('extended class writeAs', function(){
+	test('extended class return self', function(){
 		function Extended() {
 
 		}
@@ -478,7 +478,9 @@ suite('msgpackr basic tests', function() {
 				Object.setPrototypeOf(data, Extended.prototype)
 				return data
 			},
-			writeAs: 'object'
+			write: function(data) {
+				return data
+			}
 		})
 		var serialized = pack(data)
 		var deserialized = unpack(serialized)
@@ -486,7 +488,7 @@ suite('msgpackr basic tests', function() {
 		assert.strictEqual(Object.getPrototypeOf(deserialized.extendedInstance), Extended.prototype)
 		assert.equal(deserialized.extendedInstance.getDouble(), 8)
 	})
-	test('extended Array class writeAs', function(){
+	test('extended Array class return self', function(){
 		var instance = new ExtendArray3()
 		instance.push(0)
 		instance.push('has multi-byte: ᾜ')
@@ -504,7 +506,9 @@ suite('msgpackr basic tests', function() {
 				Object.setPrototypeOf(data, ExtendArray3.prototype)
 				return data
 			},
-			writeAs: 'array'
+			write: function(data) {
+				return data
+			}
 		})
 		var serialized = pack(data)
 		var deserialized = unpack(serialized)

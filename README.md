@@ -264,9 +264,7 @@ addExtension({
 	}
 });
 ```
-If you want to use msgpackr to encode and decode the data within your extensions, you can use the `read` and `write` functions and read and write data/objects that will be encoded and decoded by msgpackr, which can be easier and faster than creating and receiving separate buffers.
-
-Note that you can't just return the instance from `write` or msgpackr will recursively try to use extension infinitely. If this is needed don't implement `write`, but use `writeAs: 'object' | 'array'` instead, so the object is written as a object or array without recursion. And in `read` function you can do `return Object.setPrototypeOf(data, ExtensionClass.prototype)` to add the prototype back.
+If you want to use msgpackr to encode and decode the data within your extensions, you can use the `read` and `write` functions and read and write data/objects that will be encoded and decoded by msgpackr, which can be easier and faster than creating and receiving separate buffers:
 
 ```js
 import { addExtension, Packr } from 'msgpackr';
@@ -289,6 +287,20 @@ addExtension({
 		return instance; // return decoded value
 	}
 });
+```
+Note that you can just return the same object from `write`, and in this case msgpackr will encode it using the default object/array encoding:
+```js
+addExtension({
+	Class: MyCustomClass,
+	type: 12,
+	read: function(data) {
+		Object.setPrototypeOf(data, MyCustomClass.prototype)
+		return data
+	},
+	write: function(data) {
+		return data
+	}
+})
 ```
 You can also create an extension with `Class` and `write` methods, but no `type` (or `read`), if you just want to customize how a class is serialized without using MessagePack extension encoding.
 

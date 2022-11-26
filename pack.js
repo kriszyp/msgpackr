@@ -435,18 +435,15 @@ export class Packr extends Unpackr {
 										target[position++] = extension.type
 										target[position++] = 0
 									}
-									pack(extension.write.call(this, value))
-									return
-								} else if (extension.writeAs) {
-									if (extension.type) {
-										target[position++] = 0xd4 // one byte "tag" extension
-										target[position++] = extension.type
-										target[position++] = 0
-									}
-									if (extension.writeAs === 'object') {
-										writeObject(value)
-									} else if (extension.writeAs === 'array') {
-										packArray(value)
+									let writeResult = extension.write.call(this, value)
+									if (writeResult === value) { // avoid infinite recursion
+										if (Array.isArray(value)) {
+											packArray(value)
+										} else {
+											writeObject(value)
+										}
+									} else {
+										pack(writeResult)
 									}
 									return
 								}
@@ -983,8 +980,8 @@ function writeBundles(start, pack, incrementPosition) {
 
 export function addExtension(extension) {
 	if (extension.Class) {
-		if (!extension.pack && !extension.write && !extension.writeAs)
-			throw new Error('Extension has no pack or write function or writeAs')
+		if (!extension.pack && !extension.write)
+			throw new Error('Extension has no pack or write function')
 		if (extension.pack && !extension.type)
 			throw new Error('Extension has no type (numeric code to identify the extension)')
 		extensionClasses.unshift(extension.Class)
