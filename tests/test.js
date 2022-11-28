@@ -57,6 +57,10 @@ class ExtendArray extends Array {
 class ExtendArray2 extends Array {
 }
 
+class ExtendArray3 extends Array {
+}
+
+
 class ExtendObject {
 }
 
@@ -450,6 +454,69 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(data, deserialized)
 		assert.equal(deserialized.extendedInstance.getDouble(), 8)
 	})
+	test('extended class return self', function(){
+		function Extended() {
+
+		}
+		Extended.prototype.getDouble = function() {
+			return this.value * 2
+		}
+		var instance = new Extended()
+		instance.value = 4
+		instance.string = 'decode this: ᾜ'
+		var data = {
+			prop1: 'has multi-byte: ᾜ',
+			extendedInstance: instance,
+			prop2: 'more string',
+			num: 3,
+		}
+		let packr = new Packr()
+		addExtension({
+			Class: Extended,
+			type: 13,
+			read: function(data) {
+				Object.setPrototypeOf(data, Extended.prototype)
+				return data
+			},
+			write: function(data) {
+				return data
+			}
+		})
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.deepEqual(data, deserialized)
+		assert.strictEqual(Object.getPrototypeOf(deserialized.extendedInstance), Extended.prototype)
+		assert.equal(deserialized.extendedInstance.getDouble(), 8)
+	})
+	test('extended Array class return self', function(){
+		var instance = new ExtendArray3()
+		instance.push(0)
+		instance.push('has multi-byte: ᾜ')
+		var data = {
+			prop1: 'has multi-byte: ᾜ',
+			extendedInstance: instance,
+			prop2: 'more string',
+			num: 3,
+		}
+		let packr = new Packr()
+		addExtension({
+			Class: ExtendArray3,
+			type: 14,
+			read: function(data) {
+				Object.setPrototypeOf(data, ExtendArray3.prototype)
+				return data
+			},
+			write: function(data) {
+				return data
+			}
+		})
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.deepEqual(data, deserialized)
+		assert.strictEqual(Object.getPrototypeOf(deserialized.extendedInstance), ExtendArray3.prototype)
+		assert.equal(deserialized.extendedInstance[0], 0)
+	})
+
 	test('proto handling', function() {
 		var objectWithProto = JSON.parse('{"__proto__":{"foo":3}}');
 		var decoded = unpack(pack(objectWithProto));

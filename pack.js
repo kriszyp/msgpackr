@@ -435,7 +435,16 @@ export class Packr extends Unpackr {
 										target[position++] = extension.type
 										target[position++] = 0
 									}
-									pack(extension.write.call(this, value))
+									let writeResult = extension.write.call(this, value)
+									if (writeResult === value) { // avoid infinite recursion
+										if (Array.isArray(value)) {
+											packArray(value)
+										} else {
+											writeObject(value)
+										}
+									} else {
+										pack(writeResult)
+									}
 									return
 								}
 								let currentTarget = target
