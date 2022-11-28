@@ -28,7 +28,19 @@ export default [
             replace({ Function: 'BlockedFunction '})
         ],
         output: {
-            file: "dist/index-no-eval.js",
+            file: "dist/index-no-eval.cjs",
+            format: "umd",
+            name: "msgpackr",
+            sourcemap: true
+        },
+    },
+    {
+        input: "unpack.js",
+        plugins: [
+            replace({ Function: 'BlockedFunction '})
+        ],
+        output: {
+            file: "dist/unpack-no-eval.cjs",
             format: "umd",
             name: "msgpackr",
             sourcemap: true

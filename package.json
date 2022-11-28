@@ -63,7 +63,9 @@
         "require": "./dist/node.cjs"
       },
       "default": "./unpack.js"
-    }
+    },
+    "./unpack-no-eval": "./dist/unpack-no-eval.cjs",
+    "./index-no-eval": "./dist/index-no-eval.cjs"
   },
   "files": [
     "/dist",
