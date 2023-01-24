@@ -83,7 +83,7 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 		position -= lastStart;
 		refsStartPosition -= lastStart;
 		start = 0;
-		safeEnd = target.length - 10
+		safeEnd = target.length - 10;
 	}
 
 	let refOffset, refPosition = refsStartPosition;
@@ -700,24 +700,35 @@ function readStruct(src, position, srcEnd, unpackr) {
 			let objectLiteralProperties = [];
 			let args = [];
 			let i = 0;
+			let hasInheritedProperties;
 			for (let property of properties) { // assign in enumeration order
+				if (unpackr.alwaysLazyProperty && unpackr.alwaysLazyProperty(property.key)) {
+					// these properties are not eagerly evaluated and this can be used for creating properties
+					// that are not serialized as JSON
+					hasInheritedProperties = true;
+					continue;
+				}
 				Object.defineProperty(prototype, property.key, { get: withSource(property.get), enumerable: true });
 				let valueFunction = 'v' + i++;
 				args.push(valueFunction);
 				objectLiteralProperties.push('[' + JSON.stringify(property.key) + ']:' + valueFunction + '(s)');
 			}
+			if (hasInheritedProperties) {
+				objectLiteralProperties.push('__proto__:this');
+			}
 			let toObject = (new Function(...args, 'return function(s){return{' + objectLiteralProperties.join(',') + '}}')).apply(null, properties.map(prop => prop.get));
 			Object.defineProperty(prototype, 'toJSON', {
-				value() {
-					return toObject(this[sourceSymbol]);
+				value(omitUnderscoredProperties) {
+					return toObject.call(this, this[sourceSymbol]);
 				}
 			});
 		} else {
 			Object.defineProperty(prototype, 'toJSON', {
-				value() {
+				value(omitUnderscoredProperties) {
 					// return an enumerable object with own properties to JSON stringify
 					let resolved = {};
 					for (let i = 0, l = properties.length; i < l; i++) {
+						// TODO: check alwaysLazyProperty
 						let key = properties[i].key;
 
 						resolved[key] = this[key];

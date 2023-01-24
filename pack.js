@@ -740,12 +740,11 @@ export class Packr extends Unpackr {
 				if (notifySharedUpdate)
 					return hasSharedUpdate = true;
 				position = newPosition;
-				if (start > 0) {
-					pack(value);
-					if (start == 0)
-						return { position, targetView, target }; // indicate the buffer was re-allocated
-				} else
-					pack(value);
+				let startTarget = target;
+				pack(value);
+				if (startTarget !== target) {
+					return { position, targetView, target }; // indicate the buffer was re-allocated
+				}
 				return position;
 			}, this);
 			if (newPosition === 0) // bail and go to a msgpack object
