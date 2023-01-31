@@ -557,7 +557,8 @@ export function setExtractor(extractStrings) {
 			if (string == null) {
 				if (bundledStrings)
 					return readStringJS(length)
-				let extraction = extractStrings(position - headerLength, srcEnd, src)
+				let byteOffset = src.byteOffset
+				let extraction = extractStrings(position - headerLength + byteOffset, srcEnd + byteOffset, src.buffer)
 				if (typeof extraction == 'string') {
 					string = extraction
 					strings = EMPTY_ARRAY
