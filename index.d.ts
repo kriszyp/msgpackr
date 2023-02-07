@@ -10,6 +10,7 @@ export interface Options {
 	useRecords?: boolean
 	structures?: {}[]
 	moreTypes?: boolean
+	sequential?: boolean
 	structuredClone?: boolean
 	mapsAsObjects?: boolean
 	variableMapSize?: boolean
