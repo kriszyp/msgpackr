@@ -41,6 +41,7 @@ package-lock.json
 yarn.lock
 # Typescript v1 declaration files
 typings/
+index.d.cts
 
 # Optional npm cache directory
 .npm
