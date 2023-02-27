@@ -224,7 +224,7 @@ suite('msgpackr basic tests', function() {
 			var serialized = packr.pack(data)
 			var deserialized = packr.unpack(serialized)
 			assert.deepEqual(deserialized, data)
-		})
+		});
 	}
 
 	test('pack/unpack empty data with bundled strings', function () {
@@ -234,6 +234,29 @@ suite('msgpackr basic tests', function() {
 		var deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized, data)
 	})
+	test('pack/unpack large amount of chinese characters', function() {
+		const MSGPACK_OPTIONS = {bundleStrings: true}
+
+		const item = {
+			message: '你好你好你好你好你好你好你好你好你好', // some Chinese characters
+		}
+
+		testSize(100)
+		testSize(1000)
+		testSize(10000)
+		function testSize(size) {
+			const list = []
+			for (let i = 0; i < size; i++) {
+				list.push({...item})
+			}
+
+			const packer = new Packr(MSGPACK_OPTIONS)
+			const unpacker = new Unpackr(MSGPACK_OPTIONS)
+			const encoded = packer.pack(list)
+			const decoded = unpacker.unpack(encoded)
+			assert.deepEqual(list, decoded);
+		}
+	});
 	test('pack/unpack sequential data', function () {
 		var data = {foo: 1, bar: 2}
 		let packr = new Packr({sequential: true})

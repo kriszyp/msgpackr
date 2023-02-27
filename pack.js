@@ -15,7 +15,7 @@ let position = 0
 let safeEnd
 let bundledStrings = null
 let writeStructSlots
-const MAX_BUNDLE_SIZE = 0xf000
+const MAX_BUNDLE_SIZE = 0x5500 // maximum characters such that the encoded bytes fits in 16 bits.
 const hasNonLatin = /[\u0080-\uFFFF]/
 export const RECORD_SYMBOL = Symbol('record-id')
 export class Packr extends Unpackr {
