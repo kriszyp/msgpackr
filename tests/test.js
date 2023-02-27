@@ -924,6 +924,10 @@ suite('msgpackr basic tests', function() {
 		var deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized.a, '325283295382932843')
 	})
+	test('fixint should be one byte', function(){
+		let encoded = pack(123);
+		assert.equal(encoded.length, 1);
+	});
 	test('numbers', function(){
 		var data = {
 			bigEncodable: 48978578104322,
