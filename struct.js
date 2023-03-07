@@ -384,11 +384,11 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 		case 3:
 			if (recordId >= 0x10000) return 0;
 			target[start] = 0x39;
-			target.setUint16(start + 1, recordId, true);
+			targetView.setUint16(start + 1, recordId, true);
 			break;
 		case 4:
 			if (recordId >= 0x1000000) return 0;
-			target.setUint32(start, (recordId << 8) + 0x3a, true);
+			targetView.setUint32(start, (recordId << 8) + 0x3a, true);
 			break;
 	}
 
