@@ -150,7 +150,7 @@ suite('msgpackr basic tests', function() {
 				console.log('getStructures');
 			}
 		})
-		for (let i = 0; i < 20; i++) {
+		for (let i = 0; i < 2000; i++) {
 			let data = {};
 			let props = ['foo', 'bar', 'a', 'b', 'c', 'name', 'age', 'd'];
 
