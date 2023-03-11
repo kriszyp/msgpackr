@@ -210,10 +210,13 @@ export function checkedRead(options) {
 			// over read
 			throw new Error('Unexpected end of MessagePack data')
 		} else if (!sequentialMode) {
-			throw new Error(
-				'Data read, but end of buffer not reached ' +
-				JSON.stringify(result, (_, value) => typeof value === "bigint" ? `${value}n` : value
-			).slice(0, 100))
+			let jsonView;
+			try {
+				jsonView = JSON.stringify(result, (_, value) => typeof value === "bigint" ? `${value}n` : value).slice(0, 100)
+			} catch(error) {
+				jsonView = '(JSON view not available ' + error + ')'
+			}
+			throw new Error('Data read, but end of buffer not reached ' + jsonView)
 		}
 		// else more to read, but we are reading sequentially, so don't clear source yet
 		return result
