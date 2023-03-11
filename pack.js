@@ -485,6 +485,8 @@ export class Packr extends Unpackr {
 						if (Array.isArray(value)) {
 							packArray(value)
 						} else {
+							if (value.toJSON) // use this as an alternate mechanism for expressing how to serialize
+								return pack(value.toJSON());
 							// no extension found, write as object
 							writeObject(value, !value.hasOwnProperty) // if it doesn't have hasOwnProperty, don't do hasOwnProperty checks
 						}
