@@ -372,6 +372,9 @@ export function read() {
 					value += dataView.getUint32(position + 4)
 				} else if (currentUnpackr.int64AsType === 'string') {
 					value = dataView.getBigUint64(position).toString()
+				} else if (currentUnpackr.int64AsType === 'numberOrBigInt') {
+					value = dataView.getBigUint64(position)
+					if (value<=BigInt(2)<<BigInt(52)) value=Number(value)
 				} else
 					value = dataView.getBigUint64(position)
 				position += 8
@@ -394,6 +397,9 @@ export function read() {
 					value += dataView.getUint32(position + 4)
 				} else if (currentUnpackr.int64AsType === 'string') {
 					value = dataView.getBigInt64(position).toString()
+				} else if (currentUnpackr.int64AsType === 'numberOrBigInt') {
+					value = dataView.getBigInt64(position)
+					if (value>=BigInt(-2)<<BigInt(52)&&value<=BigInt(2)<<BigInt(52)) value=Number(value)
 				} else
 					value = dataView.getBigInt64(position)
 				position += 8
