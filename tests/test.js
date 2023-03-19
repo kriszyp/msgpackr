@@ -913,7 +913,7 @@ suite('msgpackr basic tests', function() {
 		var deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized.a, 325283295382932843)
 	})
-	test('bigint to float or bigint', function() {
+	test('bigint to auto (float or bigint)', function() {
 		var data = {
 			a: -9007199254740993n,
 			b: -9007199254740992n,
@@ -922,7 +922,7 @@ suite('msgpackr basic tests', function() {
 			e: 9007199254740993n,
 		}
 		let packr = new Packr({
-			int64AsType: 'numberOrBigInt'
+			int64AsType: 'auto'
 		})
 		var serialized = packr.pack(data)
 		var deserialized = packr.unpack(serialized)
