@@ -21,6 +21,8 @@ export interface Options {
 	encodeUndefinedAsNil?: boolean
 	maxSharedStructures?: number
 	maxOwnStructures?: number
+	mapAsEmptyObject?: boolean
+	setAsEmptyObject?: boolean
 	/** @deprecated use int64AsType: 'number' */
 	int64AsNumber?: boolean
 	int64AsType?: 'bigint' | 'number' | 'string'

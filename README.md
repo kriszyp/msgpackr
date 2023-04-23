@@ -175,6 +175,8 @@ The following options properties can be provided to the Packr or Unpackr constru
 * `encodeUndefinedAsNil` - Encodes a value of `undefined` as a MessagePack `nil`, the same as a `null`.
 * `int64AsType` - This will decode uint64 and int64 numbers as the specified type. The type can be `bigint` (default), `number`,  `string`, or `auto` (where range [-2^53...2^53] is represented by number and everything else by a bigint). 
 * `onInvalidDate` - This can be provided as function that will be called when an invalid date is provided. The function can throw an error, or return a value that will be encoded in place of the invalid date. If not provided, an invalid date will be encoded as an invalid timestamp (which decodes with msgpackr back to an invalid date).
+* `mapAsEmptyObject` - Encodes JS `Map`s as empty objects (for back-compat with older libraries).
+* `setAsEmptyObject` - Encodes JS `Set`s as empty objects (for back-compat with older libraries).
 
 ### 32-bit Float Options
 By default all non-integer numbers are serialized as 64-bit float (double). This is fast, and ensures maximum precision. However, often real-world data doesn't not need 64-bits of precision, and using 32-bit encoding can be much more space efficient. There are several options that provide more efficient encodings. Using the decimal rounding options for encoding and decoding provides lossless storage of common decimal representations like 7.99, in more efficient 32-bit format (rather than 64-bit). The `useFloat32` property has several possible options, available from the module as constants:

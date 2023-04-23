@@ -408,21 +408,24 @@ export class Packr extends Unpackr {
 					} else if (constructor === Array) {
 						packArray(value)
 					} else if (constructor === Map) {
-						length = value.size
-						if (length < 0x10) {
-							target[position++] = 0x80 | length
-						} else if (length < 0x10000) {
-							target[position++] = 0xde
-							target[position++] = length >> 8
-							target[position++] = length & 0xff
-						} else {
-							target[position++] = 0xdf
-							targetView.setUint32(position, length)
-							position += 4
-						}
-						for (let [ key, entryValue ] of value) {
-							pack(key)
-							pack(entryValue)
+						if (this.mapAsEmptyObject) target[position++] = 0x80
+						else {
+							length = value.size
+							if (length < 0x10) {
+								target[position++] = 0x80 | length
+							} else if (length < 0x10000) {
+								target[position++] = 0xde
+								target[position++] = length >> 8
+								target[position++] = length & 0xff
+							} else {
+								target[position++] = 0xdf
+								targetView.setUint32(position, length)
+								position += 4
+							}
+							for (let [key, entryValue] of value) {
+								pack(key)
+								pack(entryValue)
+							}
 						}
 					} else {	
 						for (let i = 0, l = extensions.length; i < l; i++) {
@@ -813,6 +816,7 @@ extensions = [{
 	}
 }, {
 	pack(set, allocateForWrite, pack) {
+		if (this.setAsEmptyObject) return pack({})
 		let array = Array.from(set)
 		let { target, position} = allocateForWrite(this.moreTypes ? 3 : 0)
 		if (this.moreTypes) {
