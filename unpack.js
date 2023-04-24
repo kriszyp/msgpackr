@@ -70,6 +70,8 @@ export class Unpackr {
 				return this ? this.unpack(source, options) : Unpackr.prototype.unpack.call(defaultOptions, source, options)
 			})
 		}
+		if (!source.buffer && source.constructor === ArrayBuffer)
+			source = typeof Buffer !== 'undefined' ? Buffer.from(source) : new Uint8Array(source);
 		if (typeof options === 'object') {
 			srcEnd = options.end || source.length
 			position = options.start || 0

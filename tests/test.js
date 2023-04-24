@@ -142,6 +142,15 @@ suite('msgpackr basic tests', function() {
 		var deserialized = unpack(serialized)
 		assert.equal(deserialized, data)
 	})
+	test('use ArrayBuffer', function () {
+		const data = {prop: 'a test'};
+		var serialized = pack(data)
+		let ab = new ArrayBuffer(serialized.length);
+		let u8 = new Uint8Array(ab);
+		u8.set(serialized);
+		var deserialized = unpack(ab)
+		assert.deepEqual(deserialized, data)
+	})
 	test('pack/unpack varying data with random access structures', function () {
 		let structures = []
 		let packr = new Packr({
