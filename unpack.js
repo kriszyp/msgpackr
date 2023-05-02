@@ -981,10 +981,10 @@ const recordDefinition = (id, highByte) => {
 currentExtensions[0] = () => {} // notepack defines extension 0 to mean undefined, so use that as the default here
 currentExtensions[0].noBuffer = true
 
-let global = typeof globalThis === 'object' ? globalThis : window;
+let glbl = typeof globalThis === 'object' ? globalThis : window;
 currentExtensions[0x65] = () => {
 	let data = read()
-	return (global[data[0]] || Error)(data[1])
+	return (glbl[data[0]] || Error)(data[1])
 }
 
 currentExtensions[0x69] = (data) => {
@@ -1028,7 +1028,7 @@ currentExtensions[0x74] = (data) => {
 	if (!typedArrayName)
 		throw new Error('Could not find typed array for code ' + typeCode)
 	// we have to always slice/copy here to get a new ArrayBuffer that is word/byte aligned
-	return new global[typedArrayName](Uint8Array.prototype.slice.call(data, 1).buffer)
+	return new glbl[typedArrayName](Uint8Array.prototype.slice.call(data, 1).buffer)
 }
 currentExtensions[0x78] = () => {
 	let data = read()
