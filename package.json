@@ -20,7 +20,7 @@
   },
   "scripts": {
     "benchmark": "node ./tests/benchmark.cjs",
-    "build": "rollup -c && cpy index.d.ts . --rename=index.d.cts",
+    "build": "rollup -c && cpy index.d.ts . --rename=index.d.cts && cpy pack.d.ts . --rename=pack.d.cts && cpy unpack.d.ts . --rename=unpack.d.cts",
     "dry-run": "npm publish --dry-run",
     "prepare": "npm run build",
     "test": "mocha tests/test**.*js -u tdd --experimental-json-modules"
@@ -28,6 +28,10 @@
   "type": "module",
   "exports": {
     ".": {
+      "types": {
+        "require": "./index.d.cts",
+        "import": "./index.d.ts"
+      },
       "node": {
         "require": "./dist/node.cjs",
         "import": "./node-index.js"
@@ -36,13 +40,13 @@
         "require": "./dist/node.cjs",
         "import": "./node-index.js"
       },
-      "types": {
-        "require": "./index.d.cts",
-        "import": "./index.d.ts"
-      },
       "default": "./index.js"
     },
     "./pack": {
+      "types": {
+        "require": "./pack.d.cts",
+        "import": "./pack.d.ts"
+      },
       "node": {
         "import": "./index.js",
         "require": "./dist/node.cjs"
@@ -54,6 +58,10 @@
       "default": "./pack.js"
     },
     "./unpack": {
+      "types": {
+        "require": "./unpack.d.cts",
+        "import": "./unpack.d.ts"
+      },
       "node": {
         "import": "./index.js",
         "require": "./dist/node.cjs"
