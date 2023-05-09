@@ -135,7 +135,6 @@ suite('msgpackr basic tests', function() {
 		var deserialized = packr.unpack(serialized)
 		assert.deepEqual(deserialized, data)
 	})
-
 	test('255 chars', function () {
 		const data = 'RRZG9A6I7xupPeOZhxcOcioFsuhszGOdyDUcbRf4Zef2kdPIfC9RaLO4jTM5JhuZvTsF09fbRHMGtqk7YAgu3vespeTe9l61ziZ6VrMnYu2CamK96wCkmz0VUXyqaiUoTPgzk414LS9yYrd5uh7w18ksJF5SlC2e91rukWvNqAZJjYN3jpkqHNOFchCwFrhbxq2Lrv1kSJPYCx9blRg2hGmYqTbElLTZHv20iNqwZeQbRMgSBPT6vnbCBPnOh1W'
 		var serialized = pack(data)

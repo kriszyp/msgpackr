@@ -816,7 +816,10 @@ extensions = [{
 	}
 }, {
 	pack(set, allocateForWrite, pack) {
-		if (this.setAsEmptyObject) return pack({})
+		if (this.setAsEmptyObject) {
+			allocateForWrite(0);
+			return pack({})
+		}
 		let array = Array.from(set)
 		let { target, position} = allocateForWrite(this.moreTypes ? 3 : 0)
 		if (this.moreTypes) {
