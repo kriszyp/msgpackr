@@ -3,6 +3,11 @@ import stream from 'stream'
 import chai from 'chai'
 import util from 'util'
 import fs from 'fs'
+let allSampleData = [];
+for (let i = 1; i < 6; i++) {
+	allSampleData.push(JSON.parse(fs.readFileSync(new URL(`./example${i > 1 ? i : ''}.json`, import.meta.url))));
+}
+
 const finished = util.promisify(stream.finished)
 var assert = chai.assert
 
@@ -66,6 +71,27 @@ suite('msgpackr node stream tests', function(){
 		setTimeout(() => serializeStream.end(), 10)
 		
 		await finished(serializeStream)
+	})
+	test('stream with records and bundleStrings', async function() {
+		const serializeStream = new PackrStream({
+			useRecords: true,
+			bundleStrings: true,
+		})
+		const parseStream = new UnpackrStream()
+		serializeStream.pipe(parseStream)
+		const received = []
+		parseStream.on('data', data => {
+			received.push(data)
+		})
+		const messages = allSampleData;
+		for (const message of messages)
+			serializeStream.write(message)
+		return new Promise((resolve, reject) => {
+			setTimeout(() => {
+				assert.deepEqual(received, messages)
+				resolve()
+			}, 10)
+		})
 	})
 	teardown(function() {
 		try {

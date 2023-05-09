@@ -233,8 +233,24 @@ suite('msgpackr basic tests', function() {
 			var deserialized = packr.unpack(serialized)
 			assert.deepEqual(deserialized, data)
 		});
-	}
 
+	}
+	test('mapAsEmptyObject combination', function () {
+		const msgpackr = new Packr({ useRecords: false, encodeUndefinedAsNil: true, variableMapSize: true, mapAsEmptyObject: true, setAsEmptyObject: true  });
+
+		const map = new Map();
+		map.set('a', 1);
+		map.set('b', 2);
+		const set = new Set();
+		set.add('a');
+		set.add('b');
+		const input = { map, set };
+
+		const packed = msgpackr.pack(input);
+		const unpacked = msgpackr.unpack(packed);
+		assert.deepEqual(unpacked.map, {});
+		assert.deepEqual(unpacked.set, {});
+	});
 	test('pack/unpack empty data with bundled strings', function () {
 		var data = {}
 		let packr = new Packr({bundleStrings: true})
