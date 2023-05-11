@@ -156,6 +156,17 @@ unpackMultiple(data, (value) => {
 	// return false if you wish to end the parsing
 })
 ```
+If you need to know the offset and byteLength of the unpacked values, these are
+provided as optional parameters in the callback:
+```js
+let data = new Uint8Array([1, 2, 3]) // encodings of values 1, 2, and 3
+unpackMultiple(data, (value,start,size) => {
+	// called for each value
+	// start is the offset in data buffer value was read from
+	// size is the number of bytes of the encoded value
+	// return false if you wish to end the parsing
+})
+```
 
 ## Options
 The following options properties can be provided to the Packr or Unpackr constructor:

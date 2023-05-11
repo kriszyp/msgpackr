@@ -1062,6 +1062,14 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(values, [1, 2, 3, 4])
 	})
 
+	test('unpackMultiple with positions', () => {
+		let values = unpackMultiple(new Uint8Array([1, 2, 3, 4]))
+		assert.deepEqual(values, [1, 2, 3, 4])
+		values = []
+		unpackMultiple(new Uint8Array([1, 2, 3, 4]), (value,start,size) => values.push([value,start,size]))
+		assert.deepEqual(values, [[1,0,1], [2,1,1], [3,2,1], [4,3,1]])
+	})
+
 })
 suite('msgpackr performance tests', function(){
 	test('performance JSON.parse', function() {
