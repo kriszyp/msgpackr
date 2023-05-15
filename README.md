@@ -156,14 +156,15 @@ unpackMultiple(data, (value) => {
 	// return false if you wish to end the parsing
 })
 ```
-If you need to know the offset and byteLength of the unpacked values, these are
+
+If you need to know the start and end offsets of the unpacked values, these are
 provided as optional parameters in the callback:
 ```js
 let data = new Uint8Array([1, 2, 3]) // encodings of values 1, 2, and 3
-unpackMultiple(data, (value,start,size) => {
+unpackMultiple(data, (value,start,end) => {
 	// called for each value
-	// start is the offset in data buffer value was read from
-	// size is the number of bytes of the encoded value
+	// `start` is the data buffer offset where the value was read from
+	// `end` is `start` plus the byte length of the encoded value
 	// return false if you wish to end the parsing
 })
 ```
