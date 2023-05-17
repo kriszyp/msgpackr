@@ -119,10 +119,10 @@ export class Unpackr {
 			let size = source.length
 			let value = this ? this.unpack(source, size) : defaultUnpackr.unpack(source, size)
 			if (forEach) {
-				if (forEach(value,lastPosition,position) === false) return;
+				if (forEach(value, lastPosition, position) === false) return;
 				while(position < size) {
 					lastPosition = position
-					if (forEach(checkedRead(),lastPosition,position) === false) {
+					if (forEach(checkedRead(), lastPosition, position) === false) {
 						return
 					}
 				}
