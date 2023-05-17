@@ -199,6 +199,10 @@ export function checkedRead(options) {
 			position = bundledStrings.postBundlePosition
 			bundledStrings = null
 		}
+		if (sequentialMode)
+			// we only need to restore the structures if there was an error, but if we completed a read,
+			// we can clear this out and keep the structures we read
+			currentStructures.restoreStructures = null
 
 		if (position == srcEnd) {
 			// finished reading this source, cleanup references
@@ -971,7 +975,10 @@ const recordDefinition = (id, highByte) => {
 		structure.highByte = highByte
 	}
 	let existingStructure = currentStructures[id]
-	if (existingStructure && existingStructure.isShared) {
+	// If it is a shared structure, we need to restore any changes after reading.
+	// Also in sequential mode, we may get incomplete reads and thus errors, and we need to restore
+	// to the state prior to an incomplete read in order to properly resume.
+	if (existingStructure && (existingStructure.isShared || sequentialMode)) {
 		(currentStructures.restoreStructures || (currentStructures.restoreStructures = []))[id] = existingStructure
 	}
 	currentStructures[id] = structure

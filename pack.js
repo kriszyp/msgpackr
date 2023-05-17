@@ -175,7 +175,7 @@ export class Packr extends Unpackr {
 					if (serializationsSinceTransitionRebuild < 10)
 						serializationsSinceTransitionRebuild++
 					let sharedLength = structures.sharedLength || 0
-					if (structures.length > sharedLength)
+					if (structures.length > sharedLength && !isSequential)
 						structures.length = sharedLength
 					if (transitionsCount > 10000) {
 						// force a rebuild occasionally after a lot of transitions so it can get cleaned up
