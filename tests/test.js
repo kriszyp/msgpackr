@@ -564,6 +564,22 @@ suite('msgpackr basic tests', function() {
 		assert.equal(deserialized.extendedInstance[0], 0)
 	})
 
+	test.skip('convert Date to string', function(){
+		var data = {
+			aDate: new Date(),
+		}
+		let packr = new Packr()
+		addExtension({
+			Class: Date,
+			write(date) {
+				return date.toString()
+			}
+		})
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.equal(deserialized.aDate, data.aDate.toString())
+	})
+
 	test('proto handling', function() {
 		var objectWithProto = JSON.parse('{"__proto__":{"foo":3}}');
 		var decoded = unpack(pack(objectWithProto));
