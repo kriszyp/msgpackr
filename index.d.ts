@@ -32,8 +32,8 @@ export interface Options {
 	onInvalidDate?: () => any
 }
 interface Extension {
-	Class: Function
-	type: number
+	Class?: Function
+	type?: number
 	pack?(value: any): Buffer | Uint8Array
 	unpack?(messagePack: Buffer | Uint8Array): any	
 	read?(datum: any): any
