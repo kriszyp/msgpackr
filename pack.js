@@ -525,7 +525,7 @@ export class Packr extends Unpackr {
 					target[position++] = 0
 				}
 			} else if (type === 'function') {
-				pack(this.writeFunction && this.writeFunction()) // if there is a writeFunction, use it, otherwise just encode as undefined
+				pack(this.writeFunction && this.writeFunction(value)) // if there is a writeFunction, use it, otherwise just encode as undefined
 			} else {
 				throw new Error('Unknown type: ' + type)
 			}
