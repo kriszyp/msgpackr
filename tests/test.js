@@ -411,9 +411,6 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(data, deserialized)
 	})
 
-	
-
-
 	test('unregistered extended Array class read/write', function(){
 		var instance = new ExtendArray2()
 		instance.push(0);
