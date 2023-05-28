@@ -383,7 +383,7 @@ export class Packr extends Unpackr {
 					targetView.setFloat64(position, value)
 					position += 8
 				}
-			} else if (type === 'object') {
+			} else if (type === 'object' || type === 'function') {
 				if (!value)
 					target[position++] = 0xc0
 				else {
@@ -490,6 +490,11 @@ export class Packr extends Unpackr {
 						} else {
 							if (value.toJSON) // use this as an alternate mechanism for expressing how to serialize
 								return pack(value.toJSON());
+							
+							// if there is a writeFunction, use it, otherwise just encode as undefined
+							if (constructor === Function)
+								return pack(this.writeFunction && this.writeFunction(value));
+							
 							// no extension found, write as object
 							writeObject(value, !value.hasOwnProperty) // if it doesn't have hasOwnProperty, don't do hasOwnProperty checks
 						}
@@ -524,8 +529,6 @@ export class Packr extends Unpackr {
 					target[position++] = 0
 					target[position++] = 0
 				}
-			} else if (type === 'function') {
-				pack(this.writeFunction && this.writeFunction(value)) // if there is a writeFunction, use it, otherwise just encode as undefined
 			} else {
 				throw new Error('Unknown type: ' + type)
 			}
