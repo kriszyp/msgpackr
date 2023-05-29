@@ -492,7 +492,7 @@ export class Packr extends Unpackr {
 								return pack(value.toJSON());
 							
 							// if there is a writeFunction, use it, otherwise just encode as undefined
-							if (constructor === Function)
+							if (type === 'function')
 								return pack(this.writeFunction && this.writeFunction(value));
 							
 							// no extension found, write as object
