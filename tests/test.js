@@ -411,7 +411,6 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(data, deserialized)
 	})
 
-
 	test('unregistered extended Array class read/write', function(){
 		var instance = new ExtendArray2()
 		instance.push(0);
@@ -562,6 +561,42 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(data, deserialized)
 		assert.strictEqual(Object.getPrototypeOf(deserialized.extendedInstance), ExtendArray3.prototype)
 		assert.equal(deserialized.extendedInstance[0], 0)
+	})
+
+	test('extended class pack/unpack proxied', function(){
+		function Extended() {
+			
+		}
+		Extended.prototype.__call__ = function(){
+			return this.value * 4
+		}
+		Extended.prototype.getDouble = function() {
+			return this.value * 2
+		}
+
+		var instance = function() { instance.__call__()/* callable stuff */ }
+		Object.setPrototypeOf(instance,Extended.prototype);
+		
+		instance.value = 4
+		var data = instance
+
+		let packr = new Packr()
+		addExtension({
+			Class: Extended,
+			type: 15,
+			unpack: function(buffer) {
+				var e = function() { e.__call__() }
+				Object.setPrototypeOf(e,Extended.prototype);
+				e.value = packr.unpack(buffer)
+				return e
+			},
+			pack: function(instance) {
+				return packr.pack(instance.value)
+			}
+		})
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.equal(deserialized.getDouble(), 8)
 	})
 
 	test.skip('convert Date to string', function(){
