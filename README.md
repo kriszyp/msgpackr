@@ -172,7 +172,7 @@ unpackMultiple(data, (value,start,end) => {
 ## Options
 The following options properties can be provided to the Packr or Unpackr constructor:
 
-* `useRecords` - Setting this to `false` disables the record extension and stores JavaScript objects as MessagePack maps, and unpacks maps as JavaScript `Object`s, which ensures compatibilty with other decoders.
+* `useRecords` - Setting this to `false` disables the record extension and stores JavaScript objects as MessagePack maps, and unpacks maps as JavaScript `Object`s, which ensures compatibilty with other decoders. Setting this to a function will use records for objects where `useRecords(object)` returns `true`.
 * `structures` - Provides the array of structures that is to be used for record extension, if you want the structures saved and used again. This array will be modified in place with new record structures that are serialized (if less than 32 structures are in the array).
 * `moreTypes` - Enable serialization of additional built-in types/classes including typed arrays, `Set`s, `Map`s, and `Error`s.
 * `structuredClone` - This enables the structured cloning extensions that will encode object/cyclic references. `moreTypes` is enabled by default when this is enabled.
