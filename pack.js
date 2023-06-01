@@ -534,7 +534,7 @@ export class Packr extends Unpackr {
 			}
 		}
 
-		const writeObject = this.useRecords === false ? this.variableMapSize ? (object) => {
+		const writePlainObject = this.variableMapSize ? (object) => {
 			// this method is slightly slower, but generates "preferred serialization" (optimally small for smaller objects)
 			let keys = Object.keys(object)
 			let length = keys.length
@@ -569,7 +569,9 @@ export class Packr extends Unpackr {
 			}
 			target[objectOffset++ + start] = size >> 8
 			target[objectOffset + start] = size & 0xff
-		} :
+		}
+
+		const writeRecord = this.useRecords === false ? writePlainObject :
 		(options.progressiveRecords && !useTwoByteRecords) ?  // this is about 2% faster for highly stable structures, since it only requires one for-in loop (but much more expensive when new structure needs to be written)
 		(object, safePrototype) => {
 			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null))
@@ -641,6 +643,14 @@ export class Packr extends Unpackr {
 				if (safePrototype || object.hasOwnProperty(key))
 					pack(object[key])
 		}
+
+		// craete reference to useRecords if useRecords is a function
+		const checkUseRecords = typeof this.useRecords == 'function' && this.useRecords;
+		
+		const writeObject = checkUseRecords ? (object, safePrototype) => {
+			checkUseRecords(object) ? writeRecord(object,safePrototype) : writePlainObject(object,safePrototype)
+		} : writeRecord
+
 		const makeRoom = (end) => {
 			let newSize
 			if (end > 0x1000000) {

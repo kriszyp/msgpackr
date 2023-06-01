@@ -233,8 +233,30 @@ suite('msgpackr basic tests', function() {
 			var deserialized = packr.unpack(serialized)
 			assert.deepEqual(deserialized, data)
 		});
-
 	}
+
+	test('pack/unpack sample data with useRecords function', function () {
+		var data = [
+			{id: 1, type: 1, labels: {a: 1, b: 2}},
+			{id: 2, type: 1, labels: {b: 1, c: 2}},
+			{id: 3, type: 1, labels: {d: 1, e: 2}}
+		]
+		
+		var alternatives = [
+			{useRecords: false}, // 88 bytes
+			{useRecords: true}, // 58 bytes
+			{mapsAsObjects: true, useRecords: (v)=>!!v.id}, // 55 bytes
+			{mapsAsObjects: true, variableMapSize: true, useRecords: (v)=>!!v.id} // 49 bytes
+		]
+
+		for(let o of alternatives) {
+			let packr = new Packr(o)
+			var serialized = packr.pack(data)
+			var deserialized = packr.unpack(serialized)
+			assert.deepEqual(deserialized, data)	
+		}
+	})
+
 	test('mapAsEmptyObject combination', function () {
 		const msgpackr = new Packr({ useRecords: false, encodeUndefinedAsNil: true, variableMapSize: true, mapAsEmptyObject: true, setAsEmptyObject: true  });
 
