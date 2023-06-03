@@ -988,10 +988,10 @@ const recordDefinition = (id, highByte) => {
 currentExtensions[0] = () => {} // notepack defines extension 0 to mean undefined, so use that as the default here
 currentExtensions[0].noBuffer = true
 
-let glbl = typeof globalThis === 'object' ? globalThis : window;
+let errors = { Error, TypeError, ReferenceError };
 currentExtensions[0x65] = () => {
 	let data = read()
-	return (glbl[data[0]] || Error)(data[1])
+	return (errors[data[0]] || Error)(data[1])
 }
 
 currentExtensions[0x69] = (data) => {
@@ -1029,6 +1029,7 @@ currentExtensions[0x73] = () => new Set(read())
 
 export const typedArrays = ['Int8','Uint8','Uint8Clamped','Int16','Uint16','Int32','Uint32','Float32','Float64','BigInt64','BigUint64'].map(type => type + 'Array')
 
+let glbl = typeof globalThis === 'object' ? globalThis : window;
 currentExtensions[0x74] = (data) => {
 	let typeCode = data[0]
 	let typedArrayName = typedArrays[typeCode]
