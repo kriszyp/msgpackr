@@ -273,6 +273,13 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(unpacked.map, {});
 		assert.deepEqual(unpacked.set, {});
 	});
+	test('pack/unpack numeric coercible keys', function () {
+		var data = { a: 1, 2: 'test', '-3.45': 'test2'}
+		let packr = new Packr({variableMapSize: true, coercibleKeyAsNumber: true, useRecords: false});
+		var serialized = packr.pack(data)
+		var deserialized = packr.unpack(serialized)
+		assert.deepEqual(deserialized, data)
+	})
 	test('pack/unpack empty data with bundled strings', function () {
 		var data = {}
 		let packr = new Packr({bundleStrings: true})

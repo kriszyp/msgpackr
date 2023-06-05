@@ -534,7 +534,7 @@ export class Packr extends Unpackr {
 			}
 		}
 
-		const writePlainObject = this.variableMapSize ? (object) => {
+		const writePlainObject = (this.variableMapSize || this.coercibleKeyAsNumber) ? (object) => {
 			// this method is slightly slower, but generates "preferred serialization" (optimally small for smaller objects)
 			let keys = Object.keys(object)
 			let length = keys.length
@@ -550,9 +550,19 @@ export class Packr extends Unpackr {
 				position += 4
 			}
 			let key
-			for (let i = 0; i < length; i++) {
-				pack(key = keys[i])
-				pack(object[key])
+			if (this.coercibleKeyAsNumber) {
+				for (let i = 0; i < length; i++) {
+					key = keys[i]
+					let num = Number(key)
+					pack(isNaN(num) ? key : num)
+					pack(object[key])
+				}
+
+			} else {
+				for (let i = 0; i < length; i++) {
+					pack(key = keys[i])
+					pack(object[key])
+				}
 			}
 		} :
 		(object, safePrototype) => {

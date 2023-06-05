@@ -14,6 +14,7 @@ export interface Options {
 	structuredClone?: boolean
 	mapsAsObjects?: boolean
 	variableMapSize?: boolean
+	coercibleKeyAsNumber?: boolean
 	copyBuffers?: boolean
 	bundleStrings?: boolean
 	useTimestamp32?: boolean
