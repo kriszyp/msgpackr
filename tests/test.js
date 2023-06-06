@@ -1150,6 +1150,17 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(values, [[1,0,1], [2,1,2], [3,2,3], [4,3,4]])
 	})
 
+	test('pack toJSON returning this', () => {
+		class Serializable {
+			someData = [1, 2, 3, 4]
+			toJSON() {
+				return this
+			}
+		}
+		const serialized = pack(new Serializable)
+		const deserialized = unpack(serialized)
+		assert.deepStrictEqual(deserialized, { someData: [1, 2, 3, 4] })
+	})
 })
 suite('msgpackr performance tests', function(){
 	test('performance JSON.parse', function() {
