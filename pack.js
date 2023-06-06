@@ -488,8 +488,13 @@ export class Packr extends Unpackr {
 						if (Array.isArray(value)) {
 							packArray(value)
 						} else {
-							if (value.toJSON) // use this as an alternate mechanism for expressing how to serialize
-								return pack(value.toJSON());
+							// use this as an alternate mechanism for expressing how to serialize
+							if (value.toJSON) {
+								const json = value.toJSON()
+								// if for some reason value.toJSON returns itself it'll loop forever
+								if (json !== value)
+									return pack(json)
+							}
 							
 							// if there is a writeFunction, use it, otherwise just encode as undefined
 							if (type === 'function')
