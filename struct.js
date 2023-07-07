@@ -717,11 +717,16 @@ function readStruct(src, position, srcEnd, unpackr) {
 				objectLiteralProperties.push('__proto__:this');
 			}
 			let toObject = (new Function(...args, 'return function(s){return{' + objectLiteralProperties.join(',') + '}}')).apply(null, properties.map(prop => prop.get));
-			Object.defineProperty(prototype, 'toJSON', {
-				value(omitUnderscoredProperties) {
-					return toObject.call(this, this[sourceSymbol]);
-				}
-			});
+			try {
+				Object.defineProperty(prototype, 'toJSON', {
+					value(omitUnderscoredProperties) {
+						return toObject.call(this, this[sourceSymbol]);
+					}
+				});
+			} catch(error) {
+				error.message += ' setting properties ' + JSON.stringify(properties);
+				throw error;
+			}
 		} else {
 			Object.defineProperty(prototype, 'toJSON', {
 				value(omitUnderscoredProperties) {
