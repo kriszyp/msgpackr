@@ -172,25 +172,9 @@ export class Packr extends Unpackr {
 				return target.subarray(start, position) // position can change if we call pack again in saveStructures, so we get the buffer now
 			} finally {
 				if (structures) {
-					if (serializationsSinceTransitionRebuild < 10)
-						serializationsSinceTransitionRebuild++
-					let sharedLength = structures.sharedLength || 0
-					if (structures.length > sharedLength && !isSequential)
-						structures.length = sharedLength
-					if (transitionsCount > 10000) {
-						// force a rebuild occasionally after a lot of transitions so it can get cleaned up
-						structures.transitions = null
-						serializationsSinceTransitionRebuild = 0
-						transitionsCount = 0
-						if (recordIdsToRemove.length > 0)
-							recordIdsToRemove = []
-					} else if (recordIdsToRemove.length > 0 && !isSequential) {
-						for (let i = 0, l = recordIdsToRemove.length; i < l; i++) {
-							recordIdsToRemove[i][RECORD_SYMBOL] = 0
-						}
-						recordIdsToRemove = []
-					}
+					resetStructures();
 					if (hasSharedUpdate && packr.saveStructures) {
+						let sharedLength = structures.sharedLength || 0
 						// we can't rely on start/end with REUSE_BUFFER_MODE since they will (probably) change when we save
 						let returnBuffer = target.subarray(start, position)
 						let newSharedData = prepareStructures(structures, packr);
@@ -204,6 +188,26 @@ export class Packr extends Unpackr {
 				}
 				if (encodeOptions & RESET_BUFFER_MODE)
 					position = start
+			}
+		}
+		const resetStructures = () => {
+			if (serializationsSinceTransitionRebuild < 10)
+				serializationsSinceTransitionRebuild++
+			let sharedLength = structures.sharedLength || 0
+			if (structures.length > sharedLength && !isSequential)
+				structures.length = sharedLength
+			if (transitionsCount > 10000) {
+				// force a rebuild occasionally after a lot of transitions so it can get cleaned up
+				structures.transitions = null
+				serializationsSinceTransitionRebuild = 0
+				transitionsCount = 0
+				if (recordIdsToRemove.length > 0)
+					recordIdsToRemove = []
+			} else if (recordIdsToRemove.length > 0 && !isSequential) {
+				for (let i = 0, l = recordIdsToRemove.length; i < l; i++) {
+					recordIdsToRemove[i][RECORD_SYMBOL] = 0
+				}
+				recordIdsToRemove = []
 			}
 		}
 		const packArray = (value) => {
@@ -655,8 +659,9 @@ export class Packr extends Unpackr {
 			}
 			// now write the values
 			for (let key in object)
-				if (safePrototype || object.hasOwnProperty(key))
+				if (safePrototype || object.hasOwnProperty(key)) {
 					pack(object[key])
+				}
 		}
 
 		// craete reference to useRecords if useRecords is a function
@@ -775,6 +780,7 @@ export class Packr extends Unpackr {
 				position = newPosition;
 				let startTarget = target;
 				pack(value);
+				resetStructures();
 				if (startTarget !== target) {
 					return { position, targetView, target }; // indicate the buffer was re-allocated
 				}
