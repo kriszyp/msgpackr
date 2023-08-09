@@ -132,25 +132,28 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 		switch (typeof value) {
 			case 'number':
 				let number = value;
-				if (number >> 0 === number && number < 0x20000000 && number > -0x1f000000) {
-					if (number < 0xf6 && number >= 0 && (nextTransition.num8 || number < 0x20 && !nextTransition.num32)) {
-						transition = nextTransition.num8 || createTypeTransition(nextTransition, NUMBER, 1);
-						target[position++] = number;
-					} else {
-						transition = nextTransition.num32 || createTypeTransition(nextTransition, NUMBER, 4);
-						targetView.setUint32(position, number, true);
-						position += 4;
-					}
-					break;
-				} else if (number < 0x100000000 && number >= -0x80000000) {
-					targetView.setFloat32(position, number, true);
-					if (float32Headers[target[position + 3] >>> 5]) {
-						let xShifted
-						// this checks for rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
-						if (((xShifted = number * mult10[((target[position + 3] & 0x7f) << 1) | (target[position + 2] >> 7)]) >> 0) === xShifted) {
+				// first check to see if we are using a lot of ids and should default to wide/common format
+				if (nextId < 200 || !nextTransition.num64) {
+					if (number >> 0 === number && number < 0x20000000 && number > -0x1f000000) {
+						if (number < 0xf6 && number >= 0 && (nextTransition.num8 && !(nextId > 200 && nextTransition.num32) || number < 0x20 && !nextTransition.num32)) {
+							transition = nextTransition.num8 || createTypeTransition(nextTransition, NUMBER, 1);
+							target[position++] = number;
+						} else {
 							transition = nextTransition.num32 || createTypeTransition(nextTransition, NUMBER, 4);
+							targetView.setUint32(position, number, true);
 							position += 4;
-							break;
+						}
+						break;
+					} else if (number < 0x100000000 && number >= -0x80000000) {
+						targetView.setFloat32(position, number, true);
+						if (float32Headers[target[position + 3] >>> 5]) {
+							let xShifted
+							// this checks for rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
+							if (((xShifted = number * mult10[((target[position + 3] & 0x7f) << 1) | (target[position + 2] >> 7)]) >> 0) === xShifted) {
+								transition = nextTransition.num32 || createTypeTransition(nextTransition, NUMBER, 4);
+								position += 4;
+								break;
+							}
 						}
 					}
 				}
