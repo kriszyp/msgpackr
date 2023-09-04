@@ -79,6 +79,7 @@ export class Packr extends Unpackr {
 			} else
 				position = (position + 7) & 0x7ffffff8 // Word align to make any future copying of this buffer faster
 			start = position
+			if (encodeOptions & RESERVE_START_SPACE) position += (encodeOptions & 0xff)
 			referenceMap = packr.structuredClone ? new Map() : null
 			if (packr.bundleStrings && typeof value !== 'string') {
 				bundledStrings = []
@@ -1054,3 +1055,4 @@ import { FLOAT32_OPTIONS } from './unpack.js'
 export const { NEVER, ALWAYS, DECIMAL_ROUND, DECIMAL_FIT } = FLOAT32_OPTIONS
 export const REUSE_BUFFER_MODE = 512
 export const RESET_BUFFER_MODE = 1024
+export const RESERVE_START_SPACE = 2048

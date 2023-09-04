@@ -172,8 +172,8 @@ export class Unpackr {
 		}
 		return this.structures = loadedStructures
 	}
-	decode(source, end) {
-		return this.unpack(source, end)
+	decode(source, options) {
+		return this.unpack(source, options)
 	}
 }
 export function getPosition() {
