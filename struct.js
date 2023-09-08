@@ -69,7 +69,7 @@ const encodeUtf8 = hasNodeBuffer ? function(target, string, position) {
 const TYPE = Symbol('type');
 const PARENT = Symbol('parent');
 setWriteStructSlots(writeStruct, prepareStructures);
-function writeStruct(object, target, position, structures, makeRoom, pack, packr) {
+function writeStruct(object, target, encodingStart, position, structures, makeRoom, pack, packr) {
 	let typedStructs = packr.typedStructs || (packr.typedStructs = []);
 	// note that we rely on pack.js to load stored structures before we get to this point
 	let targetView = target.dataView;
@@ -77,12 +77,12 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 	let safeEnd = target.length - 10;
 	let start = position;
 	if (position > safeEnd) {
-		let lastStart = start;
 		target = makeRoom(position);
 		targetView = target.dataView;
-		position -= lastStart;
-		refsStartPosition -= lastStart;
-		start = 0;
+		position -= encodingStart;
+		start -= encodingStart;
+		refsStartPosition -= encodingStart;
+		encodingStart = 0;
 		safeEnd = target.length - 10;
 	}
 
@@ -120,13 +120,13 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 			};
 		}
 		if (position > safeEnd) {
-			let lastStart = start;
 			target = makeRoom(position);
 			targetView = target.dataView;
-			position -= lastStart;
-			refsStartPosition -= lastStart;
-			refPosition -= lastStart;
-			start = 0;
+			position -= encodingStart;
+			start -= encodingStart;
+			refsStartPosition -= encodingStart;
+			refPosition -= encodingStart;
+			encodingStart = 0;
 			safeEnd = target.length - 10
 		}
 		switch (typeof value) {
@@ -165,13 +165,13 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 				let strLength = value.length;
 				refOffset = refPosition - refsStartPosition;
 				if ((strLength << 2) + refPosition > safeEnd) {
-					let lastStart = start;
 					target = makeRoom((strLength << 2) + refPosition);
 					targetView = target.dataView;
-					position -= lastStart;
-					refsStartPosition -= lastStart;
-					refPosition -= lastStart;
-					start = 0;
+					position -= encodingStart;
+					start -= encodingStart;
+					refsStartPosition -= encodingStart;
+					refPosition -= encodingStart;
+					encodingStart = 0;
 					safeEnd = target.length - 10
 				}
 				if (strLength > ((0xff00 + refOffset) >> 2)) {
@@ -330,9 +330,10 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 				refPosition = newPosition.position;
 				targetView = newPosition.targetView;
 				target = newPosition.target;
-				refsStartPosition -= start;
-				position -= start;
-				start = 0;
+				refsStartPosition -= encodingStart;
+				position -= encodingStart;
+				start -= encodingStart;
+				encodingStart = 0;
 			} else
 				refPosition = newPosition;
 			if (size === 2) {
@@ -406,7 +407,7 @@ function writeStruct(object, target, position, structures, makeRoom, pack, packr
 		if (refsStartPosition === refPosition)
 			return position; // no refs
 		typedStructs.lastStringStart = position - start;
-		return writeStruct(object, target, start, structures, makeRoom, pack, packr);
+		return writeStruct(object, target, encodingStart, start, structures, makeRoom, pack, packr);
 	}
 	return refPosition;
 }
