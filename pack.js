@@ -181,7 +181,7 @@ export class Packr extends Unpackr {
 						let newSharedData = prepareStructures(structures, packr);
 						if (packr.saveStructures(newSharedData, newSharedData.isCompatible) === false) {
 							// get updated structures and try again if the update failed
-							return packr.pack(value)
+							return packr.pack(value, encodeOptions)
 						}
 						packr.lastNamedStructuresLength = sharedLength
 						return returnBuffer
@@ -775,7 +775,7 @@ export class Packr extends Unpackr {
 			}
 		}
 		const writeStruct = (object, safePrototype) => {
-			let newPosition = writeStructSlots(object, target, position, structures, makeRoom, (value, newPosition, notifySharedUpdate) => {
+			let newPosition = writeStructSlots(object, target, start, position, structures, makeRoom, (value, newPosition, notifySharedUpdate) => {
 				if (notifySharedUpdate)
 					return hasSharedUpdate = true;
 				position = newPosition;
