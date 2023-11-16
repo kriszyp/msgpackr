@@ -121,6 +121,7 @@ export class Packr extends Unpackr {
 			}
 			if (hasSharedUpdate)
 				hasSharedUpdate = false
+			let encodingError;
 			try {
 				if (packr.randomAccessStructure && value && value.constructor && value.constructor === Object)
 					writeStruct(value);
@@ -171,6 +172,9 @@ export class Packr extends Unpackr {
 					return target
 				}
 				return target.subarray(start, position) // position can change if we call pack again in saveStructures, so we get the buffer now
+			} catch(error) {
+				encodingError = error;
+				throw error;
 			} finally {
 				if (structures) {
 					resetStructures();
@@ -179,12 +183,14 @@ export class Packr extends Unpackr {
 						// we can't rely on start/end with REUSE_BUFFER_MODE since they will (probably) change when we save
 						let returnBuffer = target.subarray(start, position)
 						let newSharedData = prepareStructures(structures, packr);
-						if (packr.saveStructures(newSharedData, newSharedData.isCompatible) === false) {
-							// get updated structures and try again if the update failed
-							return packr.pack(value, encodeOptions)
+						if (!encodingError) { // TODO: If there is an encoding error, should make the structures as uninitialized so they get rebuilt next time
+							if (packr.saveStructures(newSharedData, newSharedData.isCompatible) === false) {
+								// get updated structures and try again if the update failed
+								return packr.pack(value, encodeOptions)
+							}
+							packr.lastNamedStructuresLength = sharedLength
+							return returnBuffer
 						}
-						packr.lastNamedStructuresLength = sharedLength
-						return returnBuffer
 					}
 				}
 				if (encodeOptions & RESET_BUFFER_MODE)

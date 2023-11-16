@@ -643,6 +643,21 @@ suite('msgpackr basic tests', function() {
 		var deserialized = unpack(serialized)
 		assert.equal(deserialized.aDate, data.aDate.toString())
 	})
+	test('standard pack fails on circular reference with shared structures', function () {
+		var data = {}
+		data.self = data;
+		let structures = []
+		let savedStructures
+		let packr = new Packr({
+			structures,
+			saveStructures(structures) {
+				savedStructures = structures
+			}
+		})
+		assert.throws(function () {
+			packr.pack(data);
+		});
+	})
 
 	test('proto handling', function() {
 		var objectWithProto = JSON.parse('{"__proto__":{"foo":3}}');
