@@ -988,6 +988,17 @@ const recordDefinition = (id, highByte) => {
 currentExtensions[0] = () => {} // notepack defines extension 0 to mean undefined, so use that as the default here
 currentExtensions[0].noBuffer = true
 
+currentExtensions[0x42] = (data) => {
+	// decode bigint
+	let length = data.length;
+	let value = BigInt(data[0] & 0x80 ? data[0] - 0x100 : data[0]);
+	for (let i = 1; i < length; i++) {
+		value <<= 8n;
+		value += BigInt(data[i]);
+	}
+	return value;
+}
+
 let errors = { Error, TypeError, ReferenceError };
 currentExtensions[0x65] = () => {
 	let data = read()

@@ -532,8 +532,26 @@ export class Packr extends Unpackr {
 					if (this.largeBigIntToFloat) {
 						target[position++] = 0xcb
 						targetView.setFloat64(position, Number(value))
+					} else if (this.useBigIntExtension && value < 2n**(1023n) && value > -(2n**(1023n))) {
+						target[position++] = 0xc7
+						position++;
+						target[position++] = 0x42 // "B" for BigInt
+						let bytes = [];
+						let alignedSign;
+						do {
+							let byte = value & 0xffn;
+							alignedSign = (byte & 0x80n) === (value < 0n ? 0x80n : 0n);
+							bytes.push(byte);
+							value >>= 8n;
+						} while (!((value === 0n || value === -1n) && alignedSign));
+						target[position-2] = bytes.length;
+						for (let i = bytes.length; i > 0;) {
+							target[position++] = Number(bytes[--i]);
+						}
+						return
 					} else {
-						throw new RangeError(value + ' was too large to fit in MessagePack 64-bit integer format, set largeBigIntToFloat to convert to float-64')
+						throw new RangeError(value + ' was too large to fit in MessagePack 64-bit integer format, use' +
+							' useBigIntExtension or set largeBigIntToFloat to convert to float-64')
 					}
 				}
 				position += 8

@@ -374,6 +374,22 @@ suite('msgpackr basic tests', function() {
 		assert.equal(pack(123).length, 1)
 	})
 
+	test('BigInt', function() {
+		let packr = new Packr({useBigIntExtension: true})
+		let data = {
+			a: 3333333333333333333333333333n,
+			b: 1234567890123456789012345678901234567890n,
+			c: -3333333333333333333333333333n,
+			d: -352523523642364364364264264264264264262642642n,
+			e: 0xffffffffffffffffffffffffffn,
+			f: -0xffffffffffffffffffffffffffn,
+		}
+		let serialized = packr.pack(data)
+		let deserialized = packr.unpack(serialized)
+		assert.deepEqual(data, deserialized)
+	})
+
+
 	test('extended class pack/unpack', function(){
 		function Extended() {
 
