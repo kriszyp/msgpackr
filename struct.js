@@ -273,6 +273,8 @@ function writeStruct(object, target, encodingStart, position, structures, makeRo
 					position = updatedPosition;
 				} else queuedReferences.push(key, value, keyIndex);
 				break;
+			default:
+				queuedReferences.push(key, value, keyIndex);
 		}
 		keyIndex++;
 	}
