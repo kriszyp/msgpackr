@@ -914,7 +914,7 @@ function readKey() {
 			return readFixedString(length)
 	} else { // not cacheable, go back and do a standard read
 		position--
-		return read().toString()
+		return asSafeString(read())
 	}
 	let key = ((length << 5) ^ (length > 1 ? dataView.getUint16(position) : length > 0 ? src[position] : 0)) & 0xfff
 	let entry = keyCache[key]
@@ -966,9 +966,15 @@ function readKey() {
 	return entry.string = readFixedString(length)
 }
 
+function asSafeString(property) {
+	if (typeof property === 'string') return property;
+	if (typeof property === 'number') return property.toString();
+	throw new Error('Invalid property type for record', typeof property);
+}
 // the registration of the record definition extension (as "r")
 const recordDefinition = (id, highByte) => {
-	let structure = read().map(property => property.toString()) // ensure that all keys are strings and that the array is mutable
+	let structure = read().map(asSafeString) // ensure that all keys are strings and
+	// that the array is mutable
 	let firstByte = id
 	if (highByte !== undefined) {
 		id = id < 32 ? -((highByte << 5) + id) : ((highByte << 5) + id)
