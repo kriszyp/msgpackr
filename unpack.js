@@ -1013,6 +1013,7 @@ currentExtensions[0x65] = () => {
 
 currentExtensions[0x69] = (data) => {
 	// id extension (for structured clones)
+	if (currentUnpackr.structuredClone === false) throw new Error('Structured clone extension is disabled')
 	let id = dataView.getUint32(position - 4)
 	if (!referenceMap)
 		referenceMap = new Map()
@@ -1036,6 +1037,7 @@ currentExtensions[0x69] = (data) => {
 
 currentExtensions[0x70] = (data) => {
 	// pointer extension (for structured clones)
+	if (currentUnpackr.structuredClone === false) throw new Error('Structured clone extension is disabled')
 	let id = dataView.getUint32(position - 4)
 	let refEntry = referenceMap.get(id)
 	refEntry.used = true
