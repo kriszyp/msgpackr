@@ -967,8 +967,10 @@ function readKey() {
 }
 
 function asSafeString(property) {
+	// protect against expensive (DoS) string conversions
 	if (typeof property === 'string') return property;
-	if (typeof property === 'number') return property.toString();
+	if (typeof property === 'number' || typeof property === 'boolean' || typeof property === 'bigint') return property.toString();
+	if (property == null) return property + '';
 	throw new Error('Invalid property type for record', typeof property);
 }
 // the registration of the record definition extension (as "r")

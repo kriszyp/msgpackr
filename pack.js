@@ -415,7 +415,7 @@ export class Packr extends Unpackr {
 					}
 					let constructor = value.constructor
 					if (constructor === Object) {
-						writeObject(value, true)
+						writeObject(value)
 					} else if (constructor === Array) {
 						packArray(value)
 					} else if (constructor === Map) {
@@ -511,8 +511,8 @@ export class Packr extends Unpackr {
 							if (type === 'function')
 								return pack(this.writeFunction && this.writeFunction(value));
 							
-							// no extension found, write as object
-							writeObject(value, !value.hasOwnProperty) // if it doesn't have hasOwnProperty, don't do hasOwnProperty checks
+							// no extension found, write as plain object
+							writeObject(value)
 						}
 					}
 				}
@@ -599,13 +599,13 @@ export class Packr extends Unpackr {
 				}
 			}
 		} :
-		(object, safePrototype) => {
+		(object) => {
 			target[position++] = 0xde // always using map 16, so we can preallocate and set the length afterwards
 			let objectOffset = position - start
 			position += 2
 			let size = 0
 			for (let key in object) {
-				if (safePrototype || object.hasOwnProperty(key)) {
+				if (typeof object.hasOwnProperty !== 'function' || object.hasOwnProperty(key)) {
 					pack(key)
 					pack(object[key])
 					size++
@@ -617,12 +617,12 @@ export class Packr extends Unpackr {
 
 		const writeRecord = this.useRecords === false ? writePlainObject :
 		(options.progressiveRecords && !useTwoByteRecords) ?  // this is about 2% faster for highly stable structures, since it only requires one for-in loop (but much more expensive when new structure needs to be written)
-		(object, safePrototype) => {
+		(object) => {
 			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null))
 			let objectOffset = position++ - start
 			let wroteKeys
 			for (let key in object) {
-				if (safePrototype || object.hasOwnProperty(key)) {
+				if (typeof object.hasOwnProperty !== 'function' || object.hasOwnProperty(key)) {
 					nextTransition = transition[key]
 					if (nextTransition)
 						transition = nextTransition
@@ -661,10 +661,10 @@ export class Packr extends Unpackr {
 					insertNewRecord(transition, Object.keys(object), objectOffset, 0)
 			}
 		} :
-		(object, safePrototype) => {
+		(object) => {
 			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null))
 			let newTransitions = 0
-			for (let key in object) if (safePrototype || object.hasOwnProperty(key)) {
+			for (let key in object) if (typeof object.hasOwnProperty !== 'function' || object.hasOwnProperty(key)) {
 				nextTransition = transition[key]
 				if (!nextTransition) {
 					nextTransition = transition[key] = Object.create(null)
@@ -684,7 +684,7 @@ export class Packr extends Unpackr {
 			}
 			// now write the values
 			for (let key in object)
-				if (safePrototype || object.hasOwnProperty(key)) {
+				if (typeof object.hasOwnProperty !== 'function' || object.hasOwnProperty(key)) {
 					pack(object[key])
 				}
 		}
@@ -692,8 +692,8 @@ export class Packr extends Unpackr {
 		// craete reference to useRecords if useRecords is a function
 		const checkUseRecords = typeof this.useRecords == 'function' && this.useRecords;
 		
-		const writeObject = checkUseRecords ? (object, safePrototype) => {
-			checkUseRecords(object) ? writeRecord(object,safePrototype) : writePlainObject(object,safePrototype)
+		const writeObject = checkUseRecords ? (object) => {
+			checkUseRecords(object) ? writeRecord(object) : writePlainObject(object)
 		} : writeRecord
 
 		const makeRoom = (end) => {
@@ -798,7 +798,7 @@ export class Packr extends Unpackr {
 				target[insertionOffset + start] = keysTarget[0]
 			}
 		}
-		const writeStruct = (object, safePrototype) => {
+		const writeStruct = (object) => {
 			let newPosition = writeStructSlots(object, target, start, position, structures, makeRoom, (value, newPosition, notifySharedUpdate) => {
 				if (notifySharedUpdate)
 					return hasSharedUpdate = true;
@@ -812,7 +812,7 @@ export class Packr extends Unpackr {
 				return position;
 			}, this);
 			if (newPosition === 0) // bail and go to a msgpack object
-				return writeObject(object, true);
+				return writeObject(object);
 			position = newPosition;
 		}
 	}

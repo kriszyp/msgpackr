@@ -805,6 +805,13 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(deserialized, data)
 	})
 
+	test('object with __proto__', function(){
+		const data = { foo: 'bar', __proto__: { isAdmin: true } };
+		var serialized = pack(data)
+		var deserialized = unpack(serialized)
+		assert.deepEqual(deserialized, { foo: 'bar' });
+	})
+
 	test('separate instances', function() {
 		const packr = new Packr({
 			structures: [['m', 'e'], ['action', 'share']]
