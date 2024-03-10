@@ -189,10 +189,14 @@ export class Packr extends Unpackr {
 								return packr.pack(value, encodeOptions)
 							}
 							packr.lastNamedStructuresLength = sharedLength
+							// don't keep large buffers around
+							if (target.length > 0x40000000) target = null
 							return returnBuffer
 						}
 					}
 				}
+				// don't keep large buffers around, they take too much memory and cause problems (limit at 1GB)
+				if (target.length > 0x40000000) target = null
 				if (encodeOptions & RESET_BUFFER_MODE)
 					position = start
 			}
