@@ -900,7 +900,7 @@ extensions = [{
 			target[position++] = 0x65 // 'e' for error
 			target[position++] = 0
 		}
-		pack([ error.name, error.message ])
+		pack([ error.name, error.message, error.cause ])
 	}
 }, {
 	pack(regex, allocateForWrite, pack) {

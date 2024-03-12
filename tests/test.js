@@ -703,6 +703,24 @@ suite('msgpackr basic tests', function() {
 			}
 	})
 
+	test('moreTyesp: Error with causes', function() {
+		const object = {
+			error: new Error('test'),
+			errorWithCause: new Error('test-1', { cause: new Error('test-2')}),
+		}
+		const packr = new Packr({
+			moreTypes: true,
+		})
+
+		const serialized = packr.pack(object)
+		const deserialized = packr.unpack(serialized)
+		assert.equal(deserialized.error.message, object.error.message)
+		assert.equal(deserialized.error.cause, object.error.cause)
+		assert.equal(deserialized.errorWithCause.message, object.errorWithCause.message)
+		assert.equal(deserialized.errorWithCause.cause.message, object.errorWithCause.cause.message)
+		assert.equal(deserialized.errorWithCause.cause.cause, object.errorWithCause.cause.cause)
+	})
+
 	test('structured cloning: self reference', function() {
 		let object = {
 			test: 'string',
