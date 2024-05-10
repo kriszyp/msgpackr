@@ -708,8 +708,12 @@ suite('msgpackr basic tests', function() {
 			test: 'string',
 			children: [
 				{ name: 'child' }
-			]
+			],
+			value: new ArrayBuffer(10)
 		}
+		let u8 = new Uint8Array(object.value)
+		u8[0] = 1
+		u8[1] = 2
 		object.self = object
 		object.children[1] = object
 		object.children[2] = object.children[0]
@@ -725,6 +729,10 @@ suite('msgpackr basic tests', function() {
 		assert.equal(deserialized.children[1], deserialized)
 		assert.equal(deserialized.children[0], deserialized.children[2])
 		assert.equal(deserialized.children, deserialized.childrenAgain)
+		assert.equal(deserialized.value.constructor.name, 'ArrayBuffer')
+		u8 = new Uint8Array(deserialized.value)
+		assert.equal(u8[0], 1)
+		assert.equal(u8[1], 2)
 	})
 
 	test('structured cloning: types', function() {

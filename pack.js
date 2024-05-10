@@ -953,6 +953,7 @@ function writeExtBuffer(typedArray, type, allocateForWrite, encode) {
 	}
 	target[position++] = 0x74 // "t" for typed array
 	target[position++] = type
+	if (!typedArray.buffer) typedArray = new Uint8Array(typedArray)
 	target.set(new Uint8Array(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength), position)
 }
 function writeBuffer(buffer, allocateForWrite) {
