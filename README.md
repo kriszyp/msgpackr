@@ -188,6 +188,7 @@ The following options properties can be provided to the Packr or Unpackr constru
 * `encodeUndefinedAsNil` - Encodes a value of `undefined` as a MessagePack `nil`, the same as a `null`.
 * `int64AsType` - This will decode uint64 and int64 numbers as the specified type. The type can be `bigint` (default), `number`,  `string`, or `auto` (where range [-2^53...2^53] is represented by number and everything else by a bigint). 
 * `onInvalidDate` - This can be provided as function that will be called when an invalid date is provided. The function can throw an error, or return a value that will be encoded in place of the invalid date. If not provided, an invalid date will be encoded as an invalid timestamp (which decodes with msgpackr back to an invalid date).
+* `writeFunction` - This can be provided as function that will be called when a function is encountered. The function can throw an error, or return a value that will be encoded in place of the function. If not provided, a function will be encoded as undefined (similar to `JSON.stringify`).
 * `mapAsEmptyObject` - Encodes JS `Map`s as empty objects (for back-compat with older libraries).
 * `setAsEmptyObject` - Encodes JS `Set`s as empty objects (for back-compat with older libraries).
 
