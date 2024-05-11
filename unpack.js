@@ -1010,7 +1010,7 @@ currentExtensions[0x42] = (data) => {
 let errors = { Error, TypeError, ReferenceError };
 currentExtensions[0x65] = () => {
 	let data = read()
-	return (errors[data[0]] || Error)(data[1])
+	return (errors[data[0]] || Error)(data[1], { cause: data[2] })
 }
 
 currentExtensions[0x69] = (data) => {
