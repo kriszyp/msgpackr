@@ -38,7 +38,7 @@ interface Extension {
 	Class?: Function
 	type?: number
 	pack?(value: any): Buffer | Uint8Array
-	unpack?(messagePack: Buffer | Uint8Array): any	
+	unpack?(messagePack: Buffer | Uint8Array): any
 	read?(datum: any): any
 	write?(instance: any): any
 }
@@ -63,10 +63,16 @@ export let isNativeAccelerationEnabled: boolean
 export class Packr extends Unpackr {
 	pack(value: any): Buffer
 	encode(value: any): Buffer
+	useBuffer(buffer: Buffer): void;
+	clearSharedData(): void;
 }
 export class Encoder extends Packr {}
 export function pack(value: any): Buffer
 export function encode(value: any): Buffer
+
+export const REUSE_BUFFER_MODE: number;
+export const RESET_BUFFER_MODE: number;
+export const RESERVE_START_SPACE: number;
 
 import { Transform, Readable } from 'stream'
 
