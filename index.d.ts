@@ -42,18 +42,19 @@ interface Extension {
 	read?(datum: any): any
 	write?(instance: any): any
 }
+export type UnpackOptions = { start?: number; end?: number; lazy?: boolean; } | number;
 export class Unpackr {
 	constructor(options?: Options)
-	unpack(messagePack: Buffer | Uint8Array): any
-	decode(messagePack: Buffer | Uint8Array): any
+	unpack(messagePack: Buffer | Uint8Array, options?: UnpackOptions): any
+	decode(messagePack: Buffer | Uint8Array, options?: UnpackOptions): any
 	unpackMultiple(messagePack: Buffer | Uint8Array): any[]
 	unpackMultiple(messagePack: Buffer | Uint8Array, forEach: (value: any, start?: number, end?: number) => any): void
 }
 export class Decoder extends Unpackr {}
-export function unpack(messagePack: Buffer | Uint8Array): any
+export function unpack(messagePack: Buffer | Uint8Array, options?: UnpackOptions): any
 export function unpackMultiple(messagePack: Buffer | Uint8Array): any[]
 export function unpackMultiple(messagePack: Buffer | Uint8Array, forEach: (value: any, start?: number, end?: number) => any): void
-export function decode(messagePack: Buffer | Uint8Array): any
+export function decode(messagePack: Buffer | Uint8Array, options?: UnpackOptions): any
 export function addExtension(extension: Extension): void
 export function clearSource(): void
 export function roundFloat32(float32Number: number): number
@@ -61,14 +62,14 @@ export const C1: {}
 export let isNativeAccelerationEnabled: boolean
 
 export class Packr extends Unpackr {
-	pack(value: any): Buffer
-	encode(value: any): Buffer
+	pack(value: any, encodeOptions?: number): Buffer
+	encode(value: any, encodeOptions?: number): Buffer
 	useBuffer(buffer: Buffer): void;
 	clearSharedData(): void;
 }
 export class Encoder extends Packr {}
-export function pack(value: any): Buffer
-export function encode(value: any): Buffer
+export function pack(value: any, encodeOptions?: number): Buffer
+export function encode(value: any, encodeOptions?: number): Buffer
 
 export const REUSE_BUFFER_MODE: number;
 export const RESET_BUFFER_MODE: number;
