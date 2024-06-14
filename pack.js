@@ -53,7 +53,7 @@ export class Packr extends Unpackr {
 		if (!this.structures && options.useRecords != false)
 			this.structures = []
 		// two byte record ids for shared structures
-		let useTwoByteRecords = maxSharedStructures > 32 || (maxOwnStructures + maxSharedStructures > 64)		
+		let useTwoByteRecords = maxSharedStructures > 32 || (maxOwnStructures + maxSharedStructures > 64)
 		let sharedLimitId = maxSharedStructures + 0x40
 		let maxStructureId = maxSharedStructures + maxOwnStructures + 0x40
 		if (maxStructureId > 8256) {
@@ -71,7 +71,7 @@ export class Packr extends Unpackr {
 			}
 			safeEnd = target.length - 10
 			if (safeEnd - position < 0x800) {
-				// don't start too close to the end, 
+				// don't start too close to the end,
 				target = new ByteArrayAllocate(target.length)
 				targetView = target.dataView || (target.dataView = new DataView(target.buffer, 0, target.length))
 				safeEnd = target.length - 10
@@ -414,7 +414,7 @@ export class Packr extends Unpackr {
 							targetView.setUint32(position, referee.id)
 							position += 4
 							return
-						} else 
+						} else
 							referenceMap.set(value, { offset: position - start })
 					}
 					let constructor = value.constructor
@@ -442,7 +442,7 @@ export class Packr extends Unpackr {
 								pack(entryValue)
 							}
 						}
-					} else {	
+					} else {
 						for (let i = 0, l = extensions.length; i < l; i++) {
 							let extensionClass = extensionClasses[i]
 							if (value instanceof extensionClass) {
@@ -510,11 +510,11 @@ export class Packr extends Unpackr {
 								if (json !== value)
 									return pack(json)
 							}
-							
+
 							// if there is a writeFunction, use it, otherwise just encode as undefined
 							if (type === 'function')
 								return pack(this.writeFunction && this.writeFunction(value));
-							
+
 							// no extension found, write as plain object
 							writeObject(value)
 						}
@@ -695,7 +695,7 @@ export class Packr extends Unpackr {
 
 		// craete reference to useRecords if useRecords is a function
 		const checkUseRecords = typeof this.useRecords == 'function' && this.useRecords;
-		
+
 		const writeObject = checkUseRecords ? (object) => {
 			checkUseRecords(object) ? writeRecord(object) : writePlainObject(object)
 		} : writeRecord
@@ -825,6 +825,12 @@ export class Packr extends Unpackr {
 		target = buffer
 		targetView = new DataView(target.buffer, target.byteOffset, target.byteLength)
 		position = 0
+	}
+	set position (value) {
+		position = value;
+	}
+	get position() {
+		return position;
 	}
 	clearSharedData() {
 		if (this.structures)
