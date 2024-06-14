@@ -62,6 +62,7 @@ export const C1: {}
 export let isNativeAccelerationEnabled: boolean
 
 export class Packr extends Unpackr {
+	offset: number;
 	pack(value: any, encodeOptions?: number): Buffer
 	encode(value: any, encodeOptions?: number): Buffer
 	useBuffer(buffer: Buffer): void;
