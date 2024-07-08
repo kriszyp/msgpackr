@@ -504,6 +504,8 @@ function readStruct(src, position, srcEnd, unpackr) {
 		src = Uint8Array.prototype.slice.call(src, position, srcEnd);
 		srcEnd -= position;
 		position = 0;
+		if (!unpackr.getStructures)
+			throw new Error(`Reference to shared structure ${recordId} without getStructures method`);
 		unpackr._mergeStructures(unpackr.getStructures());
 		if (!unpackr.typedStructs)
 			throw new Error('Could not find any shared typed structures');
