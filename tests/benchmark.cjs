@@ -22,7 +22,7 @@ msgpack_codec = msgpack_codec && msgpack_codec.msgpack;
 what_the_pack = what_the_pack && what_the_pack.initialize(2**20);
 
 var pkg = require("../package.json");
-var data = require("./example5.json");
+var data = require("./example4.json");
 var packed = msgpack_lite && msgpack_lite.encode(data);
 var expected = JSON.stringify(data);
 
@@ -54,31 +54,15 @@ if (msgpackr) {
   buf = bench('msgpackr w/ shared structures: packr.pack(obj);', packr.pack.bind(packr), data);
   console.log('buffer size', buf.length);
   //buf = bench('msgpackr w/ shared structures: packr.pack(obj);', data => {let result = packr.pack(data); packr.resetMemory(); return result;}, data);
-  obj = bench('msgpackr w/ shared structures: packr.unpack(buf);', value => {
-	let o = packr.unpack(value);
-    return o.biggerNum;
-/*	for (let i of keys) {
-		last = o[i];
-	}
-	return last;*/
-  }, buf);
+  obj = bench('msgpackr w/ shared structures: packr.unpack(buf);', value => packr.unpack(value), buf);
   test(obj);
 
   packr = new msgpackr.Packr({ structures: [],randomAccessStructure: true, saveStructures(structures) {
-      console.log('saved',{structures});
     } })
-  console.log('starting')
   buf = bench('msgpackr w/ random access structures: packr.pack(obj);', value => packr.pack(value), data);
   //buf = bench('msgpackr w/ shared structures: packr.pack(obj);', data => {let result = packr.pack(data); packr.resetMemory(); return result;}, data);
   console.log('buffer size', buf.length);
-  obj = bench('msgpackr w/ random access structures: packr.unpack(buf);', value => {
-	let o = packr.unpack(value);
-  return o.biggerNum;
-/*	for (let i of keys) {
-		last = o[i];
-	}
-	return last;*/
-  }, buf);
+  obj = bench('msgpackr w/ random access structures: packr.unpack(buf);', value => packr.unpack(value), buf);
   test(obj);
 
   packr = new msgpackr.Packr({ useRecords: false })
