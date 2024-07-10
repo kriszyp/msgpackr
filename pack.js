@@ -572,9 +572,19 @@ export class Packr extends Unpackr {
 			}
 		}
 
-		const writePlainObject = (this.variableMapSize || this.coercibleKeyAsNumber) ? (object) => {
+		const writePlainObject = (this.variableMapSize || this.coercibleKeyAsNumber || this.skipValues) ? (object) => {
 			// this method is slightly slower, but generates "preferred serialization" (optimally small for smaller objects)
-			let keys = Object.keys(object)
+			let keys;
+			if (this.skipValues) {
+				keys = [];
+				for (let key in object) {
+					if ((typeof object.hasOwnProperty !== 'function' || object.hasOwnProperty(key)) &&
+						!this.skipValues.includes(object[key]))
+						keys.push(key);
+				}
+			} else {
+				keys = Object.keys(object)
+			}
 			let length = keys.length
 			if (length < 0x10) {
 				target[position++] = 0x80 | length
@@ -693,7 +703,7 @@ export class Packr extends Unpackr {
 				}
 		}
 
-		// craete reference to useRecords if useRecords is a function
+		// create reference to useRecords if useRecords is a function
 		const checkUseRecords = typeof this.useRecords == 'function' && this.useRecords;
 
 		const writeObject = checkUseRecords ? (object) => {
@@ -837,12 +847,6 @@ export class Packr extends Unpackr {
 			this.structures = []
 		if (this.typedStructs)
 			this.typedStructs = []
-	}
-}
-
-function copyBinary(source, target, targetOffset, offset, endOffset) {
-	while (offset < endOffset) {
-		target[targetOffset++] = source[offset++]
 	}
 }
 
