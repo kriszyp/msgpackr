@@ -1225,6 +1225,54 @@ suite('msgpackr basic tests', function() {
 		const deserialized = unpack(serialized)
 		assert.deepStrictEqual(deserialized, { someData: [1, 2, 3, 4] })
 	})
+	test('skip values', function () {
+		var data = {
+			data: [
+				{ a: 1, name: 'one', type: 'odd', isOdd: true },
+				{ a: 2, name: 'two', type: 'even', isOdd: undefined },
+				{ a: 3, name: 'three', type: 'odd', isOdd: true },
+				{ a: 4, name: 'four', type: 'even', isOdd: null},
+				{ a: 5, name: 'five', type: 'odd', isOdd: true },
+				{ a: 6, name: 'six', type: 'even', isOdd: null }
+			],
+			description: 'some names',
+			types: ['odd', 'even'],
+			convertEnumToNum: [
+				{ prop: 'test' },
+				{ prop: 'test' },
+				{ prop: 'test' },
+				{ prop: 1 },
+				{ prop: 2 },
+				{ prop: [undefined, null] },
+				{ prop: null }
+			]
+		}
+		var expected = {
+			data: [
+				{ a: 1, name: 'one', type: 'odd', isOdd: true },
+				{ a: 2, name: 'two', type: 'even' },
+				{ a: 3, name: 'three', type: 'odd', isOdd: true },
+				{ a: 4, name: 'four', type: 'even', },
+				{ a: 5, name: 'five', type: 'odd', isOdd: true },
+				{ a: 6, name: 'six', type: 'even' }
+			],
+			description: 'some names',
+			types: ['odd', 'even'],
+			convertEnumToNum: [
+				{ prop: 'test' },
+				{ prop: 'test' },
+				{ prop: 'test' },
+				{ prop: 1 },
+				{ prop: 2 },
+				{ prop: [undefined, null] },
+				{}
+			]
+		}
+		let packr = new Packr({ useRecords: false, skipValues: [undefined, null] })
+		var serialized = packr.pack(data)
+		var deserialized = packr.unpack(serialized)
+		assert.deepEqual(deserialized, expected)
+	})
 })
 suite('msgpackr performance tests', function(){
 	test('performance JSON.parse', function() {
@@ -1271,56 +1319,5 @@ suite('msgpackr performance tests', function(){
 			//var serializedGzip = deflateSync(serialized)
 		}
 		//console.log('serialized', serialized.length, global.propertyComparisons)
-	})
-	test('sparse objects', function () {
-		var data = {
-			data: [
-				{ a: 1, name: 'one', type: 'odd', isOdd: true },
-				{ a: 2, name: 'two', type: 'even', isOdd: undefined },
-				{ a: 3, name: 'three', type: 'odd', isOdd: true },
-				{ a: 4, name: 'four', type: 'even', isOdd: null},
-				{ a: 5, name: 'five', type: 'odd', isOdd: true },
-				{ a: 6, name: 'six', type: 'even', isOdd: null }
-			],
-			description: 'some names',
-			types: ['odd', 'even'],
-			convertEnumToNum: [
-				{ prop: 'test' },
-				{ prop: 'test' },
-				{ prop: 'test' },
-				{ prop: 1 },
-				{ prop: 2 },
-				{ prop: [undefined, null] },
-				{ prop: null }
-			]
-		}
-		var expected = {
-			data: [
-				{ a: 1, name: 'one', type: 'odd', isOdd: true },
-				{ a: 2, name: 'two', type: 'even' },
-				{ a: 3, name: 'three', type: 'odd', isOdd: true },
-				{ a: 4, name: 'four', type: 'even', },
-				{ a: 5, name: 'five', type: 'odd', isOdd: true },
-				{ a: 6, name: 'six', type: 'even' }
-			],
-			description: 'some names',
-			types: ['odd', 'even'],
-			convertEnumToNum: [
-				{ prop: 'test' },
-				{ prop: 'test' },
-				{ prop: 'test' },
-				{ prop: 1 },
-				{ prop: 2 },
-				{ prop: [undefined, null] },
-				{}
-			]
-		}
-		let structures = []
-		let packr = new Packr({ structures })
-		var serialized = packr.pack(data)
-		serialized = packr.pack(data)
-		serialized = packr.pack(data)
-		var deserialized = packr.unpack(serialized)
-		assert.deepEqual(deserialized, data)
 	})
 })
