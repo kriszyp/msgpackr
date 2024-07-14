@@ -833,7 +833,7 @@ export class Packr extends Unpackr {
 	useBuffer(buffer) {
 		// this means we are finished using our own buffer and we can write over it safely
 		target = buffer
-		targetView = new DataView(target.buffer, target.byteOffset, target.byteLength)
+		target.dataView || (target.dataView = new DataView(target.buffer, target.byteOffset, target.byteLength))
 		position = 0
 	}
 	set position (value) {
