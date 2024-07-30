@@ -536,7 +536,7 @@ export class Packr extends Unpackr {
 					if (this.largeBigIntToFloat) {
 						target[position++] = 0xcb
 						targetView.setFloat64(position, Number(value))
-					} else if (this.useBigIntExtension && value < 2n**(1023n) && value > -(2n**(1023n))) {
+					} else if (this.useBigIntExtension && value < BigInt(2)**BigInt(1023) && value > -(BigInt(2)**BigInt(1023))) {
 						target[position++] = 0xc7
 						position++;
 						target[position++] = 0x42 // "B" for BigInt
@@ -544,10 +544,10 @@ export class Packr extends Unpackr {
 						let alignedSign;
 						do {
 							let byte = value & 0xffn;
-							alignedSign = (byte & 0x80n) === (value < 0n ? 0x80n : 0n);
+							alignedSign = (byte & BigInt(0x80)) === (value < BigInt(0) ? BigInt(0x80) : BigInt(0));
 							bytes.push(byte);
-							value >>= 8n;
-						} while (!((value === 0n || value === -1n) && alignedSign));
+							value >>= BigInt(8);
+						} while (!((value === BigInt(0) || value === BigInt(-1)) && alignedSign));
 						target[position-2] = bytes.length;
 						for (let i = bytes.length; i > 0;) {
 							target[position++] = Number(bytes[--i]);

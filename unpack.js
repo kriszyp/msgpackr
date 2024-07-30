@@ -1001,7 +1001,7 @@ currentExtensions[0x42] = (data) => {
 	let length = data.length;
 	let value = BigInt(data[0] & 0x80 ? data[0] - 0x100 : data[0]);
 	for (let i = 1; i < length; i++) {
-		value <<= 8n;
+		value <<= BigInt(8);
 		value += BigInt(data[i]);
 	}
 	return value;
