@@ -543,7 +543,7 @@ export class Packr extends Unpackr {
 						let bytes = [];
 						let alignedSign;
 						do {
-							let byte = value & 0xffn;
+							let byte = value & BigInt(0xff);
 							alignedSign = (byte & BigInt(0x80)) === (value < BigInt(0) ? BigInt(0x80) : BigInt(0));
 							bytes.push(byte);
 							value >>= BigInt(8);
