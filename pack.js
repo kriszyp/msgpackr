@@ -536,6 +536,8 @@ export class Packr extends Unpackr {
 					if (this.largeBigIntToFloat) {
 						target[position++] = 0xcb
 						targetView.setFloat64(position, Number(value))
+					} else if (this.largeBigIntToString) {
+						return pack(value.toString());
 					} else if (this.useBigIntExtension && value < BigInt(2)**BigInt(1023) && value > -(BigInt(2)**BigInt(1023))) {
 						target[position++] = 0xc7
 						position++;
@@ -555,7 +557,8 @@ export class Packr extends Unpackr {
 						return
 					} else {
 						throw new RangeError(value + ' was too large to fit in MessagePack 64-bit integer format, use' +
-							' useBigIntExtension or set largeBigIntToFloat to convert to float-64')
+							' useBigIntExtension, or set largeBigIntToFloat to convert to float-64, or set' +
+							' largeBigIntToString to convert to string')
 					}
 				}
 				position += 8
