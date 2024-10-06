@@ -273,7 +273,7 @@ addExtension({
 	pack(instance) {
 		// define how your custom class should be encoded
 		return Buffer.from([instance.myData]); // return a buffer
-	}
+	},
 	unpack(buffer) {
 		// define how your custom class should be decoded
 		let instance = new MyCustomClass();
