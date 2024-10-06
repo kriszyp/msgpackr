@@ -628,6 +628,10 @@ export class Packr extends Unpackr {
 					size++
 				}
 			}
+			if (size > 0xffff) {
+				throw new Error('Object is too large to serialize with fast 16-bit map size,' +
+				' use the "variableMapSize" option to serialize this object');
+			}
 			target[objectOffset++ + start] = size >> 8
 			target[objectOffset + start] = size & 0xff
 		}
