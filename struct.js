@@ -808,3 +808,4 @@ function prepareStructures(structures, packr) {
 }
 
 setReadStruct(readStruct, onLoadedStructures, saveState);
+
