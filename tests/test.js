@@ -1153,6 +1153,13 @@ suite('msgpackr basic tests', function() {
 		serialized = packr.pack(tooBigInt)
 		deserialized = unpack(serialized)
 		assert.isTrue(deserialized.tooBig > 2n**65n)
+
+		packr = new Packr({
+			largeBigIntToString: true
+		})
+		serialized = packr.pack(tooBigInt)
+		deserialized = unpack(serialized)
+		assert.equal(deserialized.tooBig, (2n**66n).toString())
 	})
 
 	test('roundFloat32', function() {
