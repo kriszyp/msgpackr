@@ -986,7 +986,7 @@ function writeBuffer(buffer, allocateForWrite) {
 		target[position++] = length >> 8
 		target[position++] = length & 0xff
 	} else {
-		let { target, position, targetView } = allocateForWrite(length + 5)
+		var { target, position, targetView } = allocateForWrite(length + 5)
 		target[position++] = 0xc6
 		targetView.setUint32(position, length)
 		position += 4
