@@ -28,7 +28,7 @@ export class Packr extends Unpackr {
 		let structures
 		let referenceMap
 		let encodeUtf8 = ByteArray.prototype.utf8Write ? function(string, position) {
-			return target.utf8Write(string, position, 0xffffffff)
+			return target.utf8Write(string, position, target.byteLength - position)
 		} : (textEncoder && textEncoder.encodeInto) ?
 			function(string, position) {
 				return textEncoder.encodeInto(string, target.subarray(position)).written

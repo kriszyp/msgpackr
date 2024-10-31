@@ -60,7 +60,7 @@ try {
 	textEncoder = new TextEncoder()
 } catch (error) {}
 const encodeUtf8 = hasNodeBuffer ? function(target, string, position) {
-	return target.utf8Write(string, position, 0xffffffff)
+	return target.utf8Write(string, position, target.byteLength - position)
 } : (textEncoder && textEncoder.encodeInto) ?
 	function(target, string, position) {
 		return textEncoder.encodeInto(string, target.subarray(position)).written
