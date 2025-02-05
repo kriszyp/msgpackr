@@ -970,7 +970,7 @@ function asSafeString(property) {
 	// protect against expensive (DoS) string conversions
 	if (property == null) return property + '';
 	if (['string', 'number', 'boolean', 'bigint'].includes(typeof property)) return property.toString();
-	if (Array.isArray(property) && property.flat().every(item => ['string', 'number', 'boolean', 'bigint'].includes(typeof item))) {
+	if (currentUnpackr.allowArraysInMapKeys && Array.isArray(property) && property.flat().every(item => ['string', 'number', 'boolean', 'bigint'].includes(typeof item))) {
 		return property.flat().toString();
 	}
 	throw new Error(`Invalid property type for record: ${typeof property}`);
