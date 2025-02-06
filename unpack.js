@@ -968,8 +968,9 @@ function readKey() {
 
 function asSafeString(property) {
 	// protect against expensive (DoS) string conversions
+	if (typeof property === 'string') return property;
+	if (typeof property === 'number' || typeof property === 'boolean' || typeof property === 'bigint') return property.toString();
 	if (property == null) return property + '';
-	if (['string', 'number', 'boolean', 'bigint'].includes(typeof property)) return property.toString();
 	if (currentUnpackr.allowArraysInMapKeys && Array.isArray(property) && property.flat().every(item => ['string', 'number', 'boolean', 'bigint'].includes(typeof item))) {
 		return property.flat().toString();
 	}
