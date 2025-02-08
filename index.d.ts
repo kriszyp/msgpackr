@@ -26,6 +26,7 @@ export interface Options {
 	maxOwnStructures?: number
 	mapAsEmptyObject?: boolean
 	setAsEmptyObject?: boolean
+	allowArraysInMapKeys?: boolean
 	writeFunction?: () => any
 	/** @deprecated use int64AsType: 'number' */
 	int64AsNumber?: boolean

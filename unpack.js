@@ -971,7 +971,10 @@ function asSafeString(property) {
 	if (typeof property === 'string') return property;
 	if (typeof property === 'number' || typeof property === 'boolean' || typeof property === 'bigint') return property.toString();
 	if (property == null) return property + '';
-	throw new Error('Invalid property type for record', typeof property);
+	if (currentUnpackr.allowArraysInMapKeys && Array.isArray(property) && property.flat().every(item => ['string', 'number', 'boolean', 'bigint'].includes(typeof item))) {
+		return property.flat().toString();
+	}
+	throw new Error(`Invalid property type for record: ${typeof property}`);
 }
 // the registration of the record definition extension (as "r")
 const recordDefinition = (id, highByte) => {

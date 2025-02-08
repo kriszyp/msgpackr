@@ -703,7 +703,7 @@ suite('msgpackr basic tests', function() {
 			}
 	})
 
-	test('moreTyesp: Error with causes', function() {
+	test('moreTypes: Error with causes', function() {
 		const object = {
 			error: new Error('test'),
 			errorWithCause: new Error('test-1', { cause: new Error('test-2')}),
@@ -1196,6 +1196,18 @@ suite('msgpackr basic tests', function() {
 		var deserialized = unpack(serialized)
 		var deserialized = unpack(serialized)
 		assert.deepEqual(deserialized, data)
+	})
+
+	test('arrays in map keys', function() {
+		const msgpackr = new Packr({ mapsAsObjects: true, allowArraysInMapKeys: true });
+
+		const map = new Map();
+		map.set([1, 2, 3], 1);
+		map.set([1, 2, ['foo', 3.14]], 2);
+
+		const packed = msgpackr.pack(map);
+		const unpacked = msgpackr.unpack(packed);
+		assert.deepEqual(unpacked, { '1,2,3': 1, '1,2,foo,3.14': 2 });
 	})
 
 	test('utf16 causing expansion', function() {
