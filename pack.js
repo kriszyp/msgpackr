@@ -538,22 +538,21 @@ export class Packr extends Unpackr {
 						targetView.setFloat64(position, Number(value))
 					} else if (this.largeBigIntToString) {
 						return pack(value.toString());
-					} else if (this.useBigIntExtension && value < BigInt(2)**BigInt(1023) && value > -(BigInt(2)**BigInt(1023))) {
-						target[position++] = 0xc7
-						position++;
-						target[position++] = 0x42 // "B" for BigInt
-						let bytes = [];
-						let alignedSign;
+					} else if (this.useBigIntExtension || this.moreTypes) {
+						let empty = value < BigInt(0) ? BigInt(-1) : BigInt(0)
+						let mask = BigInt(0x10000000000000000) - BigInt(1) // literal would overflow
+						let chunks = []
 						do {
-							let byte = value & BigInt(0xff);
-							alignedSign = (byte & BigInt(0x80)) === (value < BigInt(0) ? BigInt(0x80) : BigInt(0));
-							bytes.push(byte);
-							value >>= BigInt(8);
-						} while (!((value === BigInt(0) || value === BigInt(-1)) && alignedSign));
-						target[position-2] = bytes.length;
-						for (let i = bytes.length; i > 0;) {
-							target[position++] = Number(bytes[--i]);
-						}
+							chunks.push(value & mask)
+							value >>= BigInt(64)
+						} while (value !== empty)
+
+						let array = new Uint8Array(new BigUint64Array(chunks).buffer)
+						array.reverse()
+
+						if (chunks.length + position > safeEnd)
+							makeRoom(chunks.length + position)
+						position = writeExtensionData(array, target, position, 0x42)
 						return
 					} else {
 						throw new RangeError(value + ' was too large to fit in MessagePack 64-bit integer format, use' +
