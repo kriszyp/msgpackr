@@ -767,6 +767,30 @@ suite('msgpackr basic tests', function() {
 		assert.equal(u8[1], 2)
 	})
 
+	test('structured cloning: self reference with more types', function() {
+		let set = new Set()
+		set.add(['hello', 1, 2, { map: new Map([[set, set], ['a', 'b']]) }])
+
+		let packr = new Packr({
+			moreTypes: true,
+			structuredClone: true,
+		})
+		let serialized = packr.pack(set)
+		let deserialized = packr.unpack(serialized)
+		assert.equal(deserialized.constructor.name, 'Set')
+		let map = Array.from(deserialized)[0][3].map
+		assert.equal(map.get(deserialized), deserialized)
+
+		let sizeTest = new Set()
+		for (let i = 0; i < 50; i++) {
+			sizeTest.add(i || sizeTest)
+			let deserialized = packr.unpack(packr.pack(sizeTest))
+			assert.equal(deserialized.size, i + 1)
+			assert(deserialized.has(deserialized))
+			assert(deserialized.has(i || deserialized))
+		}
+	})
+
 	test('structured cloning: types', function() {
 		let b = typeof Buffer != 'undefined' ? Buffer.alloc(20) : new Uint8Array(20)
 		let fa = new Float32Array(b.buffer, 8, 2)

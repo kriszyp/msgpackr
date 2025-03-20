@@ -1050,20 +1050,33 @@ currentExtensions[0x69] = (data) => {
 		referenceMap = new Map()
 	let token = src[position]
 	let target
-	// TODO: handle Maps, Sets, and other types that can cycle; this is complicated, because you potentially need to read
-	// ahead past references to record structure definitions
+	// TODO: handle any other types that can cycle and make the code more robust if there are other extensions
 	if (token >= 0x90 && token < 0xa0 || token == 0xdc || token == 0xdd)
 		target = []
+	else if (token == 0xde || token == 0xdf)
+		target = new Map()
+	else if ((token >= 0xc7 && token <= 0xc9 || token >= 0xd4 && token <= 0xd8) && src[position + 1] === 0x73)
+		target = new Set()
 	else
 		target = {}
 
 	let refEntry = { target } // a placeholder object
 	referenceMap.set(id, refEntry)
 	let targetProperties = read() // read the next value as the target object to id
-	if (refEntry.used) // there is a cycle, so we have to assign properties to original target
-		return Object.assign(target, targetProperties)
-	refEntry.target = targetProperties // the placeholder wasn't used, replace with the deserialized one
-	return targetProperties // no cycle, can just use the returned read object
+	if (!refEntry.used) {
+		// no cycle, can just use the returned read object
+		return refEntry.target = targetProperties // replace the placeholder with the real one
+	} else {
+		// there is a cycle, so we have to assign properties to original target
+		Object.assign(target, targetProperties)
+	}
+
+	// copy over map/set entries if we're able to
+	if (target instanceof Map)
+		for (let [k, v] of targetProperties.entries()) target.set(k, v)
+	if (target instanceof Set)
+		for (let i of Array.from(targetProperties)) target.add(i)
+	return target
 }
 
 currentExtensions[0x70] = (data) => {
