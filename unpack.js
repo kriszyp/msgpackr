@@ -1082,18 +1082,16 @@ export const typedArrays = ['Int8','Uint8','Uint8Clamped','Int16','Uint16','Int3
 let glbl = typeof globalThis === 'object' ? globalThis : window;
 currentExtensions[0x74] = (data) => {
 	let typeCode = data[0]
+	// we always have to slice to get a new ArrayBuffer that is aligned
+	let buffer = Uint8Array.prototype.slice.call(data, 1).buffer
+
 	let typedArrayName = typedArrays[typeCode]
 	if (!typedArrayName) {
-		if (typeCode === 16) {
-			let ab = new ArrayBuffer(data.length - 1)
-			let u8 = new Uint8Array(ab)
-			u8.set(data.subarray(1))
-			return ab;
-		}
+		if (typeCode === 16) return buffer
+		if (typeCode === 17) return new DataView(buffer)
 		throw new Error('Could not find typed array for code ' + typeCode)
 	}
-	// we have to always slice/copy here to get a new ArrayBuffer that is word/byte aligned
-	return new glbl[typedArrayName](Uint8Array.prototype.slice.call(data, 1).buffer)
+	return new glbl[typedArrayName](buffer)
 }
 currentExtensions[0x78] = () => {
 	let data = read()

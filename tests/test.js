@@ -777,7 +777,9 @@ suite('msgpackr basic tests', function() {
 			set: new Set(['a', 'b']),
 			regexp: /test/gi,
 			float32Array: fa,
-			uint16Array: new Uint16Array([3,4])
+			uint16Array: new Uint16Array([3, 4]),
+			arrayBuffer: new Uint8Array([0xde, 0xad]).buffer,
+			dataView: new DataView(new Uint8Array([0xbe, 0xef]).buffer),
 		}
 		let packr = new Packr({
 			moreTypes: true,
@@ -794,6 +796,10 @@ suite('msgpackr basic tests', function() {
 		assert.equal(deserialized.uint16Array.constructor.name, 'Uint16Array')
 		assert.equal(deserialized.uint16Array[0], 3)
 		assert.equal(deserialized.uint16Array[1], 4)
+		assert.equal(deserialized.arrayBuffer.constructor.name, 'ArrayBuffer')
+		assert.equal(new DataView(deserialized.arrayBuffer).getUint16(), 0xdead)
+		assert.equal(deserialized.dataView.constructor.name, 'DataView')
+		assert.equal(deserialized.dataView.getUint16(), 0xbeef)
 	})
 	test('big bundledStrings', function() {
 		const MSGPACK_OPTIONS = {bundleStrings: true}

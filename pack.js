@@ -856,7 +856,7 @@ export class Packr extends Unpackr {
 	}
 }
 
-extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/, C1Type ]
+extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/, DataView, C1Type ]
 extensions = [{
 	pack(date, allocateForWrite, pack) {
 		let seconds = date.getTime() / 1000
@@ -942,6 +942,13 @@ extensions = [{
 			writeExtBuffer(typedArray, typedArrays.indexOf(constructor.name), allocateForWrite)
 		else
 			writeBuffer(typedArray, allocateForWrite)
+	}
+}, {
+	pack(arrayBuffer, allocateForWrite) {
+		if (this.moreTypes)
+			writeExtBuffer(arrayBuffer, 0x11, allocateForWrite)
+		else
+			writeBuffer(hasNodeBuffer ? Buffer.from(arrayBuffer) : new Uint8Array(arrayBuffer), allocateForWrite)
 	}
 }, {
 	pack(c1, allocateForWrite) { // specific 0xC1 object
