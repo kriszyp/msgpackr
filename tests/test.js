@@ -389,7 +389,15 @@ suite('msgpackr basic tests', function() {
 			j: (-1234n << 1234n) ^ (5678n << 567n) ^ 890n,
 			k: 0xdeadn << 0xbeefn,
 			l: -0xdeadn << 0xbeefn,
+			m: 11n << 0x11111n ^ 111n,
+			n: -11n << 0x11111n ^ 111n,
+			array: [],
 		}
+
+		for (let n = 7n; n.toString(16).length * 4 < 150000; n *= n) {
+			data.array.push(n, -n)
+		}
+
 		let serialized = packr.pack(data)
 		let deserialized = packr.unpack(serialized)
 		assert.deepEqual(data, deserialized)
