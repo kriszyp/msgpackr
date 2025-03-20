@@ -1132,13 +1132,13 @@ currentExtensions[0xff] = (data) => {
 		return new Date(
 			((data[0] << 22) + (data[1] << 14) + (data[2] << 6) + (data[3] >> 2)) / 1000000 +
 			((data[3] & 0x3) * 0x100000000 + data[4] * 0x1000000 + (data[5] << 16) + (data[6] << 8) + data[7]) * 1000)
-	else if (data.length == 12)// TODO: Implement support for negative
+	else if (data.length == 12)
 		return new Date(
 			((data[0] << 24) + (data[1] << 16) + (data[2] << 8) + data[3]) / 1000000 +
 			(((data[4] & 0x80) ? -0x1000000000000 : 0) + data[6] * 0x10000000000 + data[7] * 0x100000000 + data[8] * 0x1000000 + (data[9] << 16) + (data[10] << 8) + data[11]) * 1000)
 	else
 		return new Date('invalid')
-} // notepack defines extension 0 to mean undefined, so use that as the default here
+}
 // registration of bulk record definition?
 // currentExtensions[0x52] = () =>
 
