@@ -1053,7 +1053,7 @@ currentExtensions[0x69] = (data) => {
 	// TODO: handle any other types that can cycle and make the code more robust if there are other extensions
 	if (token >= 0x90 && token < 0xa0 || token == 0xdc || token == 0xdd)
 		target = []
-	else if (token == 0xde || token == 0xdf)
+	else if (token >= 0x80 && token < 0x90 || token == 0xde || token == 0xdf)
 		target = new Map()
 	else if ((token >= 0xc7 && token <= 0xc9 || token >= 0xd4 && token <= 0xd8) && src[position + 1] === 0x73)
 		target = new Set()
