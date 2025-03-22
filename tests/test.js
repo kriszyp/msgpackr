@@ -789,10 +789,19 @@ suite('msgpackr basic tests', function() {
 		let map = Array.from(deserialized)[0][3].map
 		assert.equal(map.get(deserialized), deserialized)
 
-		let sizeTest = new Set()
+		let sizeTestMap = new Map()
 		for (let i = 0; i < 50; i++) {
-			sizeTest.add(i || sizeTest)
-			let deserialized = packr.unpack(packr.pack(sizeTest))
+			sizeTestMap.set(i || sizeTestMap, sizeTestMap)
+			let deserialized = packr.unpack(packr.pack(sizeTestMap))
+			assert.equal(deserialized.size, i + 1)
+			assert(deserialized.has(deserialized))
+			assert(deserialized.has(i || deserialized))
+		}
+
+		let sizeTestSet = new Set()
+		for (let i = 0; i < 50; i++) {
+			sizeTestSet.add(i || sizeTestSet)
+			let deserialized = packr.unpack(packr.pack(sizeTestSet))
 			assert.equal(deserialized.size, i + 1)
 			assert(deserialized.has(deserialized))
 			assert(deserialized.has(i || deserialized))
