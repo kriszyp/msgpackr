@@ -523,11 +523,11 @@ export class Packr extends Unpackr {
 			} else if (type === 'boolean') {
 				target[position++] = value ? 0xc3 : 0xc2
 			} else if (type === 'bigint') {
-				if (value < (BigInt(1)<<BigInt(63)) && value >= -(BigInt(1)<<BigInt(63))) {
+				if (value < 0x8000000000000000 && value >= -0x8000000000000000) {
 					// use a signed int as long as it fits
 					target[position++] = 0xd3
 					targetView.setBigInt64(position, value)
-				} else if (value < (BigInt(1)<<BigInt(64)) && value > 0) {
+				} else if (value < 0x10000000000000000 && value > 0) {
 					// if we can fit an unsigned int, use that
 					target[position++] = 0xcf
 					targetView.setBigUint64(position, value)
@@ -539,19 +539,44 @@ export class Packr extends Unpackr {
 					} else if (this.largeBigIntToString) {
 						return pack(value.toString());
 					} else if (this.useBigIntExtension || this.moreTypes) {
-						let empty = value < BigInt(0) ? BigInt(-1) : BigInt(0)
-						let mask = BigInt(0x10000000000000000) - BigInt(1) // literal would overflow
-						let chunks = []
-						do {
-							chunks.push(value & mask)
-							value >>= BigInt(64)
-						} while (value !== empty)
+						let empty = value < 0 ? BigInt(-1) : BigInt(0)
 
-						let array = new Uint8Array(new BigUint64Array(chunks).buffer)
-						array.reverse()
+						let array
+						if (value >> BigInt(0x10000) === empty) {
+							let mask = BigInt(0x10000000000000000) - BigInt(1) // literal would overflow
+							let chunks = []
+							do {
+								chunks.push(value & mask)
+								value >>= BigInt(64)
+							} while (value !== empty)
 
-						if (chunks.length + position > safeEnd)
-							makeRoom(chunks.length + position)
+							array = new Uint8Array(new BigUint64Array(chunks).buffer)
+							array.reverse()
+						} else {
+							let invert = value < 0
+							let string = (invert ? ~value : value).toString(16)
+							if (string.length % 2) {
+								string = '0' + string
+							} else if (parseInt(string.charAt(0), 16) >= 8) {
+								string = '00' + string
+							}
+
+							if (hasNodeBuffer) {
+								array = Buffer.from(string, 'hex')
+							} else {
+								array = new Uint8Array(string.length / 2)
+								for (let i = 0; i < array.length; i++) {
+									array[i] = parseInt(string.slice(i * 2, i * 2 + 2), 16)
+								}
+							}
+
+							if (invert) {
+								for (let i = 0; i < array.length; i++) array[i] = ~array[i]
+							}
+						}
+
+						if (array.length + position > safeEnd)
+							makeRoom(array.length + position)
 						position = writeExtensionData(array, target, position, 0x42)
 						return
 					} else {
@@ -856,7 +881,7 @@ export class Packr extends Unpackr {
 	}
 }
 
-extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/, C1Type ]
+extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/, DataView, C1Type ]
 extensions = [{
 	pack(date, allocateForWrite, pack) {
 		let seconds = date.getTime() / 1000
@@ -942,6 +967,13 @@ extensions = [{
 			writeExtBuffer(typedArray, typedArrays.indexOf(constructor.name), allocateForWrite)
 		else
 			writeBuffer(typedArray, allocateForWrite)
+	}
+}, {
+	pack(arrayBuffer, allocateForWrite) {
+		if (this.moreTypes)
+			writeExtBuffer(arrayBuffer, 0x11, allocateForWrite)
+		else
+			writeBuffer(hasNodeBuffer ? Buffer.from(arrayBuffer) : new Uint8Array(arrayBuffer), allocateForWrite)
 	}
 }, {
 	pack(c1, allocateForWrite) { // specific 0xC1 object

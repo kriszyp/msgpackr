@@ -389,7 +389,15 @@ suite('msgpackr basic tests', function() {
 			j: (-1234n << 1234n) ^ (5678n << 567n) ^ 890n,
 			k: 0xdeadn << 0xbeefn,
 			l: -0xdeadn << 0xbeefn,
+			m: 11n << 0x11111n ^ 111n,
+			n: -11n << 0x11111n ^ 111n,
+			array: [],
 		}
+
+		for (let n = 7n; n.toString(16).length * 4 < 150000; n *= n) {
+			data.array.push(n, -n)
+		}
+
 		let serialized = packr.pack(data)
 		let deserialized = packr.unpack(serialized)
 		assert.deepEqual(data, deserialized)
@@ -767,6 +775,39 @@ suite('msgpackr basic tests', function() {
 		assert.equal(u8[1], 2)
 	})
 
+	test('structured cloning: self reference with more types', function() {
+		let set = new Set()
+		set.add(['hello', 1, 2, { map: new Map([[set, set], ['a', 'b']]) }])
+
+		let packr = new Packr({
+			moreTypes: true,
+			structuredClone: true,
+		})
+		let serialized = packr.pack(set)
+		let deserialized = packr.unpack(serialized)
+		assert.equal(deserialized.constructor.name, 'Set')
+		let map = Array.from(deserialized)[0][3].map
+		assert.equal(map.get(deserialized), deserialized)
+
+		let sizeTestMap = new Map()
+		for (let i = 0; i < 50; i++) {
+			sizeTestMap.set(i || sizeTestMap, sizeTestMap)
+			let deserialized = packr.unpack(packr.pack(sizeTestMap))
+			assert.equal(deserialized.size, i + 1)
+			assert(deserialized.has(deserialized))
+			assert(deserialized.has(i || deserialized))
+		}
+
+		let sizeTestSet = new Set()
+		for (let i = 0; i < 50; i++) {
+			sizeTestSet.add(i || sizeTestSet)
+			let deserialized = packr.unpack(packr.pack(sizeTestSet))
+			assert.equal(deserialized.size, i + 1)
+			assert(deserialized.has(deserialized))
+			assert(deserialized.has(i || deserialized))
+		}
+	})
+
 	test('structured cloning: types', function() {
 		let b = typeof Buffer != 'undefined' ? Buffer.alloc(20) : new Uint8Array(20)
 		let fa = new Float32Array(b.buffer, 8, 2)
@@ -777,7 +818,9 @@ suite('msgpackr basic tests', function() {
 			set: new Set(['a', 'b']),
 			regexp: /test/gi,
 			float32Array: fa,
-			uint16Array: new Uint16Array([3,4])
+			uint16Array: new Uint16Array([3, 4]),
+			arrayBuffer: new Uint8Array([0xde, 0xad]).buffer,
+			dataView: new DataView(new Uint8Array([0xbe, 0xef]).buffer),
 		}
 		let packr = new Packr({
 			moreTypes: true,
@@ -794,6 +837,10 @@ suite('msgpackr basic tests', function() {
 		assert.equal(deserialized.uint16Array.constructor.name, 'Uint16Array')
 		assert.equal(deserialized.uint16Array[0], 3)
 		assert.equal(deserialized.uint16Array[1], 4)
+		assert.equal(deserialized.arrayBuffer.constructor.name, 'ArrayBuffer')
+		assert.equal(new DataView(deserialized.arrayBuffer).getUint16(), 0xdead)
+		assert.equal(deserialized.dataView.constructor.name, 'DataView')
+		assert.equal(deserialized.dataView.getUint16(), 0xbeef)
 	})
 	test('big bundledStrings', function() {
 		const MSGPACK_OPTIONS = {bundleStrings: true}
