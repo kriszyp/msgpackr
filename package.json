@@ -32,6 +32,7 @@
         "require": "./index.d.cts",
         "import": "./index.d.ts"
       },
+      "browser": "./index.js",
       "node": {
         "require": "./dist/node.cjs",
         "import": "./node-index.js"
@@ -47,6 +48,7 @@
         "require": "./pack.d.cts",
         "import": "./pack.d.ts"
       },
+      "browser": "./pack.js",
       "node": {
         "import": "./index.js",
         "require": "./dist/node.cjs"
@@ -62,6 +64,7 @@
         "require": "./unpack.d.cts",
         "import": "./unpack.d.ts"
       },
+      "browser": "./unpack.js",
       "node": {
         "import": "./index.js",
         "require": "./dist/node.cjs"
