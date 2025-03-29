@@ -6,6 +6,7 @@
 [![types](https://img.shields.io/npm/types/msgpackr)](README.md)
 [![module](https://img.shields.io/badge/module-ESM%2FCJS-blue)](README.md)
 [![license](https://img.shields.io/badge/license-MIT-brightgreen)](LICENSE)
+[![libs.tech recommends](https://libs.tech/project/286586192/badge.svg)](https://libs.tech/project/286586192/msgpackr)
 
 <img align="right" src="./assets/performance.png" width="380"/>
 
