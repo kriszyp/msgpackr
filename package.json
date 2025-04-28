@@ -1,12 +1,13 @@
 {
   "name": "msgpackr",
   "author": "Kris Zyp",
-  "version": "1.11.2",
+  "version": "1.11.3",
   "description": "Ultra-fast MessagePack implementation with extensions for records and structured cloning",
   "license": "MIT",
   "types": "./index.d.ts",
   "main": "./dist/node.cjs",
   "module": "./index.js",
+  "react-native": "./index.js",
   "keywords": [
     "MessagePack",
     "msgpack",
