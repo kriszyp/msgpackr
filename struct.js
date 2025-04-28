@@ -515,10 +515,14 @@ function readStruct(src, position, srcEnd, unpackr) {
 			throw new Error('Could not find typed structure ' + recordId);
 	}
 	var construct = structure.construct;
+	var fullConstruct = structure.fullConstruct;
 	if (!construct) {
 		construct = structure.construct = function LazyObject() {
 		}
-		var prototype = construct.prototype;
+		fullConstruct = structure.fullConstruct = function LoadedObject() {
+		}
+		fullConstruct.prototype = unpackr.structPrototype ?? {};
+		var prototype = construct.prototype = unpackr.structPrototype ? Object.create(unpackr.structPrototype) : {};
 		let properties = [];
 		let currentOffset = 0;
 		let lastRefProperty;
@@ -719,12 +723,12 @@ function readStruct(src, position, srcEnd, unpackr) {
 				Object.defineProperty(prototype, property.key, { get: withSource(property.get), enumerable: true });
 				let valueFunction = 'v' + i++;
 				args.push(valueFunction);
-				objectLiteralProperties.push('[' + JSON.stringify(property.key) + ']:' + valueFunction + '(s)');
+				objectLiteralProperties.push('o[' + JSON.stringify(property.key) + ']=' + valueFunction + '(s)');
 			}
 			if (hasInheritedProperties) {
 				objectLiteralProperties.push('__proto__:this');
 			}
-			let toObject = (new Function(...args, 'return function(s){return{' + objectLiteralProperties.join(',') + '}}')).apply(null, properties.map(prop => prop.get));
+			let toObject = (new Function(...args, 'var c=this;return function(s){var o=new c();' + objectLiteralProperties.join(';') + ';return o;}')).apply(fullConstruct, properties.map(prop => prop.get));
 			Object.defineProperty(prototype, 'toJSON', {
 				value(omitUnderscoredProperties) {
 					return toObject.call(this, this[sourceSymbol]);
