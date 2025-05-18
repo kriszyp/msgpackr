@@ -391,6 +391,7 @@ suite('msgpackr basic tests', function() {
 			l: -0xdeadn << 0xbeefn,
 			m: 11n << 0x11111n ^ 111n,
 			n: -11n << 0x11111n ^ 111n,
+			o: -12345678901234567890n,
 			array: [],
 		}
 
