@@ -521,7 +521,7 @@ function readStruct(src, position, srcEnd, unpackr) {
 		}
 		fullConstruct = structure.fullConstruct = function LoadedObject() {
 		}
-		fullConstruct.prototype = unpackr.structPrototype ?? {};
+		fullConstruct.prototype = unpackr.structPrototype || {};
 		var prototype = construct.prototype = unpackr.structPrototype ? Object.create(unpackr.structPrototype) : {};
 		let properties = [];
 		let currentOffset = 0;
