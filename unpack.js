@@ -1010,10 +1010,17 @@ currentExtensions[0x42] = (data) => {
 	return value;
 }
 
-let errors = { Error, TypeError, ReferenceError };
+let errors = {
+	Error, EvalError, RangeError, ReferenceError, SyntaxError, TypeError, URIError, AggregateError: typeof AggregateError === 'function' ? AggregateError : null,
+}
 currentExtensions[0x65] = () => {
 	let data = read()
-	return (errors[data[0]] || Error)(data[1], { cause: data[2] })
+	if (!errors[data[0]]) {
+		let error = Error(data[1], { cause: data[2] })
+		error.name = data[0]
+		return error
+	}
+	return errors[data[0]](data[1], { cause: data[2] })
 }
 
 currentExtensions[0x69] = (data) => {

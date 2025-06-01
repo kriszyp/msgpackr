@@ -241,7 +241,7 @@ suite('msgpackr basic tests', function() {
 			{id: 2, type: 1, labels: {b: 1, c: 2}},
 			{id: 3, type: 1, labels: {d: 1, e: 2}}
 		]
-		
+
 		var alternatives = [
 			{useRecords: false}, // 88 bytes
 			{useRecords: true}, // 58 bytes
@@ -253,7 +253,7 @@ suite('msgpackr basic tests', function() {
 			let packr = new Packr(o)
 			var serialized = packr.pack(data)
 			var deserialized = packr.unpack(serialized)
-			assert.deepEqual(deserialized, data)	
+			assert.deepEqual(deserialized, data)
 		}
 	})
 
@@ -613,7 +613,7 @@ suite('msgpackr basic tests', function() {
 
 	test('extended class pack/unpack proxied', function(){
 		function Extended() {
-			
+
 		}
 		Extended.prototype.__call__ = function(){
 			return this.value * 4
@@ -624,7 +624,7 @@ suite('msgpackr basic tests', function() {
 
 		var instance = function() { instance.__call__()/* callable stuff */ }
 		Object.setPrototypeOf(instance,Extended.prototype);
-		
+
 		instance.value = 4
 		var data = instance
 
@@ -709,7 +709,9 @@ suite('msgpackr basic tests', function() {
 	test('moreTypes: Error with causes', function() {
 		const object = {
 			error: new Error('test'),
-			errorWithCause: new Error('test-1', { cause: new Error('test-2')}),
+			errorWithCause: new Error('test-1', { cause: new Error('test-2') }),
+			type: new TypeError(),
+			range: new RangeError('test', { cause: [1, 2] }),
 		}
 		const packr = new Packr({
 			moreTypes: true,
@@ -722,6 +724,12 @@ suite('msgpackr basic tests', function() {
 		assert.equal(deserialized.errorWithCause.message, object.errorWithCause.message)
 		assert.equal(deserialized.errorWithCause.cause.message, object.errorWithCause.cause.message)
 		assert.equal(deserialized.errorWithCause.cause.cause, object.errorWithCause.cause.cause)
+		assert.equal(deserialized.type.message, object.type.message)
+		assert.equal(deserialized.range.message, object.range.message)
+		assert.deepEqual(deserialized.range.cause, object.range.cause)
+		assert(deserialized.error instanceof Error)
+		assert(deserialized.type instanceof TypeError)
+		assert(deserialized.range instanceof RangeError)
 	})
 
 	test('structured cloning: self reference', function() {
@@ -950,7 +958,7 @@ suite('msgpackr basic tests', function() {
 			getStructures() {
 				return structures
 			},
-			saveStructures(structures) {		  
+			saveStructures(structures) {
 			},
 			maxSharedStructures: 100
 		})
@@ -958,7 +966,7 @@ suite('msgpackr basic tests', function() {
 			getStructures() {
 				return structures2
 			},
-			saveStructures(structures) {		  
+			saveStructures(structures) {
 			},
 			maxSharedStructures: 100
 		})
