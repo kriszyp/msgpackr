@@ -999,21 +999,47 @@ const recordDefinition = (id, highByte) => {
 currentExtensions[0] = () => {} // notepack defines extension 0 to mean undefined, so use that as the default here
 currentExtensions[0].noBuffer = true
 
-currentExtensions[0x42] = (data) => {
-	// decode bigint
-	let length = data.length;
-	let value = BigInt(data[0] & 0x80 ? data[0] - 0x100 : data[0]);
-	for (let i = 1; i < length; i++) {
-		value <<= BigInt(8);
-		value += BigInt(data[i]);
+currentExtensions[0x42] = data => {
+	let headLength = (data.byteLength % 8) || 8
+	let head = BigInt(data[0] & 0x80 ? data[0] - 0x100 : data[0])
+	for (let i = 1; i < headLength; i++) {
+		head <<= BigInt(8)
+		head += BigInt(data[i])
 	}
-	return value;
+	if (data.byteLength !== headLength) {
+		let view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+		let decode = (start, end) => {
+			let length = end - start
+			if (length <= 40) {
+				let out = view.getBigUint64(start)
+				for (let i = start + 8; i < end; i += 8) {
+					out <<= BigInt(64n)
+					out |= view.getBigUint64(i)
+				}
+				return out
+			}
+			// if (length === 8) return view.getBigUint64(start)
+			let middle = start + (length >> 4 << 3)
+			let left = decode(start, middle)
+			let right = decode(middle, end)
+			return (left << BigInt((end - middle) * 8)) | right
+		}
+		head = (head << BigInt((view.byteLength - headLength) * 8)) | decode(headLength, view.byteLength)
+	}
+	return head
 }
 
-let errors = { Error, TypeError, ReferenceError };
+let errors = {
+	Error, EvalError, RangeError, ReferenceError, SyntaxError, TypeError, URIError, AggregateError: typeof AggregateError === 'function' ? AggregateError : null,
+}
 currentExtensions[0x65] = () => {
 	let data = read()
-	return (errors[data[0]] || Error)(data[1], { cause: data[2] })
+	if (!errors[data[0]]) {
+		let error = Error(data[1], { cause: data[2] })
+		error.name = data[0]
+		return error
+	}
+	return errors[data[0]](data[1], { cause: data[2] })
 }
 
 currentExtensions[0x69] = (data) => {
