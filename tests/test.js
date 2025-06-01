@@ -375,7 +375,7 @@ suite('msgpackr basic tests', function() {
 	})
 
 	test('BigInt', function() {
-		let packr = new Packr({useBigIntExtension: true})
+		let packr = new Packr({ useBigIntExtension: true })
 		let data = {
 			a: 3333333333333333333333333333n,
 			b: 1234567890123456789012345678901234567890n,
@@ -383,10 +383,22 @@ suite('msgpackr basic tests', function() {
 			d: -352523523642364364364264264264264264262642642n,
 			e: 0xffffffffffffffffffffffffffn,
 			f: -0xffffffffffffffffffffffffffn,
+			g: (1234n << 123n) ^ (5678n << 56n) ^ 890n,
+			h: (-1234n << 123n) ^ (5678n << 56n) ^ 890n,
+			i: (1234n << 1234n) ^ (5678n << 567n) ^ 890n,
+			j: (-1234n << 1234n) ^ (5678n << 567n) ^ 890n,
+			k: 0xdeadn << 0xbeefn,
+			l: -0xdeadn << 0xbeefn,
+			m: 11n << 0x11111n ^ 111n,
+			n: -11n << 0x11111n ^ 111n,
 			o: -12345678901234567890n,
 			array: [],
 		}
-		
+
+		for (let n = 7n; n.toString(16).length * 4 < 150000; n *= n) {
+			data.array.push(n, -n)
+		}
+
 		let serialized = packr.pack(data)
 		let deserialized = packr.unpack(serialized)
 		assert.deepEqual(data, deserialized)
