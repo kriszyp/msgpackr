@@ -391,12 +391,18 @@ suite('msgpackr basic tests', function() {
 			l: -0xdeadn << 0xbeefn,
 			m: 11n << 0x11111n ^ 111n,
 			n: -11n << 0x11111n ^ 111n,
-			o: -12345678901234567890n,
-			array: [],
+			o: 12345678901234567890n,
+			p: -12345678901234567890n,
+			exp: [],
+			expexp: [],
+		}
+
+		for (let n = 1n; n.toString(16).length * 4 < 1500; n <<= 1n, n |= BigInt(Math.floor(Math.random() * 2))) {
+			data.exp.push(n, -n)
 		}
 
 		for (let n = 7n; n.toString(16).length * 4 < 150000; n *= n) {
-			data.array.push(n, -n)
+			data.expexp.push(n, -n)
 		}
 
 		let serialized = packr.pack(data)
