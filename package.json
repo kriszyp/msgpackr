@@ -1,7 +1,7 @@
 {
   "name": "msgpackr",
   "author": "Kris Zyp",
-  "version": "1.11.4",
+  "version": "1.11.5",
   "description": "Ultra-fast MessagePack implementation with extensions for records and structured cloning",
   "license": "MIT",
   "types": "./index.d.ts",
