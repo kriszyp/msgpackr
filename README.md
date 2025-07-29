@@ -104,7 +104,7 @@ packr.pack(bigDataWithLotsOfObjects);
 
 Another way to further leverage the benefits of the msgpackr record structures is to use streams that naturally allow for data to reuse based on previous record structures. The stream classes have the record structure extension enabled by default and provide excellent out-of-the-box performance.
 
-When creating a new `Packr`, `Unpackr`, `PackrStream`, or `UnpackrStream` instance, we can enable or disable the record structure extension with the `useRecords` property. When this is `false`, the record structure extension will be disabled (standard/compatibility mode), and all objects will revert to being serialized using MessageMap `map`s, and all `map`s will be deserialized to JS `Object`s as properties (like the standalone `pack` and `unpack` functions).
+When creating a new `Packr`, `Unpackr`, `PackrStream`, or `UnpackrStream` instance, we can enable or disable the record structure extension with the `useRecords` property. When this is `false`, the record structure extension will be disabled (standard/compatibility mode), and all objects will revert to being serialized using MessagePack `map`s, and all `map`s will be deserialized to JS `Object`s as properties (like the standalone `pack` and `unpack` functions).
 
 Streaming with record structures works by encoding a structure the first time it is seen in a stream and referencing the structure in later messages that are sent across that stream. When an encoder can expect a decoder to understand previous structure references, this can be configured using the `sequential: true` flag, which is auto-enabled by streams, but can also be used with Packr instances.
 
