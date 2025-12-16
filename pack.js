@@ -123,7 +123,8 @@ export class Packr extends Unpackr {
 				hasSharedUpdate = false
 			let encodingError;
 			try {
-				if (packr.randomAccessStructure && value && value.constructor && value.constructor === Object)
+				if (packr.randomAccessStructure && value && value.constructor && (value.constructor === Object ||
+						(value.constructor !== Map && !Array.isArray(value) && !extensionClasses.some(extClass => value instanceof extClass))))
 					writeStruct(value);
 				else
 					pack(value)
