@@ -88,3 +88,4 @@ export class UnpackrStream extends Transform {
 export class PackrStream extends Transform {
 	constructor(options?: Options | { highWaterMark: number, emitClose: boolean, allowHalfOpen: boolean })
 }
+export { PackrStream as EncoderStream, UnpackrStream as DecoderStream };
