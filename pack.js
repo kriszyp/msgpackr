@@ -123,10 +123,13 @@ export class Packr extends Unpackr {
 				hasSharedUpdate = false
 			let encodingError;
 			try {
-				if (packr.randomAccessStructure && value && value.constructor && (value.constructor === Object ||
-						(value.constructor !== Map && !Array.isArray(value) && !extensionClasses.some(extClass => value instanceof extClass))))
-					writeStruct(value);
-				else
+				if (packr.randomAccessStructure && value && value.constructor) {
+					if (value.constructor === Object) writeStruct(value); // simple object
+					else if (value.constructor !== Map && !Array.isArray(value) && !extensionClasses.some(extClass => value instanceof extClass)) {
+						// allow user classes, if they don't need special handling (but do use toJSON if available)
+						writeStruct(value.toJSON ? value.toJSON() : value);
+					} else pack(value)
+				} else
 					pack(value)
 				let lastBundle = bundledStrings;
 				if (bundledStrings)
