@@ -60,6 +60,8 @@ export function decode(messagePack: Buffer | Uint8Array, options?: UnpackOptions
 export function addExtension(extension: Extension): void
 export function clearSource(): void
 export function roundFloat32(float32Number: number): number
+export function decodeIter(bufferIterator: Iterable | Iterator | AsyncIterable | AsyncIterator, options?: Options): AsyncGenerator<any>
+export function encodeIter(objectIterator: Iterable | Iterator | AsyncIterable | AsyncIterator, options?: Options): IterableIterator<Buffer> | Promise<AsyncIterableIterator<Buffer>>
 export const C1: {}
 export let isNativeAccelerationEnabled: boolean
 
