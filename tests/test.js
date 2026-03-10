@@ -141,6 +141,15 @@ suite('msgpackr basic tests', function() {
 		var deserialized = unpack(serialized)
 		assert.equal(deserialized, data)
 	})
+	test('overlong UTF-8 string', function () {
+		const payload = Buffer.concat([
+			Buffer.from([0xa2]),         // msgpack fixstr, 2 bytes
+			Buffer.from([0xc0, 0xaf]),   // overlong "/"
+		]);
+
+		const result = unpack(payload);
+		assert.notEqual(result, '/');
+	})
 	test('use ArrayBuffer', function () {
 		const data = {prop: 'a test'};
 		var serialized = pack(data)
