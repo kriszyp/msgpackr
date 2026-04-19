@@ -1032,7 +1032,7 @@ currentExtensions[0x42] = data => {
 			if (length <= 40) {
 				let out = view.getBigUint64(start)
 				for (let i = start + 8; i < end; i += 8) {
-					out <<= BigInt(64n)
+					out <<= BigInt(64)
 					out |= view.getBigUint64(i)
 				}
 				return out
