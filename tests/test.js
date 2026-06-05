@@ -1417,3 +1417,187 @@ suite('msgpackr performance tests', function(){
 		//console.log('serialized', serialized.length, global.propertyComparisons)
 	})
 })
+
+suite('msgpackr – maxOwnStructures cap (randomAccessStructure)', function () {
+	// Helper: create a width-heterogeneous record generator using a deterministic PRNG.
+	// Objects have up to 6 fields drawn from a sparse set, each value is an integer whose
+	// width (num8 / num32 / num64) varies per value, producing many distinct typed structures.
+	// useRecords: false keeps the classic named-record encoder out of the way so all structure
+	// creation goes through the typed-struct path and the cap is exercised in isolation.
+	function makeCapRunner(cap) {
+		const fields = ['a','b','c','d','e','f','g','h'];
+		let seed = 42;
+		const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 0xffffffff; };
+		const packr = new Packr({
+			structures: [],
+			useRecords: false,
+			randomAccessStructure: true,
+			maxOwnStructures: cap,
+		});
+		const norm = r => packr.unpack(packr.pack(r));
+		for (let i = 0; i < 4000; i++) {
+			const r = {};
+			for (let j = 0; j < Math.ceil(rnd() * 6); j++) {
+				// values cycle across num8 / num32 / float64 ranges to force distinct structures
+				const mag = rnd() < 0.33 ? 10 : rnd() < 0.5 ? 400000 : 1e13;
+				r[fields[Math.floor(rnd() * 8)]] = Math.floor(rnd() * mag);
+			}
+			assert.deepEqual(norm(r), r);
+		}
+		return packr.typedStructs ? packr.typedStructs.length : 0;
+	}
+
+	test('uncapped (default) grows well past 256 for width-heterogeneous records', function () {
+		assert.ok(makeCapRunner(undefined) > 256, 'expected uncapped typedStructs to exceed 256');
+	});
+
+	test('cap=64 bounds typedStructs.length and preserves round-trips', function () {
+		assert.ok(makeCapRunner(64) <= 64, 'typedStructs should not exceed cap of 64');
+	});
+
+	test('cap=256 bounds typedStructs.length and preserves round-trips', function () {
+		assert.ok(makeCapRunner(256) <= 256, 'typedStructs should not exceed cap of 256');
+	});
+
+	test('flat-record streams stay a strict hard bound', function () {
+		// With maxOwnStructures=16, pack 2000 flat records; typedStructs must never exceed 16.
+		const packr = new Packr({
+			structures: [],
+			useRecords: false,
+			randomAccessStructure: true,
+			maxOwnStructures: 16,
+		});
+		let seed = 99;
+		const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 0xffffffff; };
+		for (let i = 0; i < 2000; i++) {
+			const r = { x: Math.floor(rnd() * 1e6), y: Math.floor(rnd() * 200), z: Math.floor(rnd() * 1e12) };
+			assert.deepEqual(packr.unpack(packr.pack(r)), r);
+		}
+		assert.ok(packr.typedStructs.length <= 16, 'flat records must stay within cap, got ' + packr.typedStructs.length);
+	});
+
+	test('capped-out records fall back to plain encoding and still round-trip', function () {
+		// Once the cap is hit, novel shapes must decode correctly via plain msgpack fallback.
+		const packr = new Packr({
+			structures: [],
+			useRecords: false,
+			randomAccessStructure: true,
+			maxOwnStructures: 2,
+		});
+		const norm = r => packr.unpack(packr.pack(r));
+		assert.deepEqual(norm({ a: 1 }), { a: 1 });         // mints structure 0
+		assert.deepEqual(norm({ b: 'hello' }), { b: 'hello' }); // mints structure 1, cap hit
+		// These novel shapes fall back to plain msgpack — must still decode correctly:
+		assert.deepEqual(norm({ c: 42 }), { c: 42 });
+		assert.deepEqual(norm({ a: 1, b: 'hi', c: 99 }), { a: 1, b: 'hi', c: 99 });
+		assert.strictEqual(packr.typedStructs.length, 2, 'cap must be exact');
+	});
+
+	test('a known key later seen as a nested object falls back cleanly', function () {
+		// Once frozen, a previously-learned scalar key carrying an object must bail BEFORE pack()
+		// advances the shared encoder position — otherwise the plain fallback gets corrupt bytes.
+		const packr = new Packr({
+			structures: [],
+			useRecords: false,
+			randomAccessStructure: true,
+			maxOwnStructures: 1,
+		});
+		const norm = r => packr.unpack(packr.pack(r));
+		assert.deepEqual(norm({ a: 1 }), { a: 1 }); // mints structure 0, cap hit
+		const r2 = { a: { x: 1 } };
+		assert.deepEqual(norm(r2), r2); // 'a' known but now carries object — must fall back cleanly
+	});
+
+	test('nested records do not overshoot the cap and still round-trip', function () {
+		// A nested object mints its own structure before the outer record, so a stale frozen flag
+		// could push the outer record past the cap. The record-id mint guard re-checks the live
+		// length, keeping typedStructs.length a strict bound.
+		const packr = new Packr({
+			structures: [],
+			useRecords: false,
+			randomAccessStructure: true,
+			maxOwnStructures: 4,
+		});
+		let seed = 7;
+		const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+		for (let i = 0; i < 1000; i++) {
+			const r = { outer: { inner: (rnd() * 1e7 | 0) * 1000 }, tag: 't' + (i % 20), n: (rnd() * 300 | 0) };
+			assert.deepEqual(packr.unpack(packr.pack(r)), r);
+		}
+		assert.ok(packr.typedStructs.length <= 4, 'nested encodes must not push typedStructs past the cap, got ' + packr.typedStructs.length);
+	});
+
+	test('persisted typed structures still load after a capped encoder froze the dictionary', function () {
+		// Replaying persisted structures in onLoadedStructures must always succeed, regardless of
+		// maxOwnStructures — the cap only limits minting NEW structures during encode.
+		let saved = null;
+		const writer = new Packr({
+			structures: [],
+			useRecords: false,
+			randomAccessStructure: true,
+			saveStructures(s) { saved = s; return true; },
+			getStructures() { return saved; },
+		});
+		const buf = writer.pack({ name: 'Alice', age: 30 });
+
+		// Warm up a capped encoder so the module-global-if-any freeze state is set.
+		const capped = new Packr({
+			structures: [],
+			useRecords: false,
+			randomAccessStructure: true,
+			maxOwnStructures: 1,
+		});
+		capped.pack({ x: 1 });
+		capped.pack({ y: 2, z: 3 }); // cap reached
+
+		// A fresh reader must still rebuild the transition trie from saved structures.
+		const reader = new Packr({
+			structures: [],
+			useRecords: false,
+			randomAccessStructure: true,
+			getStructures() { return saved; },
+		});
+		const result = reader.unpack(buf);
+		assert.equal(result.name, 'Alice');
+		assert.equal(result.age, 30);
+	});
+
+	test('the cap is per-instance: an uncapped sibling cannot lift this instance\'s cap', function () {
+		// frozen is derived from each encoder's own typedStructs.length — not a shared global —
+		// so an uncapped sibling churning out structures cannot lift the cap on the bounded one.
+		const uncapped = new Packr({
+			structures: [],
+			useRecords: false,
+			randomAccessStructure: true,
+		});
+		const capped = new Packr({
+			structures: [],
+			useRecords: false,
+			randomAccessStructure: true,
+			maxOwnStructures: 2,
+		});
+		let seed = 1;
+		const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 0xffffffff; };
+		const mk = () => { const o = {}; for (let f = 0; f < 20; f++) if (rnd() < 0.5) o['f' + f] = Math.floor(rnd() * 1e7); return o; };
+		for (let i = 0; i < 500; i++) {
+			uncapped.pack(mk()); // grows the sibling's dictionary freely
+			const r = mk();
+			assert.deepEqual(capped.unpack(capped.pack(r)), r);
+		}
+		assert.ok(capped.typedStructs.length <= 2, 'capped must stay bounded, got ' + capped.typedStructs.length);
+		assert.ok(uncapped.typedStructs.length > 2, 'uncapped sibling should grow freely');
+	});
+
+	test('a layout-retry record (large fixed section + nested refs) does not corrupt', function () {
+		// A large fixed section overflows the ref-start estimate and triggers the internal retry
+		// (which re-invokes writeStruct after refs were packed). The retry passes structureKnown=true
+		// to re-encode the already-minted structure rather than bailing under the now-reached cap —
+		// bailing there would write the fallback at an advanced position and corrupt the bytes.
+		const packr = new Packr({ structures: [], useRecords: false, randomAccessStructure: true, maxOwnStructures: 1 });
+		const norm = r => packr.unpack(packr.pack(r));
+		const mk = base => { const r = {}; for (let i = 0; i < 40; i++) r['n' + i] = base + i; r.a = { x: base }; r.b = { y: base + 1 }; return r; };
+		assert.deepEqual(norm(mk(1000000)), mk(1000000));
+		assert.deepEqual(norm(mk(2000000)), mk(2000000));
+		assert.ok(packr.typedStructs.length <= 1, 'retry-path records must not exceed the cap, got ' + packr.typedStructs.length);
+	});
+})
