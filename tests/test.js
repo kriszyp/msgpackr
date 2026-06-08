@@ -1003,6 +1003,31 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(inputData, outputData)
 	})
 
+	test('declined structure save re-packs against durable structures (no dangling record)', function() {
+		// Regression: when saveStructures declines a save (a concurrent writer updated the shared
+		// structures, or the store txn did not durably commit), the in-memory structures/transition
+		// trie reference a record id that was never persisted. The re-pack must reload the durable
+		// structures and re-mint/re-save — otherwise it re-emits the same record pointing at an
+		// unsaved structure, and reads throw "Record id is not defined".
+		const meta = new Packr()
+		let store = null
+		let declinedOnce = false
+		const packr = new Packr({
+			useRecords: true,
+			getStructures() { return store ? meta.unpack(store) : undefined },
+			saveStructures(structures) {
+				if (!declinedOnce) { declinedOnce = true; return false } // decline the first save
+				store = meta.pack(structures); return true
+			},
+		})
+		const a = packr.pack({ x: 9, y: 8 })  // first mint is declined -> must re-pack + re-save
+		const b = packr.pack({ x: 7, y: 6 })  // same shape -> must still reference a saved structure
+		// A fresh reader sees only the durably-saved structures (another thread / post-restart):
+		const reader = new Packr({ getStructures() { return store ? meta.unpack(store) : undefined } })
+		assert.deepEqual(reader.unpack(a), { x: 9, y: 8 })
+		assert.deepEqual(reader.unpack(b), { x: 7, y: 6 })
+	})
+
 	test('big buffer', function() {
 		var size = 100000000
 		var data = new Uint8Array(size).fill(1)
