@@ -188,7 +188,14 @@ export class Packr extends Unpackr {
 						let newSharedData = (packr._prepareStructures || prepareStructures)(structures, packr);
 						if (!encodingError) { // TODO: If there is an encoding error, should make the structures as uninitialized so they get rebuilt next time
 							if (packr.saveStructures(newSharedData, newSharedData.isCompatible) === false) {
-								// get updated structures and try again if the update failed
+								// The save was declined (a concurrent writer updated the shared structures,
+								// or the store transaction did not durably commit). Our in-memory
+								// structures + transition trie may now reference record ids that were
+								// never persisted; re-packing as-is would re-emit the same record pointing
+								// at an unpersisted structure (-> "Record id is not defined" on decode).
+								// Mark structures uninitialized so the re-pack reloads durable structures
+								// via getStructures, rebuilds the transition trie, and re-mints + re-saves.
+								structures.uninitialized = true;
 								return packr.pack(value, encodeOptions);
 							}
 							packr.lastNamedStructuresLength = sharedLength;
