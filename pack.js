@@ -123,7 +123,13 @@ export class Packr extends Unpackr {
 				hasSharedUpdate = false
 			let encodingError;
 			try {
-				if (packr.randomAccessStructure && value && typeof value === 'object') {
+				// readOnlyStructures: skip the random-access struct write path so NO new struct is
+				// minted. randomAccessStructure stays true (the struct READ path and the struct-safe
+				// integer boundary are preserved, so existing struct data still decodes), but objects
+				// fall through to the normal pack()->writeObject->writeRecord path and are written as
+				// classic shared-structure records (byte range 0x40-0x7f, disjoint from struct headers
+				// at 0x20-0x3f) — the bounded, width-agnostic encoding used before struct mode.
+				if (packr.randomAccessStructure && !packr.readOnlyStructures && value && typeof value === 'object') {
 					if (value.constructor === Object) writeStruct(value); // simple object
 					else if (value.constructor !== Map && !Array.isArray(value) && !extensionClasses.some(extClass => value instanceof extClass)) {
 						// allow user classes, if they don't need special handling (but do use toJSON if available)

@@ -1626,3 +1626,72 @@ suite('msgpackr – maxOwnStructures cap (randomAccessStructure)', function () {
 		assert.ok(packr.typedStructs.length <= 1, 'retry-path records must not exceed the cap, got ' + packr.typedStructs.length);
 	});
 })
+
+suite('msgpackr – readOnlyStructures (write-disable, read-compatible)', function () {
+	// readOnlyStructures keeps randomAccessStructure decode semantics — existing random-access
+	// struct data still decodes and the struct-safe integer boundary is preserved — but never mints
+	// a new random-access structure on write. Objects fall through to the classic shared-structure
+	// record path (bytes 0x40-0x7f, disjoint from struct headers at 0x20-0x3f), the bounded,
+	// width-agnostic encoding used before struct mode. This is the mechanism for disabling typed
+	// structures on an existing store without breaking reads.
+	const sharedStore = () => {
+		let saved;
+		return { getStructures: () => saved, saveStructures: (s) => { saved = s; return true; } };
+	};
+
+	test('decodes pre-existing random-access structs (read stays enabled)', function () {
+		const full = new Packr({ randomAccessStructure: true, useRecords: true });
+		const rec = { a: 1, b: 'hello', c: true, n: 42 };
+		const buf = full.pack(rec);
+		assert.ok(buf[0] >= 0x20 && buf[0] < 0x40, 'control: full encoder emits a random-access struct');
+
+		const ro = new Packr({ randomAccessStructure: true, useRecords: true, readOnlyStructures: true });
+		ro.typedStructs = full.typedStructs; // share the existing random-access dictionary
+		assert.deepEqual(ro.unpack(buf), rec);
+	});
+
+	test('writes classic shared-structure records (0x40-0x7f), never a random-access struct', function () {
+		const ro = new Packr({ randomAccessStructure: true, useRecords: true, readOnlyStructures: true, ...sharedStore() });
+		const rec = { x: 9, y: 'world', z: [1, 2, 3], nested: { deep: 50, k: 42 } };
+		const b1 = ro.pack(rec);
+		assert.ok(b1[0] >= 0x40 && b1[0] < 0x80, 'expected a classic record (0x40-0x7f), got 0x' + b1[0].toString(16));
+		assert.strictEqual(ro.typedStructs ? ro.typedStructs.length : 0, 0, 'no random-access struct minted');
+		assert.deepEqual(ro.unpack(b1), rec);
+		// a second record of the same shape reuses the shared classic structure (still classic)
+		const b2 = ro.pack({ x: 1, y: 'a', z: [], nested: { deep: 0, k: 0 } });
+		assert.ok(b2[0] >= 0x40 && b2[0] < 0x80, 'second record also classic');
+	});
+
+	test('preserves the struct-safe integer boundary (nested 0x20-0x3f ints do not collide)', function () {
+		const ro = new Packr({ randomAccessStructure: true, useRecords: true, readOnlyStructures: true, ...sharedStore() });
+		for (const v of [0x1f, 0x20, 0x2a, 0x3f, 0x40, 0x7f]) {
+			assert.deepEqual(ro.unpack(ro.pack({ v, nested: { w: v } })), { v, nested: { w: v } });
+		}
+	});
+
+	test('a normal randomAccessStructure reader decodes readOnly classic records (replication compat)', function () {
+		let saved;
+		const store = { getStructures: () => saved, saveStructures: (s) => { saved = s; return true; } };
+		const ro = new Packr({ randomAccessStructure: true, useRecords: true, readOnlyStructures: true, ...store });
+		const roBuf = ro.pack({ p: 'q', n: 42 });
+		assert.ok(roBuf[0] >= 0x40 && roBuf[0] < 0x80, 'readOnly writes a classic record');
+
+		// A peer that is NOT readOnly (a normal struct-writing node) shares the classic-structure
+		// store and decodes the classic record correctly — no mapsAsObjects needed, since classic
+		// records decode to objects natively.
+		const peer = new Packr({ randomAccessStructure: true, useRecords: true, ...store });
+		assert.deepEqual(peer.unpack(roBuf), { p: 'q', n: 42 });
+	});
+
+	test('every object shape uses the classic path (null-proto, shadowed ctor) — no random-access struct', function () {
+		const ro = new Packr({ randomAccessStructure: true, useRecords: true, readOnlyStructures: true, ...sharedStore() });
+
+		const np = Object.create(null); np.a = 1; np.b = 'x';
+		assert.deepEqual(ro.unpack(ro.pack(np)), { a: 1, b: 'x' });
+
+		const cs = { constructor: 'shadow', a: 1 };
+		assert.deepEqual(ro.unpack(ro.pack(cs)), { constructor: 'shadow', a: 1 });
+
+		assert.strictEqual(ro.typedStructs ? ro.typedStructs.length : 0, 0, 'no random-access struct minted for any shape');
+	});
+})
