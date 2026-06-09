@@ -1388,3 +1388,85 @@ suite('msgpackr performance tests', function(){
 		//console.log('serialized', serialized.length, global.propertyComparisons)
 	});
 });
+
+suite('msgpackr – two-byte record definitions (over-cap own records with a shared store)', function () {
+	// Regression for a data-corruption bug: with a shared-structures store (getStructures/
+	// saveStructures) and maxOwnStructures > 32, msgpackr uses two-byte record ids
+	// (useTwoByteRecords). Over-cap "own" record shapes fall back to the classic record encoder,
+	// which emits a SELF-CONTAINED record definition (0xd5 0x72 <firstByte> <highByte> <keys>
+	// <values>). On read, recordDefinition() consumed the high byte itself, then invoked
+	// structure.read() — which, for a highByte === 0 structure, was a second-byte reader that
+	// consumed the FIRST VALUE BYTE as a phantom high byte, mis-resolving to a never-defined id
+	// ("Record id is not defined for N"). The one-byte path (maxOwnStructures <= 32, fixext 1
+	// 0xd4 0x72) was unaffected because no high byte / second-byte reader is involved.
+	// Fix: recordDefinition reads the body via the un-wrapped reader (structure.read0).
+	const sharedStore = () => {
+		let saved = [];
+		return { getStructures: () => saved, saveStructures: (s) => { saved = s; return true; }, peek: () => saved };
+	};
+	// Width-heterogeneous record generator: many distinct shapes, exceeding any modest cap, so
+	// the over-cap classic-record fallback path is exercised heavily.
+	const makeRecords = (count) => {
+		const out = [];
+		for (let i = 0; i < count; i++) {
+			const rec = { id: i };
+			const n = 1 + (i % 6);
+			for (let a = 0; a < n; a++) rec['attr_' + ((i * 7 + a) % 400)] = i % 2 ? 's' + i : i;
+			out.push(rec);
+		}
+		return out;
+	};
+
+	test('cap=256 + shared store round-trips every over-cap shape (two-byte mode)', function () {
+		const store = sharedStore();
+		const o = { randomAccessStructure: true, useRecords: true, useBigIntExtension: true, maxOwnStructures: 256, ...store };
+		const w = new Packr(o), r = new Packr(o);
+		const records = makeRecords(3000);
+		let sawTwoByteDef = false;
+		for (const rec of records) {
+			const buf = w.pack(rec);
+			if (buf[0] === 0xd5 && buf[1] === 0x72) sawTwoByteDef = true;
+			assert.deepEqual(r.unpack(buf), rec);
+		}
+		assert.ok(sawTwoByteDef, 'expected at least one two-byte (0xd5 0x72) record definition to be exercised');
+	});
+
+	test('over-cap own records do not grow the shared dictionary without bound', function () {
+		const store = sharedStore();
+		const o = { randomAccessStructure: true, useRecords: true, useBigIntExtension: true, maxOwnStructures: 256, ...store };
+		const w = new Packr(o);
+		for (const rec of makeRecords(3000)) w.pack(rec);
+		const saved = store.peek();
+		const named = saved instanceof Map ? (saved.get('named') || []) : (saved || []);
+		// Over-cap shapes are inlined as self-contained definitions, not minted as ever-growing
+		// shared ids, so the shared store stays bounded by the few genuinely shared shapes.
+		assert.ok(named.length < 100, 'named structures should stay bounded, got ' + named.length);
+	});
+
+	test('two-byte record REFERENCES (shared, maxShared=64) round-trip with stable shapes', function () {
+		// maxSharedStructures > 32 forces two-byte mode; stable repeated shapes get a definition
+		// once then are emitted as two-byte references (0x60-0x7f + high byte) — the path that
+		// relies on structure.read remaining a second-byte reader after the fix.
+		const store = sharedStore();
+		const o = { useRecords: true, maxSharedStructures: 64, maxOwnStructures: 64, ...store };
+		const w = new Packr(o), r = new Packr(o);
+		const shapes = [];
+		for (let s = 0; s < 100; s++) { const rec = {}; for (let f = 0; f <= s % 8; f++) rec['k' + s + '_' + f] = s * 10 + f; shapes.push(rec); }
+		let sawRef = false;
+		for (let round = 0; round < 4; round++) for (const shp of shapes) {
+			const buf = w.pack(shp);
+			if (buf[0] >= 0x60 && buf[0] < 0x80) sawRef = true;
+			assert.deepEqual(r.unpack(buf), shp);
+		}
+		assert.ok(sawRef, 'expected at least one two-byte record reference (0x60-0x7f) to be exercised');
+	});
+
+	test('one-byte path (maxOwn=32) keeps working with a shared store', function () {
+		const store = sharedStore();
+		const o = { randomAccessStructure: true, useRecords: true, useBigIntExtension: true, maxOwnStructures: 32, ...store };
+		const w = new Packr(o), r = new Packr(o);
+		for (const rec of makeRecords(3000)) {
+			assert.deepEqual(r.unpack(w.pack(rec)), rec);
+		}
+	});
+});
