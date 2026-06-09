@@ -510,6 +510,7 @@ function createStructureReader(structure, firstId) {
 				inlineObjectReadThreshold = Infinity // disable going forward
 				return readObject(); // recursively try again
 			}
+			structure.read0 = optimizedReadObject // keep the un-wrapped body reader in sync
 			if (structure.highByte === 0)
 				structure.read = createSecondByteReader(firstId, structure.read)
 			return optimizedReadObject() // second byte is already read, if there is one so immediately read object
@@ -526,6 +527,12 @@ function createStructureReader(structure, firstId) {
 		return object
 	}
 	readObject.count = 0
+	// read0 is the un-wrapped body reader: it reads the record's values directly without
+	// consuming a leading high byte. recordDefinition uses it for the immediate read that follows
+	// a record definition (the high byte, if present, was already consumed). For highByte === 0
+	// structures the public reader is a second-byte reader (used by later references), but the
+	// definition read itself must not consume that byte.
+	structure.read0 = readObject
 	if (structure.highByte === 0) {
 		return createSecondByteReader(firstId, readObject)
 	}
@@ -1013,7 +1020,12 @@ const recordDefinition = (id, highByte) => {
 	}
 	currentStructures[id] = structure
 	structure.read = createStructureReader(structure, firstByte)
-	return structure.read()
+	// The high byte (if any) was already consumed as the `highByte` argument above, so read the
+	// record body directly. Going through structure.read (a second-byte reader when highByte === 0)
+	// would misinterpret the first value byte as a high byte — corrupting two-byte own-record
+	// definitions (0xd5 0x72 ...). createStructureReader stashes the un-wrapped body reader on
+	// structure.read0 precisely for this immediate post-definition read.
+	return (structure.read0 || structure.read)()
 }
 currentExtensions[0] = () => {} // notepack defines extension 0 to mean undefined, so use that as the default here
 currentExtensions[0].noBuffer = true
