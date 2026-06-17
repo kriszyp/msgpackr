@@ -259,10 +259,7 @@ export function read() {
 			if (currentUnpackr.mapsAsObjects) {
 				let object = {};
 				for (let i = 0; i < token; i++) {
-					let key = readKey();
-					if (key === '__proto__')
-						key = '__proto_';
-					object[key] = read();
+					setObjectKey(object, readKey(), read());
 				}
 				return object;
 			} else {
@@ -495,6 +492,16 @@ export function read() {
 		}
 	}
 }
+function setObjectKey(object, key, value) {
+	if (key === '__proto__')
+		// define it as a real own property instead of invoking the prototype
+		// setter (which would also drop the data by renaming the key)
+		Object.defineProperty(object, '__proto__', {
+			value, configurable: true, enumerable: true, writable: true,
+		});
+	else
+		object[key] = value;
+}
 const validName = /^[a-zA-Z_$][a-zA-Z\d_$]*$/;
 function createStructureReader(structure, firstId) {
 	function readObject() {
@@ -503,7 +510,7 @@ function createStructureReader(structure, firstId) {
 			let optimizedReadObject;
 			try {
 				optimizedReadObject = structure.read = (new Function('r', 'return function(){return ' + (currentUnpackr.freezeData ? 'Object.freeze' : '') +
-					'({' + structure.map(key => key === '__proto__' ? '__proto_:r()' : validName.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '})}'))(read);
+					'({' + structure.map(key => key === '__proto__' ? '["__proto__"]:r()' : validName.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '})}'))(read);
 			} catch(error) {
 				// in CF workers, the new Function call could begin to fail at any point in time
 				inlineObjectReadThreshold = Infinity; // disable going forward
@@ -516,10 +523,7 @@ function createStructureReader(structure, firstId) {
 		}
 		let object = {};
 		for (let i = 0, l = structure.length; i < l; i++) {
-			let key = structure[i];
-			if (key === '__proto__')
-				key = '__proto_';
-			object[key] = read();
+			setObjectKey(object, structure[i], read());
 		}
 		if (currentUnpackr.freezeData)
 			return Object.freeze(object);
@@ -705,10 +709,7 @@ function readMap(length) {
 	if (currentUnpackr.mapsAsObjects) {
 		let object = {};
 		for (let i = 0; i < length; i++) {
-			let key = readKey();
-			if (key === '__proto__')
-				key = '__proto_';
-			object[key] = read();
+			setObjectKey(object, readKey(), read());
 		}
 		return object;
 	} else {
