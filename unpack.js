@@ -1005,7 +1005,7 @@ function asSafeString(property) {
 	if (currentUnpackr.allowArraysInMapKeys && Array.isArray(property) && property.flat().every(item => ['string', 'number', 'boolean', 'bigint'].includes(typeof item))) {
 		return property.flat().toString();
 	}
-	throw new Error(`Invalid property type for record: ${typeof property}`);
+	throw new Error(`Invalid property type for record: ${typeof property}. A MessagePack map with non-string keys can be decoded as a Map with mapsAsObjects: false`);
 }
 // the registration of the record definition extension (as "r")
 const recordDefinition = (id, highByte) => {
