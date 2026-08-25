@@ -485,11 +485,7 @@ export function read() {
 			default: // negative int
 				if (token >= 0xe0)
 					return token - 0x100;
-				if (token === undefined) {
-					let error = new Error('Unexpected end of MessagePack data');
-					error.incomplete = true;
-					throw error;
-				}
+				if (token === undefined) throw endOfMessagePackError();
 				throw new Error('Unknown MessagePack token ' + token);
 
 		}
@@ -697,7 +693,16 @@ export function readString(source, start, length) {
 	}
 }
 
+function endOfMessagePackError() {
+	let error = new Error('Unexpected end of MessagePack data');
+	error.incomplete = true;
+	return error;
+}
+
 function readArray(length) {
+	// every element occupies at least one byte, so a length beyond what remains in the source can never
+	// be satisfied; check before allocating so a small header can not force a large allocation
+	if (length > srcEnd - position) throw endOfMessagePackError();
 	let array = new Array(length);
 	for (let i = 0; i < length; i++) {
 		array[i] = read();
@@ -708,6 +713,7 @@ function readArray(length) {
 }
 
 function readMap(length) {
+	if (length > (srcEnd - position) / 2) throw endOfMessagePackError(); // each entry needs at least two bytes
 	if (currentUnpackr.mapsAsObjects) {
 		let object = {};
 		for (let i = 0; i < length; i++) {
