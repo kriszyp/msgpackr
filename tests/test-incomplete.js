@@ -1,4 +1,4 @@
-import { encode } from '../index.js';
+import { encode, unpack, Unpackr } from '../index.js';
 import { assert } from 'chai';
 import { Encoder } from '../pack.js';
 
@@ -40,4 +40,46 @@ suite('encode and decode tests with partial values', function () {
       }
     });
   }
+});
+
+// An array or map header declares its element count up front. Decoding must not allocate for that
+// count before the elements are known to be present in the source, otherwise a few bytes of header
+// can force an arbitrarily large allocation.
+const malformedContainers = {
+  'array32 declaring 20 million elements': [0xdd, 0x01, 0x31, 0x2d, 0x00],
+  'array32 declaring 20 million elements with one present': [0xdd, 0x01, 0x31, 0x2d, 0x00, 0x01],
+  'array32 declaring the maximum length': [0xdd, 0xff, 0xff, 0xff, 0xff],
+  'array16 declaring 65535 elements': [0xdc, 0xff, 0xff],
+  'nested array32 declaring a million elements each': [0xdd, 0, 0x10, 0, 0, 0xdd, 0, 0x10, 0, 0],
+  'map32 declaring 20 million entries': [0xdf, 0x01, 0x31, 0x2d, 0x00],
+  'map16 declaring 65535 entries': [0xde, 0xff, 0xff],
+  'fixarray with no elements present': [0x9f]
+};
+
+suite('unpack malformed containers', function () {
+  this.timeout(1000); // these must all fail immediately, not after filling a declared length
+  const unpackrs = [
+    ['default', new Unpackr()],
+    ['mapsAsObjects: false', new Unpackr({ mapsAsObjects: false })],
+    ['useRecords', new Unpackr({ useRecords: true, structures: [] })]
+  ];
+  for (const [label, bytes] of Object.entries(malformedContainers)) {
+    test(label, () => {
+      for (const [unpackrLabel, unpackr] of unpackrs) {
+        try {
+          let value = unpackr.unpack(Buffer.from(bytes));
+          assert.fail(`${label} should not unpack (${unpackrLabel}), returned ${JSON.stringify(value)}`);
+        } catch (error) {
+          assert.isTrue(error.incomplete, `${label} (${unpackrLabel}): ${error.message}`);
+        }
+      }
+    });
+  }
+
+  test('rejecting an oversized declared length does not allocate', () => {
+    let before = process.memoryUsage().heapUsed;
+    assert.throws(() => unpack(Buffer.from([0xdd, 0x01, 0x31, 0x2d, 0x00])));
+    // before this was checked, the 5 byte header above allocated a 20 million element array (~150MB)
+    assert.isBelow((process.memoryUsage().heapUsed - before) / 1048576, 50, 'heap growth in MB');
+  });
 });
