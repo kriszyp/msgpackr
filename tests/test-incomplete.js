@@ -82,4 +82,22 @@ suite('unpack malformed containers', function () {
     // before this was checked, the 5 byte header above allocated a 20 million element array (~150MB)
     assert.isBelow((process.memoryUsage().heapUsed - before) / 1048576, 50, 'heap growth in MB');
   });
+
+  test('nested array lengths that each fit the source but sum past it do not allocate', () => {
+    // each array16 header declares 65535 elements, which fits the remaining bytes on its own, so the
+    // per-array check passes at every level; without a shared budget the levels pre-allocate ~65535 *
+    // depth slots (~315MB here) before the missing elements are ever read
+    let depth = 600, length = 0xffff;
+    let bytes = Buffer.alloc(length + depth * 3 + 16);
+    for (let i = 0; i < depth; i++)
+      bytes.set([0xdc, 0xff, 0xff], i * 3);
+    let before = process.memoryUsage().heapUsed;
+    try {
+      unpack(bytes);
+      assert.fail('nested oversized arrays should not unpack');
+    } catch (error) {
+      assert.isTrue(error.incomplete, error.message);
+    }
+    assert.isBelow((process.memoryUsage().heapUsed - before) / 1048576, 50, 'heap growth in MB');
+  });
 });

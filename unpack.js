@@ -18,6 +18,7 @@ var bundledStrings;
 var referenceMap;
 var currentExtensions = [];
 var dataView;
+var arrayAllocationBudget;
 var defaultOptions = {
 	useRecords: false,
 	mapsAsObjects: true
@@ -179,6 +180,7 @@ export function checkedRead(options) {
 				currentStructures.length = sharedLength;
 		}
 		let result;
+		arrayAllocationBudget = srcEnd - position;
 		if (currentUnpackr._readStruct && src[position] < 0x40 && src[position] >= 0x20) {
 			result = currentUnpackr._readStruct(src, position, srcEnd);
 			src = null; // dispose of this so that recursive unpack calls don't save state
@@ -701,8 +703,10 @@ function endOfMessagePackError() {
 
 function readArray(length) {
 	// every element occupies at least one byte, so a length beyond what remains in the source can never
-	// be satisfied; check before allocating so a small header can not force a large allocation
-	if (length > srcEnd - position) throw endOfMessagePackError();
+	// be satisfied; check before allocating so a small header can not force a large allocation. Nested
+	// arrays each pass that per-array check yet still pre-allocate, so also spend from a per-decode
+	// budget of the remaining bytes -- the summed lengths of any valid tree stay under it
+	if (length > srcEnd - position || (arrayAllocationBudget -= length) < 0) throw endOfMessagePackError();
 	let array = new Array(length);
 	for (let i = 0; i < length; i++) {
 		array[i] = read();
@@ -1196,6 +1200,7 @@ function saveState(callback) {
 	let savedStrings = strings;
 	let savedReferenceMap = referenceMap;
 	let savedBundledStrings = bundledStrings;
+	let savedArrayAllocationBudget = arrayAllocationBudget;
 
 	// TODO: We may need to revisit this if we do more external calls to user code (since it could be slow)
 	let savedSrc = new Uint8Array(src.slice(0, srcEnd)); // we copy the data in case it changes while external data is processed
@@ -1213,6 +1218,7 @@ function saveState(callback) {
 	strings = savedStrings;
 	referenceMap = savedReferenceMap;
 	bundledStrings = savedBundledStrings;
+	arrayAllocationBudget = savedArrayAllocationBudget;
 	src = savedSrc;
 	sequentialMode = savedSequentialMode;
 	currentStructures = savedStructures;
