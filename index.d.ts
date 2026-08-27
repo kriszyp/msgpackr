@@ -10,6 +10,7 @@ export interface Options {
 	useRecords?: boolean | ((value:any)=> boolean)
 	structures?: {}[]
 	moreTypes?: boolean
+	useToJSON?: boolean
 	sequential?: boolean
 	structuredClone?: boolean
 	mapsAsObjects?: boolean

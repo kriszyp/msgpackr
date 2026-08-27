@@ -126,7 +126,7 @@ export class Packr extends Unpackr {
 					if (value.constructor === Object) writeStruct(value); // simple object
 					else if (value.constructor !== Map && !Array.isArray(value) && !extensionClasses.some(extClass => value instanceof extClass)) {
 						// allow user classes, if they don't need special handling (but do use toJSON if available)
-						writeStruct(value.toJSON ? value.toJSON() : value);
+						writeStruct(packr.useToJSON !== false && value.toJSON ? value.toJSON() : value);
 					} else pack(value);
 				} else
 					pack(value);
@@ -514,7 +514,7 @@ export class Packr extends Unpackr {
 							packArray(value);
 						} else {
 							// use this as an alternate mechanism for expressing how to serialize
-							if (value.toJSON) {
+							if (packr.useToJSON !== false && value.toJSON) {
 								const json = value.toJSON();
 								// if for some reason value.toJSON returns itself it'll loop forever
 								if (json !== value)

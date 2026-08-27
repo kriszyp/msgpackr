@@ -1316,6 +1316,56 @@ suite('msgpackr basic tests', function() {
 		const deserialized = unpack(serialized);
 		assert.deepStrictEqual(deserialized, { someData: [1, 2, 3, 4] });
 	});
+	test('useToJSON: false encodes own properties instead of the toJSON form', () => {
+		class Record {
+			constructor() {
+				this.id = 1;
+				this.stored = 'own property';
+			}
+			// A response shape, not the durable shape: the API adds a derived field.
+			toJSON() {
+				return { id: this.id, stored: this.stored, derived: 'response only' };
+			}
+		}
+		assert.deepStrictEqual(unpack(pack(new Record)), { id: 1, stored: 'own property', derived: 'response only' });
+
+		const honoring = new Packr({ useToJSON: true });
+		assert.deepStrictEqual(honoring.unpack(honoring.pack(new Record)), {
+			id: 1,
+			stored: 'own property',
+			derived: 'response only',
+		});
+
+		const ignoring = new Packr({ useToJSON: false });
+		assert.deepStrictEqual(ignoring.unpack(ignoring.pack(new Record)), { id: 1, stored: 'own property' });
+	});
+
+	test('useToJSON: false is honored for a class whose toJSON returns this', () => {
+		class Serializable {
+			constructor() {
+				this.someData = [1, 2, 3, 4];
+			}
+			toJSON() {
+				return this;
+			}
+		}
+		const ignoring = new Packr({ useToJSON: false });
+		assert.deepStrictEqual(ignoring.unpack(ignoring.pack(new Serializable)), { someData: [1, 2, 3, 4] });
+	});
+
+	test('useToJSON: false leaves an inherited toJSON alone', () => {
+		class Base {
+			toJSON() {
+				return { fromPrototype: true };
+			}
+		}
+		const record = new Base();
+		record.stored = 'own';
+		const ignoring = new Packr({ useToJSON: false });
+		assert.deepStrictEqual(ignoring.unpack(ignoring.pack(record)), { stored: 'own' });
+		assert.deepStrictEqual(unpack(pack(record)), { fromPrototype: true });
+	});
+
 	test('skip values', function () {
 		var data = {
 			data: [
