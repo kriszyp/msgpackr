@@ -1282,6 +1282,19 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(unpacked, { '1,2,3': 1, '1,2,foo,3.14': 2 });
 	});
 
+	test('non-string map key into object suggests mapsAsObjects: false (#127)', function() {
+		const msgpackr = new Packr({ mapsAsObjects: true });
+		const map = new Map();
+		map.set({ nested: 'key' }, 1);
+		const packed = msgpackr.pack(map);
+		assert.throws(() => msgpackr.unpack(packed), /mapsAsObjects: false/);
+		// and the suggested option does preserve the key
+		const asMaps = new Packr({ mapsAsObjects: false });
+		const unpacked = asMaps.unpack(packed);
+		assert.equal(unpacked instanceof Map, true);
+		assert.deepEqual(Array.from(unpacked.keys())[0], { nested: 'key' });
+	});
+
 	test('utf16 causing expansion', function() {
 		this.timeout(10000);
 		let data = {fixstr: 'ᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝ', str8:'ᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝ'};
