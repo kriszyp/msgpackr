@@ -1305,6 +1305,42 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(values, [[1,0,1], [2,1,2], [3,2,3], [4,3,4]]);
 	});
 
+	test('unpackMultiple reads a long string followed by trailing bytes that look like a string header', () => {
+		// A fixstr/str8/16/32 header is used to bound how many strings the native
+		// extractor batch-decodes ahead of the one actually being read, but that
+		// bound is the end of the whole source buffer, not the end of this message.
+		// If a byte right after the message happens to be a string header claiming
+		// more bytes than remain (0xa1-0xdb), the lookahead used to run off the end
+		// and throw, even though the string we asked for was fully present.
+		let str = 'x'.repeat(32); // 32 chars crosses the native-extractor length threshold
+		let packed = pack(str);
+		for (let trailingByte of [0xbe, 0xbf, 0xd9, 0xda, 0xdb]) {
+			let withTrailingByte = new Uint8Array(packed.length + 1);
+			withTrailingByte.set(packed);
+			withTrailingByte[packed.length] = trailingByte;
+			let result;
+			unpackMultiple(withTrailingByte, (value, start, end) => {
+				result = { value, start, end };
+				return false; // stop after the first object, leaving the trailing byte unread
+			});
+			assert.strictEqual(result.value, str, `trailing byte 0x${trailingByte.toString(16)}`);
+			assert.strictEqual(result.end, packed.length, `trailing byte 0x${trailingByte.toString(16)}`);
+		}
+	});
+
+	test('unpackMultiple still reports a genuinely truncated string as incomplete', () => {
+		let packed = pack('x'.repeat(32));
+		let truncated = packed.slice(0, packed.length - 5);
+		let threw = false;
+		try {
+			unpackMultiple(truncated);
+		} catch (error) {
+			threw = true;
+			assert.strictEqual(error.incomplete, true);
+		}
+		assert.isTrue(threw, 'a truncated string must still throw');
+	});
+
 	test('pack toJSON returning this', () => {
 		class Serializable {
 			someData = [1, 2, 3, 4];

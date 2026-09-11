@@ -578,7 +578,20 @@ export function setExtractor(extractStrings) {
 				if (bundledStrings)
 					return readStringJS(length);
 				let byteOffset = src.byteOffset;
-				let extraction = extractStrings(position - headerLength + byteOffset, srcEnd + byteOffset, src.buffer);
+				let extraction;
+				try {
+					extraction = extractStrings(position - headerLength + byteOffset, srcEnd + byteOffset, src.buffer);
+				} catch (error) {
+					// The native extractor batches ahead of the string we actually asked for, using the end
+					// of the whole source as its bound rather than the end of this string. When that lookahead
+					// runs past the message into unrelated trailing bytes (e.g. unpackMultiple reading one
+					// object out of a buffer that has more data after it), it can fail even though the bytes
+					// for this string are fully present. Only let the error stand when our own bytes are
+					// genuinely missing; otherwise decode just this string in JS and let the next read retry
+					// extraction from where it left off.
+					if (position + length > srcEnd) throw error;
+					return readStringJS(length);
+				}
 				if (typeof extraction == 'string') {
 					string = extraction;
 					strings = EMPTY_ARRAY;
