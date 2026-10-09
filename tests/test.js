@@ -1187,6 +1187,31 @@ suite('msgpackr basic tests', function() {
 		let encoded = pack(123);
 		assert.equal(encoded.length, 1);
 	});
+	test('toJSON on a Set subclass is honoured, like it already is for Map subclasses', function(){
+		class CustomSet extends Set { toJSON() { return { kind: 'set', values: Array.from(this) }; } }
+		class CustomMap extends Map { toJSON() { return { kind: 'map' }; } }
+		class CustomError extends Error { toJSON() { return { kind: 'error' }; } }
+
+		let packr = new Packr({ moreTypes: true });
+		assert.deepEqual(packr.unpack(packr.pack(new CustomSet([1, 2]))), { kind: 'set', values: [1, 2] });
+		assert.deepEqual(packr.unpack(packr.pack(new CustomMap())), { kind: 'map' });
+		assert.deepEqual(packr.unpack(packr.pack(new CustomError('x'))), { kind: 'error' });
+
+		// a subclass without toJSON, and a plain Set, still use the Set extension
+		class PlainSet extends Set {}
+		assert.isTrue(packr.unpack(packr.pack(new PlainSet([1, 2]))) instanceof Set);
+		assert.isTrue(packr.unpack(packr.pack(new Set([1, 2]))) instanceof Set);
+
+		// Dates keep the timestamp extension: Date.prototype.toJSON is part of how they are
+		// serialized, not a user hook
+		let date = new Date(1234567890123);
+		assert.strictEqual(+packr.unpack(packr.pack(date)), 1234567890123);
+		assert.isTrue(packr.unpack(packr.pack(date)) instanceof Date);
+
+		// useToJSON: false keeps the old behaviour
+		let off = new Packr({ moreTypes: true, useToJSON: false });
+		assert.isTrue(off.unpack(off.pack(new CustomSet([1]))) instanceof Set);
+	});
 	test('numbers', function(){
 		var data = {
 			bigEncodable: 48978578104322,

@@ -456,6 +456,17 @@ export class Packr extends Unpackr {
 						for (let i = 0, l = extensions.length; i < l; i++) {
 							let extensionClass = extensionClasses[i];
 							if (value instanceof extensionClass) {
+								// A toJSON that no built-in provides is a user hook, and plain objects
+								// and Map subclasses are already serialized through it. Subclasses of
+								// Set, Error, RegExp and ArrayBuffer match their extension class here,
+								// so without this their hook was skipped and their own fields were
+								// written instead. Date and Buffer do have a built-in toJSON and it is
+								// how msgpackr serializes them (timestamp and byte extensions), so
+								// those two must keep the extension.
+								if (packr.useToJSON !== false && value.toJSON !== undefined &&
+										builtInToJSON.indexOf(value.toJSON) === -1) {
+									break; // fall through to the generic toJSON handling below
+								}
 								let extension = extensions[i];
 								if (extension.write) {
 									if (extension.type) {
@@ -894,6 +905,9 @@ export class Packr extends Unpackr {
 	}
 }
 
+// toJSON implementations that belong to the built-ins msgpackr serializes with extensions
+let builtInToJSON = [ Date.prototype.toJSON ];
+if (typeof Buffer !== 'undefined') builtInToJSON.push(Buffer.prototype.toJSON);
 extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/, DataView, C1Type ];
 extensions = [{
 	pack(date, allocateForWrite, pack) {
