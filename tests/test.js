@@ -756,6 +756,20 @@ suite('msgpackr basic tests', function() {
 			}
 		});
 
+		let savedFromLeftover;
+		const leftoverPackr = new Packr({
+			structures: [],
+			saveStructures(structures) {
+				savedFromLeftover = structures.slice(0);
+			}
+		});
+		leftoverPackr.unpack(new Packr().pack({ leftoverA: 1 }));
+		activePackr = leftoverPackr;
+		const leftoverEncoded = leftoverPackr.pack([new SharedNestedExt({ a: 1 })]);
+		const leftoverReader = new Packr({ structures: savedFromLeftover });
+		activePackr = leftoverReader;
+		assert.deepEqual(leftoverReader.unpack(leftoverEncoded), [new SharedNestedExt({ a: 1 })]);
+
 		let persistedStructures = [];
 		let saveCount = 0;
 		let declinedOnce = false;
@@ -772,11 +786,6 @@ suite('msgpackr basic tests', function() {
 				persistedStructures = structures.slice(0);
 			}
 		});
-
-		const inlineRecordBytes = new Packr().pack({ leftoverA: 1, leftoverB: 2 });
-		assert.deepEqual(activePackr.unpack(inlineRecordBytes), { leftoverA: 1, leftoverB: 2 });
-		assert.equal(activePackr.structures.length, 1);
-		assert.equal(activePackr.structures.sharedLength || 0, 0);
 
 		const nestedPayload = {
 			nested: new SharedNestedExt({
@@ -817,13 +826,55 @@ suite('msgpackr basic tests', function() {
 		assert.equal(saveCount, 1);
 		assert.equal(activePackr.structures.length, countBeforeError);
 
+		let throwOnSave = true;
+		activePackr = new Packr({
+			structures: persistedStructures.slice(0),
+			saveStructures(structures) {
+				if (throwOnSave)
+					throw new Error('save failed');
+				saveCount++;
+				persistedStructures = structures.slice(0);
+			}
+		});
+		assert.throws(() => {
+			activePackr.pack({ transientAfterSaveThrow: 1, b: 2 });
+		}, /save failed/);
+		assert.equal(activePackr.structures.length, countBeforeError);
+		throwOnSave = false;
+
 		const followUp = {
 			outerShape: { outerA: 1, outerB: 2 },
-			freshShape: { freshA: 3, freshB: 4 }
+			transientAfterSaveThrow: 3,
+			b: 4
 		};
 		const followUpEncoded = activePackr.pack(followUp);
 		const freshReader = new Packr({ structures: persistedStructures });
 		assert.deepEqual(freshReader.unpack(followUpEncoded), followUp);
+
+		let savedOwnIdShared = [];
+		const ownIdPackr = new Packr({
+			structures: [],
+			shouldShareStructure(keys) {
+				return !keys.includes('ownOnly');
+			},
+			saveStructures(structures) {
+				savedOwnIdShared = structures.slice(0, structures.sharedLength);
+			}
+		});
+		activePackr = ownIdPackr;
+		const ownIdPayload = {
+			firstOwn: { ownOnly: 1, firstKey: 2 },
+			nested: new SharedNestedExt({
+				innerOwn: { ownOnly: 3, innerKey: 4 },
+				innerShared: { sharedKey: 5 }
+			}),
+			secondOwn: { ownOnly: 6, secondKey: 7 },
+			reuseFirstOwn: { ownOnly: 8, firstKey: 9 }
+		};
+		const ownIdEncoded = ownIdPackr.pack(ownIdPayload);
+		const ownIdReader = new Packr({ structures: savedOwnIdShared });
+		activePackr = ownIdReader;
+		assert.deepEqual(ownIdReader.unpack(ownIdEncoded), ownIdPayload);
 
 		const seqPackr = new Packr({ sequential: true });
 		activePackr = seqPackr;

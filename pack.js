@@ -93,7 +93,8 @@ export class Packr extends Unpackr {
 				bundledStrings = null;
 			structures = packr.structures;
 			if (structures) {
-				if (structures.uninitialized)
+				let wasUninitialized = structures.uninitialized;
+				if (wasUninitialized)
 					structures = packr._mergeStructures(packr.getStructures());
 				let sharedLength = structures.sharedLength || 0;
 				if (sharedLength > maxSharedStructures) {
@@ -103,6 +104,8 @@ export class Packr extends Unpackr {
 				if (!structures.transitions) {
 					// rebuild our structure transitions
 					rebuildTransitions(sharedLength);
+					if (wasUninitialized || packr.lastNamedStructuresLength === undefined)
+						packr.lastNamedStructuresLength = sharedLength;
 				}
 				if (!isSequential || !(structures.nextId >= sharedLength + 0x40)) {
 					structures.nextId = sharedLength + 0x40;
@@ -179,6 +182,7 @@ export class Packr extends Unpackr {
 						// we can't rely on start/end with REUSE_BUFFER_MODE since they will (probably) change when we save
 						let returnBuffer = target.subarray(start, position);
 						if (!encodingError) {
+							let saveSucceeded = false;
 							try {
 								let newSharedData = (packr._prepareStructures || prepareStructures)(structures, packr);
 								if (packr.saveStructures(newSharedData, newSharedData.isCompatible) === false) {
@@ -193,8 +197,15 @@ export class Packr extends Unpackr {
 									packing = false;
 									return packr.pack(value, encodeOptions);
 								}
+								saveSucceeded = true;
 							} finally {
 								packing = false;
+								if (!saveSucceeded && !structures.uninitialized) {
+									if (packr.getStructures)
+										structures.uninitialized = true;
+									structures.length = structures.sharedLength = packr.lastNamedStructuresLength || 0;
+									structures.transitions = null;
+								}
 							}
 							packr.lastNamedStructuresLength = sharedLength;
 							// don't keep large buffers around
@@ -231,7 +242,6 @@ export class Packr extends Unpackr {
 				}
 				transition[RECORD_SYMBOL] = i + 0x40;
 			}
-			packr.lastNamedStructuresLength = sharedLength;
 		};
 		const saveState = (value, encodeOptions) => {
 			let savedTarget = target;
@@ -291,16 +301,24 @@ export class Packr extends Unpackr {
 							recordIdsToRemove[i][RECORD_SYMBOL] = 0;
 						}
 						let currentSharedLength = structures.sharedLength || 0;
+						if (structures !== savedStructures) {
+							for (let i = 0; i < savedSharedLength; i++) {
+								if (savedStructures[i] !== undefined)
+									structures[i] = savedStructures[i];
+							}
+							if (currentSharedLength < savedSharedLength)
+								currentSharedLength = structures.sharedLength = savedSharedLength;
+						}
 						structures.length = Math.max(currentSharedLength, savedSharedLength + savedOwnStructures.length);
 						for (let i = Math.max(0, currentSharedLength - savedSharedLength), l = savedOwnStructures.length; i < l; i++) {
 							if (savedOwnStructures[i] !== undefined)
 								structures[savedSharedLength + i] = savedOwnStructures[i];
 						}
-						if (structures.transitions !== savedTransitions) {
-							if (!structures.transitions && currentSharedLength === savedSharedLength) {
+						if (structures.transitions !== savedTransitions || structures !== savedStructures) {
+							if (structures === savedStructures && !structures.transitions && currentSharedLength === savedSharedLength) {
 								structures.transitions = savedTransitions;
 							} else {
-								if (!structures.transitions)
+								if (!structures.transitions || structures !== savedStructures)
 									rebuildTransitions(currentSharedLength);
 								savedRecordIdsToRemove = [];
 								savedRecordIds = [];
