@@ -645,6 +645,88 @@ suite('msgpackr basic tests', function() {
 		assert.equal(deserialized.getDouble(), 8);
 	});
 
+	test('reentrant pack on same instance with nonzero start', function() {
+		class NestedBlob {
+			constructor(meta) {
+				this.meta = meta;
+			}
+		}
+		addExtension({
+			Class: NestedBlob,
+			type: 16,
+			pack(blob) {
+				return pack(blob.meta);
+			},
+			unpack(buffer) {
+				return new NestedBlob(unpack(buffer));
+			}
+		});
+
+		// Advance position in the shared buffer so the outer pack starts at a nonzero offset
+		const warmup = pack({ control: 'warmup-frame', seq: 1 });
+		assert.deepEqual(unpack(warmup), { control: 'warmup-frame', seq: 1 });
+
+		const payload = {
+			id: 'rec-1',
+			blob: new NestedBlob({
+				name: 'file.txt',
+				size: 40020,
+				nested: new NestedBlob({ inner: true })
+			}),
+			after: 'tail'
+		};
+		const serialized = pack(payload);
+		// Outer map16 (3) + 'id' (3) + 'rec-1' (6) + 'blob' (5)
+		// + ext8 header (3) + meta map16 (3 + 'name'(5) + 'file.txt'(9) + 'size'(5) + 40020(3) + 'nested'(7) + ext8(3) + {inner:true}(10) = 45)
+		// + 'after' (6) + 'tail' (5) = 76 bytes
+		assert.equal(serialized.length, 76);
+		const deserialized = unpack(serialized);
+		assert.deepEqual(deserialized, payload);
+
+		// Also test reentrant pack on a Packr instance with records, bundleStrings, and structuredClone
+		let activePackr;
+		class NestedRecordExt {
+			constructor(value) {
+				this.value = value;
+			}
+		}
+		addExtension({
+			Class: NestedRecordExt,
+			type: 17,
+			pack(inst) {
+				return activePackr.pack(inst.value);
+			},
+			unpack(buffer) {
+				return new NestedRecordExt(activePackr.unpack(buffer));
+			}
+		});
+
+		activePackr = new Packr({ bundleStrings: true, structuredClone: true });
+		// Prime shared buffer so start > 0
+		activePackr.pack({ warmup: 'initial frame to advance buffer position' });
+
+		const sharedOuter = { label: 'shared-outer-string' };
+		const sharedInner = { label: 'shared-inner-string' };
+		const richPayload = {
+			first: { a: 'first-bundled-string', b: 1 },
+			ref1: sharedOuter,
+			ext: new NestedRecordExt({
+				sameShape: { a: 'inner-bundled-string', b: 2 },
+				innerOther: { x: 'another-inner-string', y: 3 },
+				innerRef1: sharedInner,
+				innerRef2: sharedInner
+			}),
+			second: { a: 'second-bundled-string', b: 4 },
+			third: { c: 'third-bundled-string', d: 5 },
+			ref2: sharedOuter
+		};
+		const richSerialized = activePackr.pack(richPayload);
+		const richDeserialized = activePackr.unpack(richSerialized);
+		assert.deepEqual(richDeserialized, richPayload);
+		assert.equal(richDeserialized.ref1, richDeserialized.ref2);
+		assert.equal(richDeserialized.ext.value.innerRef1, richDeserialized.ext.value.innerRef2);
+	});
+
 	test.skip('convert Date to string', function(){
 		var data = {
 			aDate: new Date(),
