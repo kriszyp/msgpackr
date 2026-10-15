@@ -93,8 +93,7 @@ export class Packr extends Unpackr {
 				bundledStrings = null;
 			structures = packr.structures;
 			if (structures) {
-				let wasUninitialized = structures.uninitialized;
-				if (wasUninitialized)
+				if (structures.uninitialized)
 					structures = packr._mergeStructures(packr.getStructures());
 				let sharedLength = structures.sharedLength || 0;
 				if (sharedLength > maxSharedStructures) {
@@ -104,7 +103,7 @@ export class Packr extends Unpackr {
 				if (!structures.transitions) {
 					// rebuild our structure transitions
 					rebuildTransitions(sharedLength);
-					if (wasUninitialized || packr.lastNamedStructuresLength === undefined)
+					if (!reentrantDepth || !hasSharedUpdate)
 						packr.lastNamedStructuresLength = sharedLength;
 				}
 				if (!isSequential || !(structures.nextId >= sharedLength + 0x40)) {
@@ -194,13 +193,15 @@ export class Packr extends Unpackr {
 									// Mark structures uninitialized so the re-pack reloads durable structures
 									// via getStructures, rebuilds the transition trie, and re-mints + re-saves.
 									structures.uninitialized = true;
+									saveSucceeded = true;
 									packing = false;
 									return packr.pack(value, encodeOptions);
 								}
 								saveSucceeded = true;
 							} finally {
 								packing = false;
-								if (!saveSucceeded && !structures.uninitialized) {
+								if (!saveSucceeded) {
+									structures = packr.structures;
 									if (packr.getStructures)
 										structures.uninitialized = true;
 									structures.length = structures.sharedLength = packr.lastNamedStructuresLength || 0;
@@ -253,7 +254,7 @@ export class Packr extends Unpackr {
 			let savedReferenceMap = referenceMap;
 			let savedHasSharedUpdate = hasSharedUpdate;
 			let wasInstancePacking = instancePacking;
-			let savedStructures, savedTransitions, savedNextId, savedNextOwnId, savedRecordIdsToRemove, savedRecordIds, savedOwnStructures, savedSharedLength, savedTransitionsCount;
+			let savedStructures, savedTransitions, savedNextId, savedNextOwnId, savedRecordIdsToRemove, savedRecordIds, savedOwnStructures, savedSharedLength, savedLastNamedLength, savedUnsavedShared, savedTransitionsCount;
 			if (wasInstancePacking) {
 				reentrantDepth++;
 				if (structures) {
@@ -261,6 +262,7 @@ export class Packr extends Unpackr {
 					savedTransitions = structures.transitions;
 					savedNextId = structures.nextId;
 					savedNextOwnId = structures.nextOwnId;
+					savedLastNamedLength = packr.lastNamedStructuresLength;
 					savedRecordIdsToRemove = recordIdsToRemove;
 					savedRecordIds = [];
 					for (let i = 0, l = recordIdsToRemove.length; i < l; i++) {
@@ -269,6 +271,23 @@ export class Packr extends Unpackr {
 					}
 					recordIdsToRemove = [];
 					savedSharedLength = structures.sharedLength || 0;
+					if (savedHasSharedUpdate && packr.saveStructures && savedTransitions) {
+						savedUnsavedShared = [];
+						for (let i = savedLastNamedLength || 0; i < savedSharedLength; i++) {
+							let keys = structures[i];
+							if (!keys)
+								continue;
+							let transition = savedTransitions;
+							for (let j = 0, l = keys.length; j < l && transition; j++) {
+								transition = transition[keys[j]];
+							}
+							if (transition && transition[RECORD_SYMBOL] === i + 0x40) {
+								savedUnsavedShared.push(transition, i + 0x40, transition.__keys__);
+								transition[RECORD_SYMBOL] = 0;
+								transition.__keys__ = null;
+							}
+						}
+					}
 					savedOwnStructures = structures.slice(savedSharedLength);
 					structures.length = savedSharedLength;
 					structures.nextId = savedSharedLength + 0x40;
@@ -302,12 +321,17 @@ export class Packr extends Unpackr {
 						}
 						let currentSharedLength = structures.sharedLength || 0;
 						if (structures !== savedStructures) {
-							for (let i = 0; i < savedSharedLength; i++) {
-								if (savedStructures[i] !== undefined)
-									structures[i] = savedStructures[i];
+							if (!structures.transitions && !hasSharedUpdate)
+								packr.lastNamedStructuresLength = currentSharedLength;
+							if (savedHasSharedUpdate) {
+								for (let i = 0; i < savedSharedLength; i++) {
+									if (savedStructures[i] !== undefined)
+										structures[i] = savedStructures[i];
+								}
+								if (currentSharedLength < savedSharedLength)
+									currentSharedLength = structures.sharedLength = savedSharedLength;
+								packr.lastNamedStructuresLength = savedLastNamedLength;
 							}
-							if (currentSharedLength < savedSharedLength)
-								currentSharedLength = structures.sharedLength = savedSharedLength;
 						}
 						structures.length = Math.max(currentSharedLength, savedSharedLength + savedOwnStructures.length);
 						for (let i = Math.max(0, currentSharedLength - savedSharedLength), l = savedOwnStructures.length; i < l; i++) {
@@ -320,6 +344,7 @@ export class Packr extends Unpackr {
 							} else {
 								if (!structures.transitions || structures !== savedStructures)
 									rebuildTransitions(currentSharedLength);
+								savedUnsavedShared = null;
 								savedRecordIdsToRemove = [];
 								savedRecordIds = [];
 								for (let i = Math.max(0, currentSharedLength - savedSharedLength), l = savedOwnStructures.length; i < l; i++) {
@@ -339,6 +364,12 @@ export class Packr extends Unpackr {
 										savedRecordIds.push(savedSharedLength + i + 0x40);
 									}
 								}
+							}
+						}
+						if (savedUnsavedShared) {
+							for (let i = 0, l = savedUnsavedShared.length; i < l; i += 3) {
+								savedUnsavedShared[i][RECORD_SYMBOL] = savedUnsavedShared[i + 1];
+								savedUnsavedShared[i].__keys__ = savedUnsavedShared[i + 2];
 							}
 						}
 						recordIdsToRemove = savedRecordIdsToRemove;
@@ -942,7 +973,7 @@ export class Packr extends Unpackr {
 			let recordId = structures.nextId;
 			if (!recordId)
 				recordId = 0x40;
-			if (recordId < sharedLimitId && this.shouldShareStructure && !this.shouldShareStructure(keys)) {
+			if (recordId < sharedLimitId && ((reentrantDepth && this.saveStructures) || (this.shouldShareStructure && !this.shouldShareStructure(keys)))) {
 				recordId = structures.nextOwnId;
 				if (!(recordId < maxStructureId))
 					recordId = sharedLimitId;
@@ -1033,8 +1064,10 @@ export class Packr extends Unpackr {
 		return position;
 	}
 	clearSharedData() {
-		if (this.structures)
+		if (this.structures) {
 			this.structures = [];
+			this.lastNamedStructuresLength = 0;
+		}
 		if (this.typedStructs)
 			this.typedStructs = [];
 	}
