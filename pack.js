@@ -290,52 +290,52 @@ export class Packr extends Unpackr {
 			let savedHasSharedUpdate = hasSharedUpdate;
 			let wasInstancePacking = instancePacking;
 			let savedStructures, savedTransitions, savedNextId, savedNextOwnId, savedRecordIdsToRemove, savedRecordIds, savedOwnStructures, savedSharedLength, savedLastNamedLength, savedUnsavedShared, savedTransitionsCount, savedPendingNestedLen;
-			if (wasInstancePacking) {
-				reentrantDepth++;
-				savedPendingNestedLen = pendingNestedStructures ? pendingNestedStructures.length : 0;
-				if (structures) {
-					savedStructures = structures;
-					savedTransitions = structures.transitions;
-					savedNextId = structures.nextId;
-					savedNextOwnId = structures.nextOwnId;
-					savedLastNamedLength = packr.lastNamedStructuresLength;
-					savedRecordIdsToRemove = recordIdsToRemove;
-					savedRecordIds = [];
-					for (let i = 0, l = recordIdsToRemove.length; i < l; i++) {
-						savedRecordIds[i] = recordIdsToRemove[i][RECORD_SYMBOL];
-						recordIdsToRemove[i][RECORD_SYMBOL] = 0;
-					}
-					recordIdsToRemove = [];
-					savedSharedLength = structures.sharedLength || 0;
-					if (savedHasSharedUpdate && packr.saveStructures && savedTransitions) {
-						savedUnsavedShared = [];
-						for (let i = savedLastNamedLength || 0; i < savedSharedLength; i++) {
-							let keys = structures[i];
-							if (!keys)
-								continue;
-							let transition = savedTransitions;
-							for (let j = 0, l = keys.length; j < l && transition; j++) {
-								transition = transition[keys[j]];
-							}
-							if (transition && transition[RECORD_SYMBOL] === i + 0x40) {
-								savedUnsavedShared.push(transition, i + 0x40, transition.__keys__);
-								transition[RECORD_SYMBOL] = 0;
-								transition.__keys__ = null;
-							}
+			if (wasInstancePacking && structures) {
+				savedStructures = structures;
+				savedTransitions = structures.transitions;
+				savedNextId = structures.nextId;
+				savedNextOwnId = structures.nextOwnId;
+				savedLastNamedLength = packr.lastNamedStructuresLength;
+				savedRecordIdsToRemove = recordIdsToRemove;
+				savedRecordIds = [];
+				for (let i = 0, l = recordIdsToRemove.length; i < l; i++) {
+					savedRecordIds[i] = recordIdsToRemove[i][RECORD_SYMBOL];
+					recordIdsToRemove[i][RECORD_SYMBOL] = 0;
+				}
+				recordIdsToRemove = [];
+				savedSharedLength = structures.sharedLength || 0;
+				if (savedHasSharedUpdate && packr.saveStructures && savedTransitions) {
+					savedUnsavedShared = [];
+					for (let i = savedLastNamedLength || 0; i < savedSharedLength; i++) {
+						let keys = structures[i];
+						if (!keys)
+							continue;
+						let transition = savedTransitions;
+						for (let j = 0, l = keys.length; j < l && transition; j++) {
+							transition = transition[keys[j]];
+						}
+						if (transition && transition[RECORD_SYMBOL] === i + 0x40) {
+							savedUnsavedShared.push(transition, i + 0x40, transition.__keys__);
+							transition[RECORD_SYMBOL] = 0;
+							transition.__keys__ = null;
 						}
 					}
-					savedOwnStructures = structures.slice(savedSharedLength);
-					structures.length = savedSharedLength;
-					structures.nextId = savedSharedLength + 0x40;
-					structures.nextOwnId = undefined;
-					savedTransitionsCount = transitionsCount;
-					transitionsCount = 0;
 				}
+				savedOwnStructures = structures.slice(savedSharedLength);
+				structures.length = savedSharedLength;
+				structures.nextId = savedSharedLength + 0x40;
+				structures.nextOwnId = undefined;
+				savedTransitionsCount = transitionsCount;
+				transitionsCount = 0;
 			}
 			target = null;
 			packing = false;
 			instancePacking = false;
 			let nestedSucceeded = false;
+			if (wasInstancePacking) {
+				savedPendingNestedLen = pendingNestedStructures ? pendingNestedStructures.length : 0;
+				reentrantDepth++;
+			}
 			try {
 				let result = packr.pack(value, encodeOptions);
 				nestedSucceeded = true;
