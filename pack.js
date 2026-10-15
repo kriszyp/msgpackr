@@ -1014,9 +1014,8 @@ export class Packr extends Unpackr {
 			let recordId = structures.nextId;
 			if (!recordId)
 				recordId = 0x40;
-			let isShareable = !(this.shouldShareStructure && !this.shouldShareStructure(keys));
-			if (recordId < sharedLimitId && ((reentrantDepth && this.saveStructures) || !isShareable)) {
-				if (reentrantDepth && this.saveStructures && isShareable)
+			if (recordId < sharedLimitId && ((reentrantDepth && this.saveStructures) || (this.shouldShareStructure && !this.shouldShareStructure(keys)))) {
+				if (reentrantDepth && this.saveStructures && !(this.shouldShareStructure && !this.shouldShareStructure(keys)))
 					(pendingNestedStructures || (pendingNestedStructures = [])).push(keys);
 				recordId = structures.nextOwnId;
 				if (!(recordId < maxStructureId))

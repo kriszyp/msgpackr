@@ -895,13 +895,16 @@ suite('msgpackr basic tests', function() {
 			b: { y: 1 },
 			n: new SharedNestedExt({ z: 1 }),
 			c: { w: 1 },
-			d: { y: 2 }
+			d: { x: 2 }
 		};
 		assert.deepEqual(nextIdPackr.unpack(nextIdPackr.pack(nextIdPayload)), nextIdPayload);
 
+		let shareCheckCalls = 0;
 		const ownIdPackr = new Packr({
 			structures: [],
+			maxSharedStructures: 4,
 			shouldShareStructure(keys) {
+				shareCheckCalls++;
 				return !keys.includes('ownOnly');
 			}
 		});
@@ -915,11 +918,15 @@ suite('msgpackr basic tests', function() {
 			reuseFirstOwn: { ownOnly: 8, firstKey: 9 }
 		};
 		const ownIdEncoded = ownIdPackr.pack(ownIdPayload);
+		assert.strictEqual(shareCheckCalls, 5);
 		const ownIdReader = new Packr({
-			structures: ownIdPackr.structures.slice(0, ownIdPackr.structures.sharedLength)
+			structures: ownIdPackr.structures.slice(0, ownIdPackr.structures.sharedLength),
+			maxSharedStructures: 4
 		});
 		activePackr = ownIdReader;
 		assert.deepEqual(ownIdReader.unpack(ownIdEncoded), ownIdPayload);
+		ownIdPackr.pack({ s4: { k4: 1 }, overLimit: { k5: 2 } });
+		assert.strictEqual(shareCheckCalls, 6);
 
 		const seqPackr = new Packr({ sequential: true });
 		activePackr = seqPackr;
