@@ -647,22 +647,35 @@ suite('msgpackr basic tests', function() {
 
 	test('reentrant pack on same instance with nonzero start', function() {
 		class NestedBlob {
-			constructor(meta) {
+			constructor(meta, prepacked) {
 				this.meta = meta;
+				if (prepacked)
+					this.prepacked = prepacked;
 			}
 		}
 		addExtension({
 			Class: NestedBlob,
 			type: 16,
 			pack(blob) {
-				return pack(blob.meta);
+				return blob.prepacked || pack(blob.meta);
 			},
 			unpack(buffer) {
 				return new NestedBlob(unpack(buffer));
 			}
 		});
 
-		// Advance position in the shared buffer so the outer pack starts at a nonzero offset
+		const innerPrepacked = Buffer.from(pack({ inner: true }));
+		const metaPrepacked = Buffer.from(pack({
+			name: 'file.txt',
+			size: 40020,
+			nested: new NestedBlob(null, innerPrepacked)
+		}));
+		const expectedBytes = Buffer.from(pack({
+			id: 'rec-1',
+			blob: new NestedBlob(null, metaPrepacked),
+			after: 'tail'
+		}));
+
 		const warmup = pack({ control: 'warmup-frame', seq: 1 });
 		assert.deepEqual(unpack(warmup), { control: 'warmup-frame', seq: 1 });
 
@@ -676,14 +689,13 @@ suite('msgpackr basic tests', function() {
 			after: 'tail'
 		};
 		const serialized = pack(payload);
-		// Outer map16 (3) + 'id' (3) + 'rec-1' (6) + 'blob' (5)
-		// + ext8 header (3) + meta map16 (3 + 'name'(5) + 'file.txt'(9) + 'size'(5) + 40020(3) + 'nested'(7) + ext8(3) + {inner:true}(10) = 45)
-		// + 'after' (6) + 'tail' (5) = 76 bytes
-		assert.equal(serialized.length, 76);
+		assert.equal(serialized.length, expectedBytes.length);
+		assert.deepEqual(Buffer.from(serialized), expectedBytes);
 		const deserialized = unpack(serialized);
 		assert.deepEqual(deserialized, payload);
+	});
 
-		// Also test reentrant pack on a Packr instance with records, bundleStrings, and structuredClone
+	test('reentrant pack with records, bundleStrings, and structuredClone', function() {
 		let activePackr;
 		class NestedRecordExt {
 			constructor(value) {
@@ -702,7 +714,6 @@ suite('msgpackr basic tests', function() {
 		});
 
 		activePackr = new Packr({ bundleStrings: true, structuredClone: true });
-		// Prime shared buffer so start > 0
 		activePackr.pack({ warmup: 'initial frame to advance buffer position' });
 
 		const sharedOuter = { label: 'shared-outer-string' };
@@ -725,6 +736,165 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(richDeserialized, richPayload);
 		assert.equal(richDeserialized.ref1, richDeserialized.ref2);
 		assert.equal(richDeserialized.ext.value.innerRef1, richDeserialized.ext.value.innerRef2);
+	});
+
+	test('reentrant pack with shared structures, saveStructures, and sequential mode', function() {
+		let activePackr;
+		class SharedNestedExt {
+			constructor(value) {
+				this.value = value;
+			}
+		}
+		addExtension({
+			Class: SharedNestedExt,
+			type: 18,
+			pack(inst) {
+				return activePackr.pack(inst.value);
+			},
+			unpack(buffer) {
+				return new SharedNestedExt(activePackr.unpack(buffer));
+			}
+		});
+
+		let persistedStructures = [];
+		let saveCount = 0;
+		let declinedOnce = false;
+		activePackr = new Packr({
+			getStructures() {
+				return persistedStructures.slice(0);
+			},
+			saveStructures(structures) {
+				if (!declinedOnce) {
+					declinedOnce = true;
+					return false;
+				}
+				saveCount++;
+				persistedStructures = structures.slice(0);
+			}
+		});
+
+		const inlineRecordBytes = new Packr().pack({ leftoverA: 1, leftoverB: 2 });
+		assert.deepEqual(activePackr.unpack(inlineRecordBytes), { leftoverA: 1, leftoverB: 2 });
+		assert.equal(activePackr.structures.length, 1);
+		assert.equal(activePackr.structures.sharedLength || 0, 0);
+
+		const nestedPayload = {
+			nested: new SharedNestedExt({
+				innerShape: { innerA: 30, innerB: 40 }
+			}),
+			outerShape: { outerA: 10, outerB: 20 },
+			afterInner: { innerA: 70, innerB: 80 },
+			useLeftover: { leftoverA: 90, leftoverB: 100 }
+		};
+		const encoded = activePackr.pack(nestedPayload);
+		assert.equal(declinedOnce, true);
+		assert.equal(saveCount, 1);
+		assert.equal(persistedStructures.length, 5);
+
+		const readerPackr = new Packr({ structures: persistedStructures });
+		activePackr = readerPackr;
+		assert.deepEqual(readerPackr.unpack(encoded), nestedPayload);
+
+		class FailingToJSON {
+			toJSON() {
+				throw new Error('abort outer pack');
+			}
+		}
+		activePackr = new Packr({
+			structures: persistedStructures,
+			saveStructures(structures) {
+				saveCount++;
+				persistedStructures = structures.slice(0);
+			}
+		});
+		const countBeforeError = persistedStructures.length;
+		assert.throws(() => {
+			activePackr.pack({
+				nested: new SharedNestedExt({ transientKeyA: 1, transientKeyB: 2 }),
+				bad: new FailingToJSON()
+			});
+		}, /abort outer pack/);
+		assert.equal(saveCount, 1);
+		assert.equal(activePackr.structures.length, countBeforeError);
+
+		const followUp = {
+			outerShape: { outerA: 1, outerB: 2 },
+			freshShape: { freshA: 3, freshB: 4 }
+		};
+		const followUpEncoded = activePackr.pack(followUp);
+		const freshReader = new Packr({ structures: persistedStructures });
+		assert.deepEqual(freshReader.unpack(followUpEncoded), followUp);
+
+		const seqPackr = new Packr({ sequential: true });
+		activePackr = seqPackr;
+		const seqPayload = {
+			first: { seqA: 1, seqB: 2 },
+			nested: new SharedNestedExt({ innerSeqA: 3, innerSeqB: 4 }),
+			second: { seqA: 5, seqB: 6 },
+			third: { innerSeqA: 7, innerSeqB: 8 }
+		};
+		const seqEncoded = seqPackr.pack(seqPayload);
+		assert.deepEqual(seqPackr.unpack(seqEncoded), seqPayload);
+	});
+
+	test('cross-instance reentrant pack in toJSON and write with bundleStrings', function() {
+		const outerPackr = new Packr({ bundleStrings: true });
+		const innerPackr = new Packr({ bundleStrings: true });
+		let capturedFromWrite;
+		let capturedFromToJSON;
+
+		class CrossWriteItem {
+			constructor(data) {
+				this.data = data;
+			}
+		}
+		addExtension({
+			Class: CrossWriteItem,
+			type: 19,
+			write(item) {
+				capturedFromWrite = Buffer.from(innerPackr.pack({
+					innerWrite: 'bundled-inside-write-callback',
+					extra: item.data
+				}));
+				return item.data;
+			},
+			read(data) {
+				return new CrossWriteItem(data);
+			}
+		});
+
+		class CrossToJSONItem {
+			toJSON() {
+				capturedFromToJSON = Buffer.from(innerPackr.pack({
+					innerToJSON: 'bundled-inside-tojson-callback',
+					count: 42
+				}));
+				return 'returned-from-tojson-string';
+			}
+		}
+
+		const outerPayload = {
+			prefix: 'outer-bundled-string-prefix',
+			item: new CrossWriteItem('cross-write-payload-string'),
+			viaToJSON: new CrossToJSONItem(),
+			suffix: 'outer-bundled-string-suffix'
+		};
+
+		const outerEncoded = outerPackr.pack(outerPayload);
+		assert.deepEqual(outerPackr.unpack(outerEncoded), {
+			prefix: 'outer-bundled-string-prefix',
+			item: new CrossWriteItem('cross-write-payload-string'),
+			viaToJSON: 'returned-from-tojson-string',
+			suffix: 'outer-bundled-string-suffix'
+		});
+		assert.deepEqual(innerPackr.unpack(capturedFromWrite), {
+			innerWrite: 'bundled-inside-write-callback',
+			extra: 'cross-write-payload-string'
+		});
+		assert.deepEqual(innerPackr.unpack(capturedFromToJSON), {
+			innerToJSON: 'bundled-inside-tojson-callback',
+			count: 42
+		});
 	});
 
 	test.skip('convert Date to string', function(){
