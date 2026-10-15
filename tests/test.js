@@ -821,6 +821,25 @@ suite('msgpackr basic tests', function() {
 			innerShape: { innerA: 30, innerB: 40 },
 			nestedOnly: { onlyInnerA: 50, onlyInnerB: 60 }
 		});
+
+		// saveStructures calling packr.pack(structures) on the same Packr instance
+		let packedStructuresBlob;
+		const selfSavingPackr = new Packr({
+			structures: [],
+			saveStructures(structures) {
+				packedStructuresBlob = Buffer.from(selfSavingPackr.pack(structures));
+			}
+		});
+		activePackr = selfSavingPackr;
+		const selfSavedPayload = {
+			outer: { a: 1, b: 2 },
+			nested: new SharedNestedExt({ innerKey: 3 })
+		};
+		const selfSavedEncoded = Buffer.from(selfSavingPackr.pack(selfSavedPayload));
+		const unpackedStructures = selfSavingPackr.unpack(packedStructuresBlob);
+		const selfSavedReader = new Packr({ structures: unpackedStructures });
+		activePackr = selfSavedReader;
+		assert.deepEqual(selfSavedReader.unpack(selfSavedEncoded), selfSavedPayload);
 	});
 
 	test('clearSharedData resets lastNamedStructuresLength after pack', function() {
@@ -900,6 +919,34 @@ suite('msgpackr basic tests', function() {
 		assert.equal(saveCount, 1);
 		const freshReader = new Packr({ structures: persistedStructures });
 		assert.deepEqual(freshReader.unpack(followUpEncoded), followUp);
+
+		// Caught error inside saveState preamble preserves outer own structures
+		const preamblePackr = new Packr({ maxSharedStructures: 0 });
+		const origSlice = preamblePackr.structures.slice;
+		class CaughtNestedToJSON {
+			toJSON() {
+				preamblePackr.structures.slice = () => {
+					throw new Error('slice failed');
+				};
+				try {
+					preamblePackr.pack({ inner: 1 });
+				} catch (err) {
+					return { fallback: err.message };
+				} finally {
+					preamblePackr.structures.slice = origSlice;
+				}
+			}
+		}
+		const outerWithCaughtNested = {
+			first: { ownA: 1, ownB: 2 },
+			caught: new CaughtNestedToJSON(),
+			second: { ownA: 3, ownB: 4 }
+		};
+		assert.deepEqual(preamblePackr.unpack(preamblePackr.pack(outerWithCaughtNested)), {
+			first: { ownA: 1, ownB: 2 },
+			caught: { fallback: 'slice failed' },
+			second: { ownA: 3, ownB: 4 }
+		});
 	});
 
 	test('reentrant pack restores nextId and nextOwnId and skips shouldShareStructure past limit', function() {
@@ -933,15 +980,18 @@ suite('msgpackr basic tests', function() {
 			reuseFirstOwn: { ownOnly: 8, firstKey: 9 }
 		};
 		const ownIdEncoded = ownIdPackr.pack(ownIdPayload);
-		assert.strictEqual(shareCheckCalls, 5);
+		assert.strictEqual(ownIdPackr.structures.sharedLength, 3);
 		const ownIdReader = new Packr({
 			structures: ownIdPackr.structures.slice(0, ownIdPackr.structures.sharedLength),
 			maxSharedStructures: 4
 		});
 		activePackr = ownIdReader;
 		assert.deepEqual(ownIdReader.unpack(ownIdEncoded), ownIdPayload);
-		ownIdPackr.pack({ s4: { k4: 1 }, overLimit: { k5: 2 } });
-		assert.strictEqual(shareCheckCalls, 6);
+		ownIdPackr.pack({ s4: { k4: 1 } });
+		assert.strictEqual(ownIdPackr.structures.sharedLength, 4);
+		const callsAtLimit = shareCheckCalls;
+		ownIdPackr.pack({ overLimitA: { k5: 2 }, overLimitB: { k6: 3 } });
+		assert.strictEqual(shareCheckCalls, callsAtLimit);
 	});
 
 	test('reentrant pack with sequential mode', function() {
