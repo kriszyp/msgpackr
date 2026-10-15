@@ -103,8 +103,8 @@ export class Packr extends Unpackr {
 				}
 				if (!structures.transitions) {
 					// rebuild our structure transitions
-					rebuildTransitions(sharedLength);
-					if (!reentrantDepth || !hasSharedUpdate)
+					rebuildTransitions(reentrantDepth && packr.saveStructures ? Math.min(sharedLength, packr.lastNamedStructuresLength || 0) : sharedLength);
+					if (!reentrantDepth)
 						packr.lastNamedStructuresLength = sharedLength;
 				}
 				if (!isSequential || !(structures.nextId >= sharedLength + 0x40)) {
@@ -307,8 +307,12 @@ export class Packr extends Unpackr {
 					savedRecordIdsToRemove = recordIdsToRemove;
 					savedRecordIds = [];
 					for (let i = 0, l = recordIdsToRemove.length; i < l; i++) {
-						savedRecordIds[i] = recordIdsToRemove[i][RECORD_SYMBOL];
-						recordIdsToRemove[i][RECORD_SYMBOL] = 0;
+						let transition = recordIdsToRemove[i];
+						let recordId = transition[RECORD_SYMBOL];
+						savedRecordIds[i] = recordId;
+						transition[RECORD_SYMBOL] = 0;
+						if (recordId >= savedSharedLength + 0x40 && transition.__keys__)
+							savedOwnStructures[recordId - savedSharedLength - 0x40] = transition.__keys__;
 					}
 					recordIdsToRemove = [];
 					if (savedHasSharedUpdate && packr.saveStructures && savedTransitions) {
@@ -364,16 +368,15 @@ export class Packr extends Unpackr {
 						}
 						let currentSharedLength = structures.sharedLength || 0;
 						if (structures !== savedStructures) {
-							if (!structures.transitions && !hasSharedUpdate)
-								packr.lastNamedStructuresLength = currentSharedLength;
-							if (savedHasSharedUpdate) {
+							if (savedHasSharedUpdate || savedOwnStructures.length > 0) {
 								for (let i = 0; i < savedSharedLength; i++) {
 									if (savedStructures[i] !== undefined)
 										structures[i] = savedStructures[i];
 								}
-								if (currentSharedLength < savedSharedLength)
-									currentSharedLength = structures.sharedLength = savedSharedLength;
+								currentSharedLength = structures.sharedLength = structures.length = savedSharedLength;
 								packr.lastNamedStructuresLength = savedLastNamedLength;
+							} else if (!reentrantDepth && !hasSharedUpdate) {
+								packr.lastNamedStructuresLength = currentSharedLength;
 							}
 						}
 						structures.length = Math.max(currentSharedLength, savedSharedLength + savedOwnStructures.length);
@@ -385,8 +388,7 @@ export class Packr extends Unpackr {
 							if (structures === savedStructures && !structures.transitions && currentSharedLength === savedSharedLength) {
 								structures.transitions = savedTransitions;
 							} else {
-								if (!structures.transitions || structures !== savedStructures)
-									rebuildTransitions(currentSharedLength);
+								rebuildTransitions(reentrantDepth && packr.saveStructures ? Math.min(currentSharedLength, packr.lastNamedStructuresLength || 0) : currentSharedLength);
 								savedUnsavedShared = null;
 								savedRecordIdsToRemove = [];
 								savedRecordIds = [];
@@ -893,7 +895,7 @@ export class Packr extends Unpackr {
 		};
 
 		const writeRecord = this.useRecords === false ? writePlainObject :
-		(options.progressiveRecords && !useTwoByteRecords) ?  // this is about 2% faster for highly stable structures, since it only requires one for-in loop (but much more expensive when new structure needs to be written)
+		(options.progressiveRecords && !useTwoByteRecords && maxOwnStructures > 0) ?  // this is about 2% faster for highly stable structures, since it only requires one for-in loop (but much more expensive when new structure needs to be written)
 		(object) => {
 			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null));
 			let objectOffset = position++ - start;
@@ -956,8 +958,8 @@ export class Packr extends Unpackr {
 					target[position++] = recordId >> 5;
 				} else
 					target[position++] = recordId;
-			} else {
-				newRecord(transition, transition.__keys__ || Object.keys(object), newTransitions);
+			} else if (newRecord(transition, transition.__keys__ || Object.keys(object), newTransitions) === false) {
+				return writePlainObject(object);
 			}
 			// now write the values
 			for (let key in object)
@@ -1020,13 +1022,18 @@ export class Packr extends Unpackr {
 			if (recordId < sharedLimitId && ((reentrantDepth && this.saveStructures) || (this.shouldShareStructure && !this.shouldShareStructure(keys)))) {
 				if (reentrantDepth && this.saveStructures && !(this.shouldShareStructure && !this.shouldShareStructure(keys)))
 					(pendingNestedStructures || (pendingNestedStructures = [])).push(keys);
+				if (!maxOwnStructures)
+					return false;
 				recordId = structures.nextOwnId;
 				if (!(recordId < maxStructureId))
 					recordId = sharedLimitId;
 				structures.nextOwnId = recordId + 1;
 			} else {
-				if (recordId >= maxStructureId)// cycle back around
+				if (recordId >= maxStructureId) {// cycle back around
+					if (!maxOwnStructures)
+						return false;
 					recordId = sharedLimitId;
+				}
 				structures.nextId = recordId + 1;
 			}
 			let highByte = keys.highByte = recordId >= 0x60 && useTwoByteRecords ? (recordId - 0x60) >> 5 : -1;

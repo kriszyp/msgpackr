@@ -837,6 +837,158 @@ suite('msgpackr basic tests', function() {
 		const selfSavedReader = new Packr({ structures: unpackedStructures });
 		activePackr = selfSavedReader;
 		assert.deepEqual(selfSavedReader.unpack(selfSavedEncoded), selfSavedPayload, 'saveStructures packing on same Packr instance should round-trip');
+
+		let sharedStore = [['baseA', 'baseB']];
+		const makeStorePackr = () => new Packr({
+			getStructures() {
+				return sharedStore.map(keys => keys.slice(0));
+			},
+			saveStructures(structures, isCompatible) {
+				if (!isCompatible(sharedStore.map(keys => keys.slice(0))))
+					return false;
+				sharedStore = structures.map(keys => keys.slice(0));
+			},
+			shouldShareStructure(keys) {
+				return !keys.includes('ownOnlyKey');
+			}
+		});
+		const writer1 = makeStorePackr();
+		const writer2 = makeStorePackr();
+		writer1.pack({ baseA: 1, baseB: 2 });
+		writer2.pack([
+			{ w2Slot1A: 10, w2Slot1B: 20 },
+			{ w2Slot2A: 30, w2Slot2B: 40 }
+		]);
+		const writer2Buf = Buffer.from(writer2.pack({ w2Slot2A: 30, w2Slot2B: 40 }));
+		let unpackedDuringPack = [];
+		class UnpackBeforeNestedPack {
+			constructor(value) {
+				this.value = value;
+			}
+			toJSON() {
+				unpackedDuringPack.push(writer1.unpack(writer2Buf));
+				return new SharedNestedExt(this.value);
+			}
+		}
+		activePackr = writer1;
+		capturedNestedBuffers = [];
+		const midPackMergePayload = [
+			{ outerUnsavedA: 1, outerUnsavedB: 2 },
+			{ ownOnlyKey: 3, extra: 4 },
+			new UnpackBeforeNestedPack({
+				sameAsUnsavedOuter: { outerUnsavedA: 5, outerUnsavedB: 6 },
+				sameAsW2: { w2Slot1A: 7, w2Slot1B: 8 },
+				nestedFresh: { freshNestedA: 9, freshNestedB: 10 }
+			}),
+			{ ownOnlyKey: 11, extra: 12 },
+			{ outerUnsavedA: 13, outerUnsavedB: 14 }
+		];
+		const midPackMergeEncoded = Buffer.from(writer1.pack(midPackMergePayload));
+		assert.equal(unpackedDuringPack.length, 2, 'outer pack should retry after mid-pack unpack structure merge and declined first save');
+		assert.equal(capturedNestedBuffers.length, 2);
+		const standaloneStoreReader = makeStorePackr();
+		activePackr = standaloneStoreReader;
+		assert.deepEqual(standaloneStoreReader.unpack(capturedNestedBuffers[0]), {
+			sameAsUnsavedOuter: { outerUnsavedA: 5, outerUnsavedB: 6 },
+			sameAsW2: { w2Slot1A: 7, w2Slot1B: 8 },
+			nestedFresh: { freshNestedA: 9, freshNestedB: 10 }
+		}, 'escaped nested buffer after mid-pack unpack merge must not emit unsaved outer shared ids');
+		assert.deepEqual(standaloneStoreReader.unpack(midPackMergeEncoded), [
+			{ outerUnsavedA: 1, outerUnsavedB: 2 },
+			{ ownOnlyKey: 3, extra: 4 },
+			new SharedNestedExt({
+				sameAsUnsavedOuter: { outerUnsavedA: 5, outerUnsavedB: 6 },
+				sameAsW2: { w2Slot1A: 7, w2Slot1B: 8 },
+				nestedFresh: { freshNestedA: 9, freshNestedB: 10 }
+			}),
+			{ ownOnlyKey: 11, extra: 12 },
+			{ outerUnsavedA: 13, outerUnsavedB: 14 }
+		], 'outer pack should preserve own structures and re-pack cleanly after mid-pack unpack merge');
+
+		const writer2Buf2 = Buffer.from(writer2.pack({ w2Slot3A: 50, w2Slot3B: 60 }));
+		let cleanMergeUnpacked = 0;
+		class UnpackCleanMergeBeforeNestedPack {
+			toJSON() {
+				cleanMergeUnpacked++;
+				writer1.unpack(writer2Buf2);
+				return new SharedNestedExt({ cleanNestedKey: 77 });
+			}
+		}
+		activePackr = writer1;
+		const cleanMergeEncoded = Buffer.from(writer1.pack([
+			{ baseA: 1, baseB: 2 },
+			new UnpackCleanMergeBeforeNestedPack(),
+			{ afterCleanMergeA: 88, afterCleanMergeB: 99 }
+		]));
+		assert.equal(cleanMergeUnpacked, 1, 'clean mid-pack unpack merge without prior unsaved outer structures should commit on first save');
+		activePackr = standaloneStoreReader;
+		assert.deepEqual(standaloneStoreReader.unpack(cleanMergeEncoded), [
+			{ baseA: 1, baseB: 2 },
+			new SharedNestedExt({ cleanNestedKey: 77 }),
+			{ afterCleanMergeA: 88, afterCleanMergeB: 99 }
+		]);
+
+		let zeroOwnStore = [];
+		const zeroOwnPackr = new Packr({
+			structures: zeroOwnStore,
+			maxOwnStructures: 0,
+			maxSharedStructures: 2,
+			saveStructures(structures) {
+				zeroOwnStore = structures.slice(0);
+			}
+		});
+		activePackr = zeroOwnPackr;
+		capturedNestedBuffers = [];
+		const zeroOwnPayload = {
+			outerKey: 1,
+			nested: new SharedNestedExt({ newKey: 2 })
+		};
+		const zeroOwnEncoded1 = Buffer.from(zeroOwnPackr.pack(zeroOwnPayload));
+		const zeroOwnEncoded2 = Buffer.from(zeroOwnPackr.pack(zeroOwnPayload));
+		assert.equal(zeroOwnStore.length, 2, 'nested structure should be promoted when maxOwnStructures is 0');
+		assert(capturedNestedBuffers[1].length < capturedNestedBuffers[0].length, 'second pack with maxOwnStructures 0 should use promoted shared structure');
+		const zeroOwnOverflow = {
+			overflowOuter: 3,
+			nested: new SharedNestedExt({ overflowInner: 4 })
+		};
+		const zeroOwnEncoded3 = Buffer.from(zeroOwnPackr.pack(zeroOwnOverflow));
+		const zeroOwnReader = new Packr({
+			structures: zeroOwnStore,
+			maxOwnStructures: 0,
+			maxSharedStructures: 2,
+			mapsAsObjects: true
+		});
+		activePackr = zeroOwnReader;
+		assert.deepEqual(zeroOwnReader.unpack(zeroOwnEncoded1), zeroOwnPayload, 'maxOwnStructures 0 first pack should fall back to plain map for nested new shape');
+		assert.deepEqual(zeroOwnReader.unpack(zeroOwnEncoded2), zeroOwnPayload, 'maxOwnStructures 0 second pack should round-trip with promoted structure');
+		assert.deepEqual(zeroOwnReader.unpack(zeroOwnEncoded3), zeroOwnOverflow, 'maxOwnStructures 0 should fall back to plain map when maxSharedStructures is full');
+
+		let twoByteStore = Array.from({ length: 32 }, (_, i) => ['pre' + i]);
+		const twoBytePackr = new Packr({
+			structures: twoByteStore.slice(0),
+			maxSharedStructures: 64,
+			saveStructures(structures) {
+				twoByteStore = structures.slice(0);
+			}
+		});
+		activePackr = twoBytePackr;
+		capturedNestedBuffers = [];
+		const twoBytePayload = {
+			pre0: 1,
+			nested: new SharedNestedExt({ twoBytePromotedA: 2, twoBytePromotedB: 3 })
+		};
+		const twoByteEncoded1 = Buffer.from(twoBytePackr.pack(twoBytePayload));
+		const twoByteEncoded2 = Buffer.from(twoBytePackr.pack(twoBytePayload));
+		assert.equal(twoByteStore.length, 34);
+		assert.equal(twoByteStore[33].highByte, 0, 'promoted structure at index >= 32 should set two-byte highByte');
+		assert(capturedNestedBuffers[1].length < capturedNestedBuffers[0].length, 'second pack should use two-byte promoted shared structure');
+		const twoByteReader = new Packr({
+			structures: twoByteStore,
+			maxSharedStructures: 64
+		});
+		activePackr = twoByteReader;
+		assert.deepEqual(twoByteReader.unpack(twoByteEncoded1), twoBytePayload);
+		assert.deepEqual(twoByteReader.unpack(twoByteEncoded2), twoBytePayload);
 	});
 
 	test('clearSharedData resets lastNamedStructuresLength after pack', function() {
