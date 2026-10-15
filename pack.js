@@ -64,6 +64,7 @@ export class Packr extends Unpackr {
 		let serializationsSinceTransitionRebuild = 0;
 		let instancePacking = false;
 		let reentrantDepth = 0;
+		let pendingNestedStructures = null;
 
 		this.pack = this.encode = function(value, encodeOptions) {
 			if (packing) {
@@ -112,11 +113,13 @@ export class Packr extends Unpackr {
 			}
 			if (hasSharedUpdate)
 				hasSharedUpdate = false;
+			if (!reentrantDepth && pendingNestedStructures)
+				pendingNestedStructures = null;
 			let encodingError;
 			packing = true;
 			instancePacking = true;
 			try {
-				if (packr._writeStruct && value && typeof value === 'object') {
+				if (packr._writeStruct && !(reentrantDepth && packr.saveStructures) && value && typeof value === 'object') {
 					if (value.constructor === Object) writeStruct(value); // simple object
 					else if (value.constructor !== Map && !Array.isArray(value) && !extensionClasses.some(extClass => value instanceof extClass)) {
 						// allow user classes, if they don't need special handling (but do use toJSON if available)
@@ -176,6 +179,38 @@ export class Packr extends Unpackr {
 				instancePacking = false;
 				if (structures) {
 					resetStructures();
+					if (pendingNestedStructures && !reentrantDepth) {
+						let toPromote = pendingNestedStructures;
+						pendingNestedStructures = null;
+						if (!encodingError && packr.saveStructures) {
+							let sharedLength = structures.sharedLength || 0;
+							if (!structures.transitions)
+								rebuildTransitions(sharedLength);
+							for (let i = 0, l = toPromote.length; i < l && sharedLength < maxSharedStructures; i++) {
+								let keys = toPromote[i];
+								let nextTransition, transition = structures.transitions;
+								for (let j = 0, kl = keys.length; j < kl; j++) {
+									let key = keys[j];
+									nextTransition = transition[key];
+									if (!nextTransition)
+										nextTransition = transition[key] = Object.create(null);
+									transition = nextTransition;
+								}
+								if (!transition[RECORD_SYMBOL]) {
+									let recordId = sharedLength + 0x40;
+									keys.highByte = recordId >= 0x60 && useTwoByteRecords ? (recordId - 0x60) >> 5 : -1;
+									keys.isShared = true;
+									transition[RECORD_SYMBOL] = recordId;
+									transition.__keys__ = keys;
+									structures[sharedLength++] = keys;
+									structures.sharedLength = sharedLength;
+									hasSharedUpdate = true;
+								}
+							}
+							if (!isSequential || !(structures.nextId >= sharedLength + 0x40))
+								structures.nextId = sharedLength + 0x40;
+						}
+					}
 					if (hasSharedUpdate && !reentrantDepth && packr.saveStructures) {
 						let sharedLength = structures.sharedLength || 0;
 						// we can't rely on start/end with REUSE_BUFFER_MODE since they will (probably) change when we save
@@ -254,9 +289,10 @@ export class Packr extends Unpackr {
 			let savedReferenceMap = referenceMap;
 			let savedHasSharedUpdate = hasSharedUpdate;
 			let wasInstancePacking = instancePacking;
-			let savedStructures, savedTransitions, savedNextId, savedNextOwnId, savedRecordIdsToRemove, savedRecordIds, savedOwnStructures, savedSharedLength, savedLastNamedLength, savedUnsavedShared, savedTransitionsCount;
+			let savedStructures, savedTransitions, savedNextId, savedNextOwnId, savedRecordIdsToRemove, savedRecordIds, savedOwnStructures, savedSharedLength, savedLastNamedLength, savedUnsavedShared, savedTransitionsCount, savedPendingNestedLen;
 			if (wasInstancePacking) {
 				reentrantDepth++;
+				savedPendingNestedLen = pendingNestedStructures ? pendingNestedStructures.length : 0;
 				if (structures) {
 					savedStructures = structures;
 					savedTransitions = structures.transitions;
@@ -299,9 +335,14 @@ export class Packr extends Unpackr {
 			target = null;
 			packing = false;
 			instancePacking = false;
+			let nestedSucceeded = false;
 			try {
-				return packr.pack(value, encodeOptions);
+				let result = packr.pack(value, encodeOptions);
+				nestedSucceeded = true;
+				return result;
 			} finally {
+				if (!nestedSucceeded && wasInstancePacking && pendingNestedStructures)
+					pendingNestedStructures.length = savedPendingNestedLen;
 				packing = true;
 				instancePacking = wasInstancePacking;
 				target = savedTarget;
@@ -973,7 +1014,10 @@ export class Packr extends Unpackr {
 			let recordId = structures.nextId;
 			if (!recordId)
 				recordId = 0x40;
-			if (recordId < sharedLimitId && ((reentrantDepth && this.saveStructures) || (this.shouldShareStructure && !this.shouldShareStructure(keys)))) {
+			let isShareable = !(this.shouldShareStructure && !this.shouldShareStructure(keys));
+			if (recordId < sharedLimitId && ((reentrantDepth && this.saveStructures) || !isShareable)) {
+				if (reentrantDepth && this.saveStructures && isShareable)
+					(pendingNestedStructures || (pendingNestedStructures = [])).push(keys);
 				recordId = structures.nextOwnId;
 				if (!(recordId < maxStructureId))
 					recordId = sharedLimitId;

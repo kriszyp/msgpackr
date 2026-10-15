@@ -791,7 +791,8 @@ suite('msgpackr basic tests', function() {
 			beforeNested: { sharedBothA: 1, sharedBothB: 2 },
 			nested: new SharedNestedExt({
 				sameAsOuter: { sharedBothA: 3, sharedBothB: 4 },
-				innerShape: { innerA: 30, innerB: 40 }
+				innerShape: { innerA: 30, innerB: 40 },
+				nestedOnly: { onlyInnerA: 50, onlyInnerB: 60 }
 			}),
 			outerShape: { outerA: 10, outerB: 20 },
 			afterInner: { innerA: 70, innerB: 80 }
@@ -799,16 +800,24 @@ suite('msgpackr basic tests', function() {
 		const encoded = activePackr.pack(nestedPayload);
 		assert.equal(declinedOnce, true);
 		assert.equal(saveCount, 1);
-		assert.equal(persistedStructures.length, 5);
+		assert.equal(persistedStructures.length, 7);
 		assert.equal(capturedNestedBuffers.length, 2);
+
+		// Second pack reuses the promoted nested-only structures as 1-byte shared references
+		const encodedSecond = activePackr.pack(nestedPayload);
+		assert.equal(saveCount, 1);
+		assert.equal(capturedNestedBuffers.length, 3);
+		assert(capturedNestedBuffers[2].length < capturedNestedBuffers[1].length);
 
 		const readerPackr = new Packr({ structures: persistedStructures });
 		activePackr = readerPackr;
 		assert.deepEqual(readerPackr.unpack(encoded), nestedPayload);
+		assert.deepEqual(readerPackr.unpack(encodedSecond), nestedPayload);
 		// Escaped nested buffer from the declined first attempt must also decode standalone
 		assert.deepEqual(new Packr({ structures: [['concurrentA', 'concurrentB']] }).unpack(capturedNestedBuffers[0]), {
 			sameAsOuter: { sharedBothA: 3, sharedBothB: 4 },
-			innerShape: { innerA: 30, innerB: 40 }
+			innerShape: { innerA: 30, innerB: 40 },
+			nestedOnly: { onlyInnerA: 50, onlyInnerB: 60 }
 		});
 
 		activePackr = new Packr({
@@ -820,10 +829,13 @@ suite('msgpackr basic tests', function() {
 				persistedStructures = structures.slice(0);
 			}
 		});
+		activePackr.pack({ beforeClear: 1 });
+		assert.equal(activePackr.lastNamedStructuresLength, 8);
 		activePackr.clearSharedData();
+		assert.equal(activePackr.lastNamedStructuresLength, 0);
 		persistedStructures = [];
 		const afterClearEncoded = activePackr.pack({ clearedA: 1, clearedB: 2 });
-		assert.equal(saveCount, 2);
+		assert.equal(saveCount, 3);
 		assert.deepEqual(new Packr({ structures: persistedStructures }).unpack(afterClearEncoded), {
 			clearedA: 1,
 			clearedB: 2
@@ -848,7 +860,7 @@ suite('msgpackr basic tests', function() {
 				bad: new FailingToJSON()
 			});
 		}, /abort outer pack/);
-		assert.equal(saveCount, 2);
+		assert.equal(saveCount, 3);
 		assert.equal(activePackr.structures.length, countBeforeError);
 
 		let throwOnSave = true;
@@ -875,6 +887,17 @@ suite('msgpackr basic tests', function() {
 		const followUpEncoded = activePackr.pack(followUp);
 		const freshReader = new Packr({ structures: persistedStructures });
 		assert.deepEqual(freshReader.unpack(followUpEncoded), followUp);
+
+		const nextIdPackr = new Packr();
+		activePackr = nextIdPackr;
+		const nextIdPayload = {
+			a: { x: 1 },
+			b: { y: 1 },
+			n: new SharedNestedExt({ z: 1 }),
+			c: { w: 1 },
+			d: { y: 2 }
+		};
+		assert.deepEqual(nextIdPackr.unpack(nextIdPackr.pack(nextIdPayload)), nextIdPayload);
 
 		const ownIdPackr = new Packr({
 			structures: [],
@@ -906,8 +929,14 @@ suite('msgpackr basic tests', function() {
 			second: { seqA: 5, seqB: 6 },
 			third: { innerSeqA: 7, innerSeqB: 8 }
 		};
+		const seqPayload2 = {
+			fourth: { seqA: 9, seqB: 10 },
+			fifth: { seqC: 11, seqD: 12 }
+		};
 		const seqEncoded = seqPackr.pack(seqPayload);
+		const seqEncoded2 = seqPackr.pack(seqPayload2);
 		assert.deepEqual(seqPackr.unpack(seqEncoded), seqPayload);
+		assert.deepEqual(seqPackr.unpack(seqEncoded2), seqPayload2);
 	});
 
 	test('cross-instance reentrant pack in toJSON and write with bundleStrings', function() {

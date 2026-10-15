@@ -282,7 +282,7 @@ addExtension({
 	}
 });
 ```
-If your extension's `pack` function calls `pack` on the same `Packr` instance configured with shared `structures` and `saveStructures`, nested `pack` calls emit inline record definitions for any unsaved structures so nested buffers remain self-contained, and outer shared structure updates are saved once when the outermost `pack` completes.
+If your extension's `pack` function calls `pack` on the same `Packr` instance configured with shared `structures` and `saveStructures`, nested `pack` calls only reference already-saved shared structures and emit inline record definitions for any not-yet-saved shapes (keeping nested buffers self-contained), while new shareable shapes are promoted and saved once when the outermost `pack` completes so subsequent `pack` calls can reference them as shared structures.
 
 If you want to use msgpackr to encode and decode the data within your extensions, you can use the `read` and `write` functions and read and write data/objects that will be encoded and decoded by msgpackr, which can be easier and faster than creating and receiving separate buffers:
 
