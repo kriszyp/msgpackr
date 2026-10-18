@@ -47,7 +47,7 @@ export function unpackIter (bufferIterator, options = {}) {
   }
 
   const unpackr = new Unpackr(options);
-  let incomplete;
+  let incomplete, fatalError;
   const parser = (chunk) => {
     let yields;
     // if there's incomplete data from previous chunk, concatinate and try again
@@ -59,29 +59,39 @@ export function unpackIter (bufferIterator, options = {}) {
     try {
       yields = unpackr.unpackMultiple(chunk);
     } catch (err) {
+      yields = err.values;
       if (err.incomplete) {
         incomplete = chunk.slice(err.lastPosition);
-        yields = err.values;
       } else {
-        throw err;
+        fatalError = err;
       }
     }
-    return yields;
+    return yields || [];
   };
 
   if (typeof bufferIterator[Symbol.iterator] === 'function') {
     return (function * iter () {
       for (const value of bufferIterator) {
         yield * parser(value);
+        if (fatalError) throw fatalError;
       }
+      if (incomplete && incomplete.length > 0) throw endOfInput();
     })();
   } else if (typeof bufferIterator[Symbol.asyncIterator] === 'function') {
     return (async function * iter () {
       for await (const value of bufferIterator) {
         yield * parser(value);
+        if (fatalError) throw fatalError;
       }
+      if (incomplete && incomplete.length > 0) throw endOfInput();
     })();
   }
 }
+function endOfInput () {
+  const error = new Error('Unexpected end of MessagePack data');
+  error.incomplete = true;
+  return error;
+}
+
 export const decodeIter = unpackIter;
 export const encodeIter = packIter;
