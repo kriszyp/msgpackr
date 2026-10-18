@@ -598,6 +598,14 @@ export function setExtractor(extractStrings) {
 	readString8 = readString(2);
 	readString16 = readString(3);
 	readString32 = readString(5);
+	// kept out of readString, where a try block measurably slowed string-heavy unpacking
+	function tryExtractStrings(start, end, buffer) {
+		try {
+			return extractStrings(start, end, buffer);
+		} catch (error) {
+			return EXTRACTION_FAILED;
+		}
+	}
 	function readString(headerLength) {
 		return function readString(length) {
 			let string = strings[stringPosition++];
@@ -605,10 +613,8 @@ export function setExtractor(extractStrings) {
 				if (bundledStrings || strings === EXTRACTION_FAILED)
 					return readStringJS(length);
 				let byteOffset = src.byteOffset;
-				let extraction;
-				try {
-					extraction = extractStrings(position - headerLength + byteOffset, srcEnd + byteOffset, src.buffer);
-				} catch (error) {
+				let extraction = tryExtractStrings(position - headerLength + byteOffset, srcEnd + byteOffset, src.buffer);
+				if (extraction === EXTRACTION_FAILED) {
 					// the extractor scans ahead to srcEnd and fails on any truncated value there, even a later one,
 					// so read the rest of this source in JS, which fails where the bytes actually run out
 					strings = EXTRACTION_FAILED;
