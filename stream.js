@@ -33,26 +33,34 @@ export class UnpackrStream extends Transform {
 			chunk = Buffer.concat([this.incompleteBuffer, chunk]);
 			this.incompleteBuffer = null;
 		}
-		let values;
+		let values, fatalError;
 		try {
 			values = this.unpackr.unpackMultiple(chunk);
 		} catch(error) {
+			values = error.values;
 			if (error.incomplete) {
 				let incompleteBuffer = chunk.slice(error.lastPosition);
-				if (incompleteBuffer.length > this.maxIncompleteBufferSize) {
-					this.incompleteBuffer = null;
-					return callback(new Error('Maximum incomplete buffer size exceeded'));
-				}
-				this.incompleteBuffer = incompleteBuffer;
-				values = error.values;
+				if (incompleteBuffer.length > this.maxIncompleteBufferSize)
+					fatalError = new Error('Maximum incomplete buffer size exceeded');
+				else
+					this.incompleteBuffer = incompleteBuffer;
 			} else {
-				return callback(error);
+				fatalError = error;
 			}
 		}
 		for (let value of values || []) {
 			if (value === null)
 				value = this.getNullValue();
 			this.push(value);
+		}
+		callback(fatalError);
+	}
+	_flush(callback) {
+		if (this.incompleteBuffer && this.incompleteBuffer.length > 0) {
+			this.incompleteBuffer = null;
+			let error = new Error('Unexpected end of MessagePack data');
+			error.incomplete = true;
+			return callback(error);
 		}
 		callback();
 	}
