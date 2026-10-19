@@ -90,10 +90,9 @@ export function unpackChunk (state, chunk) {
   if (chunk.length === 0) return [];
   let source = chunk;
   if (state.incompleteBuffer) {
-    if (!(chunk instanceof Uint8Array)) throw new TypeError('Chunk must be a Uint8Array or Buffer');
+    if (!(ArrayBuffer.isView(chunk) && chunk.BYTES_PER_ELEMENT === 1)) throw new TypeError('Chunk must be a Uint8Array or Buffer');
     const length = state.incompleteLength + chunk.length;
     if (length < state.incompleteNeeded) {
-      // the value is known to need more bytes than this, so unpacking again could not succeed yet
       if (length > state.maxIncompleteBufferSize) {
         state.incompleteBuffer = null;
         throw new Error('Maximum incomplete buffer size exceeded');
@@ -102,8 +101,10 @@ export function unpackChunk (state, chunk) {
       return [];
     }
     if (length <= state.incompleteBuffer.length) {
-      // only a buffer grown by holdIncomplete has spare room, and nothing unpacked from it is referenced yet
+      // only a buffer grown by holdIncomplete has spare room, and nothing unpacked from it is referenced yet.
+      // Unpacked binaries are views of it, so the uninitialized bytes after the data are cleared.
       state.incompleteBuffer.set(chunk, state.incompleteLength);
+      state.incompleteBuffer.fill(0, length);
       source = state.incompleteBuffer.subarray(0, length);
     } else {
       source = Buffer.concat([state.incompleteBuffer.subarray(0, state.incompleteLength), chunk], length);

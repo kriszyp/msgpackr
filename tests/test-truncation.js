@@ -1,5 +1,6 @@
 import { Packr, Unpackr, addExtension, UnpackrStream, decodeIter } from '../node-index.js';
 import { assert } from 'chai';
+import vm from 'node:vm';
 
 // A prefix of a valid encoding can only fail because bytes are missing, so it must always be reported as
 // incomplete. UnpackrStream relies on this to wait for the next chunk instead of erroring.
@@ -47,7 +48,6 @@ function assertIncomplete(unpack, label) {
 	assert.fail(`${label}: decoded ${String(value)} from a truncated encoding`);
 }
 
-// missingBytes, when present, must never exceed what the value actually needs
 function assertLowerBound(missingBytes, end, encoded, label) {
 	if (missingBytes === undefined) return;
 	assert.isAtLeast(missingBytes, 1, label);
@@ -391,6 +391,16 @@ suite('values split across many chunks', function () {
 		assert.isAtMost(allocated, 2.5 * encoded.length);
 	});
 
+	test('a Uint8Array from another realm is accepted while a value is held', async () => {
+		const foreign = vm.runInNewContext('new Uint8Array([1, 2, 3, 4])');
+		assert.deepStrictEqual([...decodeIter([Buffer.from([0xc4, 0x04]), foreign])], [Buffer.from([1, 2, 3, 4])]);
+		const stream = new UnpackrStream();
+		const outcome = receive(stream, 1);
+		stream.write(Buffer.from([0xc4, 0x04]));
+		stream.write(foreign);
+		assert.deepStrictEqual((await outcome).received, [Buffer.from([1, 2, 3, 4])]);
+	});
+
 	test('a chunk that is not bytes is rejected while a value is held', async () => {
 		assert.throws(() => [...decodeIter([Buffer.from([0xc4, 0x04]), 'ab'])], TypeError);
 		const stream = new UnpackrStream();
@@ -421,7 +431,6 @@ suite('values split across many chunks', function () {
 	});
 
 	test('a value that completes past the limit is still unpacked', () => {
-		// the limit is on bytes held while incomplete, not on the size of a value
 		assert.deepStrictEqual([...decodeIter([Buffer.from([0xc4, 0x06]), Buffer.from([1, 2, 3, 4, 5, 6])], { maxIncompleteBufferSize: 3 })],
 			[Buffer.from([1, 2, 3, 4, 5, 6])]);
 	});
