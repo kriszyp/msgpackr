@@ -1,6 +1,7 @@
 import { Transform } from 'stream';
 import { Packr } from './pack.js';
 import { Unpackr } from './unpack.js';
+import { unpackChunk, DEFAULT_MAX_INCOMPLETE_BUFFER_SIZE } from './iterators.js';
 var DEFAULT_OPTIONS = {objectMode: true};
 
 export class PackrStream extends Transform {
@@ -25,34 +26,30 @@ export class UnpackrStream extends Transform {
 		options.objectMode = true;
 		super(options);
 		options.structures = [];
-		this.maxIncompleteBufferSize = options.maxIncompleteBufferSize !== undefined ? options.maxIncompleteBufferSize : 0x4000000;
+		this.maxIncompleteBufferSize = options.maxIncompleteBufferSize !== undefined ? options.maxIncompleteBufferSize : DEFAULT_MAX_INCOMPLETE_BUFFER_SIZE;
 		this.unpackr = options.unpackr || new Unpackr(options);
 	}
 	_transform(chunk, encoding, callback) {
-		if (this.incompleteBuffer) {
-			chunk = Buffer.concat([this.incompleteBuffer, chunk]);
-			this.incompleteBuffer = null;
-		}
-		let values;
+		let values, fatalError;
 		try {
-			values = this.unpackr.unpackMultiple(chunk);
+			values = unpackChunk(this, chunk);
 		} catch(error) {
-			if (error.incomplete) {
-				let incompleteBuffer = chunk.slice(error.lastPosition);
-				if (incompleteBuffer.length > this.maxIncompleteBufferSize) {
-					this.incompleteBuffer = null;
-					return callback(new Error('Maximum incomplete buffer size exceeded'));
-				}
-				this.incompleteBuffer = incompleteBuffer;
-				values = error.values;
-			} else {
-				return callback(error);
-			}
+			values = error.values;
+			fatalError = error;
 		}
 		for (let value of values || []) {
 			if (value === null)
 				value = this.getNullValue();
 			this.push(value);
+		}
+		callback(fatalError);
+	}
+	_flush(callback) {
+		if (this.incompleteBuffer) {
+			this.incompleteBuffer = null;
+			let error = new Error('Unexpected end of MessagePack data');
+			error.incomplete = true;
+			return callback(error);
 		}
 		callback();
 	}

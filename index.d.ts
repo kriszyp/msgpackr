@@ -12,6 +12,7 @@ export interface Options {
 	moreTypes?: boolean
 	useToJSON?: boolean
 	sequential?: boolean
+	maxIncompleteBufferSize?: number
 	structuredClone?: boolean
 	mapsAsObjects?: boolean
 	variableMapSize?: boolean

@@ -7,6 +7,7 @@ var srcEnd;
 var position = 0;
 var alreadySet;
 const EMPTY_ARRAY = [];
+const EXTRACTION_FAILED = [];
 var strings = EMPTY_ARRAY;
 var stringPosition = 0;
 var currentUnpackr = {};
@@ -18,6 +19,7 @@ var bundledStrings;
 var referenceMap;
 var currentExtensions = [];
 var dataView;
+var arrayAllocationBudget;
 var defaultOptions = {
 	useRecords: false,
 	mapsAsObjects: true
@@ -59,7 +61,13 @@ export class Unpackr {
 			// re-entrant execution, save the state and restore it after we do this unpack
 			return saveState(() => {
 				clearSource();
-				return this ? this.unpack(source, options) : Unpackr.prototype.unpack.call(defaultOptions, source, options);
+				try {
+					return this ? this.unpack(source, options) : Unpackr.prototype.unpack.call(defaultOptions, source, options);
+				} catch (error) {
+					if (error && typeof error == 'object')
+						nestedUnpackErrors.add(error);
+					throw error;
+				}
 			});
 		}
 		if (!source.buffer && source.constructor === ArrayBuffer)
@@ -171,6 +179,7 @@ export class Unpackr {
 export function getPosition() {
 	return position;
 }
+const nestedUnpackErrors = new WeakSet();
 export function checkedRead(options) {
 	try {
 		if (!currentUnpackr.trusted && !sequentialMode) {
@@ -179,6 +188,7 @@ export function checkedRead(options) {
 				currentStructures.length = sharedLength;
 		}
 		let result;
+		arrayAllocationBudget = srcEnd - position;
 		if (currentUnpackr._readStruct && src[position] < 0x40 && src[position] >= 0x20) {
 			result = currentUnpackr._readStruct(src, position, srcEnd);
 			src = null; // dispose of this so that recursive unpack calls don't save state
@@ -222,10 +232,25 @@ export function checkedRead(options) {
 		if (currentStructures && currentStructures.restoreStructures)
 			restoreStructures();
 		clearSource();
-		if (error instanceof RangeError || error.message.startsWith('Unexpected end of buffer') || position > srcEnd) {
-			error.incomplete = true;
-		}
+		classifyIncomplete(error);
 		throw error;
+	}
+}
+
+function classifyIncomplete(error) {
+	if (!error || typeof error != 'object')
+		return;
+	if (position > srcEnd) {
+		error.incomplete = true;
+	} else if (nestedUnpackErrors.has(error)) {
+		// from an extension unpacking embedded data that this source fully contained, so more bytes can't help
+		if (error.incomplete)
+			error.incomplete = false;
+	} else if ((error instanceof RangeError && position + 8 > srcEnd) ||
+			(typeof error.message == 'string' && error.message.startsWith('Unexpected end of buffer'))) {
+		// a DataView read past the end of the source; these read at most 8 bytes and precede advancing position.
+		// A stack overflow (from deeply nested input) is a RangeError too, and fatal unless it lands in this window.
+		error.incomplete = true;
 	}
 }
 
@@ -320,11 +345,13 @@ export function read() {
 				// bin 16
 				value = dataView.getUint16(position);
 				position += 2;
+				if (value > srcEnd - position) throw endOfMessagePackError(position + value);
 				return readBin(value);
 			case 0xc6:
 				// bin 32
 				value = dataView.getUint32(position);
 				position += 4;
+				if (value > srcEnd - position) throw endOfMessagePackError(position + value);
 				return readBin(value);
 			case 0xc7:
 				// ext 8
@@ -417,8 +444,10 @@ export function read() {
 						} else if (extension.noBuffer) {
 							position++; // skip filler byte
 							return extension();
-						} else
+						} else {
+							if (position >= srcEnd) throw endOfMessagePackError();
 							return extension(src.subarray(position, ++position));
+						}
 					} else
 						throw new Error('Unknown extension ' + value);
 				}
@@ -450,6 +479,7 @@ export function read() {
 			// str 16
 				value = dataView.getUint16(position);
 				position += 2;
+				if (value > srcEnd - position) throw endOfMessagePackError(position + value);
 				if (srcStringEnd >= position) {
 					return srcString.slice(position - srcStringStart, (position += value) - srcStringStart);
 				}
@@ -458,6 +488,7 @@ export function read() {
 			// str 32
 				value = dataView.getUint32(position);
 				position += 4;
+				if (value > srcEnd - position) throw endOfMessagePackError(position + value);
 				if (srcStringEnd >= position) {
 					return srcString.slice(position - srcStringStart, (position += value) - srcStringStart);
 				}
@@ -571,14 +602,28 @@ export function setExtractor(extractStrings) {
 	readString8 = readString(2);
 	readString16 = readString(3);
 	readString32 = readString(5);
+	// kept out of readString, where a try block measurably slowed string-heavy unpacking
+	function tryExtractStrings(start, end, buffer) {
+		try {
+			return extractStrings(start, end, buffer);
+		} catch (error) {
+			return EXTRACTION_FAILED;
+		}
+	}
 	function readString(headerLength) {
 		return function readString(length) {
 			let string = strings[stringPosition++];
 			if (string == null) {
-				if (bundledStrings)
+				if (bundledStrings || strings === EXTRACTION_FAILED)
 					return readStringJS(length);
 				let byteOffset = src.byteOffset;
-				let extraction = extractStrings(position - headerLength + byteOffset, srcEnd + byteOffset, src.buffer);
+				let extraction = tryExtractStrings(position - headerLength + byteOffset, srcEnd + byteOffset, src.buffer);
+				if (extraction === EXTRACTION_FAILED) {
+					// the extractor scans ahead to srcEnd and fails on any truncated value there, even a later one,
+					// so read the rest of this source in JS, which fails where the bytes actually run out
+					strings = EXTRACTION_FAILED;
+					return readStringJS(length);
+				}
 				if (typeof extraction == 'string') {
 					string = extraction;
 					strings = EMPTY_ARRAY;
@@ -693,16 +738,23 @@ export function readString(source, start, length) {
 	}
 }
 
-function endOfMessagePackError() {
+// end: the least offset the value must reach, from a length header that runs past srcEnd. As missingBytes it
+// lets a stream wait for that many more bytes before unpacking again. A header itself read past srcEnd came
+// from bytes after an end argument, so it says nothing about the value.
+function endOfMessagePackError(end) {
 	let error = new Error('Unexpected end of MessagePack data');
 	error.incomplete = true;
+	if (end > srcEnd && position <= srcEnd)
+		error.missingBytes = end - srcEnd;
 	return error;
 }
 
 function readArray(length) {
 	// every element occupies at least one byte, so a length beyond what remains in the source can never
-	// be satisfied; check before allocating so a small header can not force a large allocation
-	if (length > srcEnd - position) throw endOfMessagePackError();
+	// be satisfied; check before allocating so a small header can not force a large allocation. Nested
+	// arrays each pass that per-array check yet still pre-allocate, so also spend from a per-decode
+	// budget of the remaining bytes -- the summed lengths of any valid tree stay under it
+	if (length > srcEnd - position || (arrayAllocationBudget -= length) < 0) throw endOfMessagePackError(position + length);
 	let array = new Array(length);
 	for (let i = 0; i < length; i++) {
 		array[i] = read();
@@ -713,7 +765,7 @@ function readArray(length) {
 }
 
 function readMap(length) {
-	if (length > (srcEnd - position) / 2) throw endOfMessagePackError(); // each entry needs at least two bytes
+	if (length > (srcEnd - position) / 2) throw endOfMessagePackError(position + 2 * length); // each entry needs at least two bytes
 	if (currentUnpackr.mapsAsObjects) {
 		let object = {};
 		for (let i = 0; i < length; i++) {
@@ -923,6 +975,8 @@ function readBin(length) {
 		src.subarray(position, position += length);
 }
 function readExt(length) {
+	// the payload is handed to the extension, so it must be complete
+	if (length >= srcEnd - position) throw endOfMessagePackError(position + 1 + length);
 	let type = src[position++];
 	if (currentExtensions[type]) {
 		let end;
@@ -953,6 +1007,7 @@ function readKey() {
 		position--;
 		return asSafeString(read());
 	}
+	if (length > srcEnd - position) throw endOfMessagePackError(position + length);
 	let key = ((length << 5) ^ (length > 1 ? dataView.getUint16(position) : length > 0 ? src[position] : 0)) & 0xfff;
 	let entry = keyCache[key];
 	let checkPosition = position;
@@ -1011,7 +1066,7 @@ function asSafeString(property) {
 	if (currentUnpackr.allowArraysInMapKeys && Array.isArray(property) && property.flat().every(item => ['string', 'number', 'boolean', 'bigint'].includes(typeof item))) {
 		return property.flat().toString();
 	}
-	throw new Error(`Invalid property type for record: ${typeof property}`);
+	throw new Error(`Invalid property type for record: ${typeof property}. A MessagePack map with non-string keys can be decoded as a Map with mapsAsObjects: false`);
 }
 // the registration of the record definition extension (as "r")
 const recordDefinition = (id, highByte) => {
@@ -1196,6 +1251,7 @@ function saveState(callback) {
 	let savedStrings = strings;
 	let savedReferenceMap = referenceMap;
 	let savedBundledStrings = bundledStrings;
+	let savedArrayAllocationBudget = arrayAllocationBudget;
 
 	// TODO: We may need to revisit this if we do more external calls to user code (since it could be slow)
 	let savedSrc = new Uint8Array(src.slice(0, srcEnd)); // we copy the data in case it changes while external data is processed
@@ -1203,23 +1259,26 @@ function saveState(callback) {
 	let savedStructuresContents = currentStructures.slice(0, currentStructures.length);
 	let savedPackr = currentUnpackr;
 	let savedSequentialMode = sequentialMode;
-	let value = callback();
-	srcEnd = savedSrcEnd;
-	position = savedPosition;
-	stringPosition = savedStringPosition;
-	srcStringStart = savedSrcStringStart;
-	srcStringEnd = savedSrcStringEnd;
-	srcString = savedSrcString;
-	strings = savedStrings;
-	referenceMap = savedReferenceMap;
-	bundledStrings = savedBundledStrings;
-	src = savedSrc;
-	sequentialMode = savedSequentialMode;
-	currentStructures = savedStructures;
-	currentStructures.splice(0, currentStructures.length, ...savedStructuresContents);
-	currentUnpackr = savedPackr;
-	dataView = new DataView(src.buffer, src.byteOffset, src.byteLength);
-	return value;
+	try {
+		return callback();
+	} finally {
+		srcEnd = savedSrcEnd;
+		position = savedPosition;
+		stringPosition = savedStringPosition;
+		srcStringStart = savedSrcStringStart;
+		srcStringEnd = savedSrcStringEnd;
+		srcString = savedSrcString;
+		strings = savedStrings;
+		referenceMap = savedReferenceMap;
+		bundledStrings = savedBundledStrings;
+		arrayAllocationBudget = savedArrayAllocationBudget;
+		src = savedSrc;
+		sequentialMode = savedSequentialMode;
+		currentStructures = savedStructures;
+		currentStructures.splice(0, currentStructures.length, ...savedStructuresContents);
+		currentUnpackr = savedPackr;
+		dataView = new DataView(src.buffer, src.byteOffset, src.byteLength);
+	}
 }
 export function clearSource() {
 	src = null;
