@@ -1,5 +1,6 @@
 import { Packr, Unpackr, addExtension, UnpackrStream, decodeIter } from '../node-index.js';
 import { assert } from 'chai';
+import vm from 'node:vm';
 
 // A prefix of a valid encoding can only fail because bytes are missing, so it must always be reported as
 // incomplete. UnpackrStream relies on this to wait for the next chunk instead of erroring.
@@ -42,9 +43,15 @@ function assertIncomplete(unpack, label) {
 		value = unpack();
 	} catch (error) {
 		assert.isTrue(error.incomplete, `${label}: threw a non-incomplete ${error.constructor.name}: ${error.message}`);
-		return;
+		return error;
 	}
 	assert.fail(`${label}: decoded ${String(value)} from a truncated encoding`);
+}
+
+function assertLowerBound(missingBytes, end, encoded, label) {
+	if (missingBytes === undefined) return;
+	assert.isAtLeast(missingBytes, 1, label);
+	assert.isAtMost(end + missingBytes, encoded.length, `${label}: missingBytes ${missingBytes} overshoots`);
 }
 
 suite('truncated encodings', function () {
@@ -58,10 +65,15 @@ suite('truncated encodings', function () {
 				unpackr.unpack(encoded);
 				for (let end = 0; end < encoded.length; end += end < 512 || end > encoded.length - 512 ? 1 : 251) {
 					// a copy, so the DataView ends with the data, as it does for a stream chunk
-					assertIncomplete(() => unpackr.unpack(Buffer.from(encoded.subarray(0, end))), `${label} [0, ${end})`);
+					const { missingBytes } = assertIncomplete(() => unpackr.unpack(Buffer.from(encoded.subarray(0, end))), `${label} [0, ${end})`);
+					assertLowerBound(missingBytes, end, encoded, `${label} [0, ${end})`);
 					// delimited only by the end argument, followed by bytes that must not be read
-					const padded = Buffer.concat([encoded.subarray(0, end), Buffer.alloc(16, 0xc1)]);
-					assertIncomplete(() => unpackr.unpack(padded, end), `${label} end=${end}`);
+					const hints = [0xc1, 0x00, 0xff].map(fill => {
+						const padded = Buffer.concat([encoded.subarray(0, end), Buffer.alloc(16, fill)]);
+						return assertIncomplete(() => unpackr.unpack(padded, end), `${label} end=${end}`).missingBytes;
+					});
+					assert.isTrue(hints.every(hint => hint === hints[0]), `${label} end=${end}: missingBytes depends on bytes past the end: ${hints}`);
+					assertLowerBound(hints[0], end, encoded, `${label} end=${end}`);
 				}
 			}
 		});
@@ -268,5 +280,258 @@ suite('end of input', function () {
 		});
 		assert.deepStrictEqual(received, [1]);
 		assert.match(error?.message, /Unexpected end/);
+	});
+});
+
+suite('values split across many chunks', function () {
+	this.timeout(20000);
+	const bin32Header = Buffer.from([0xc6, 0xff, 0xff, 0xff, 0xff]); // bin 32 declaring 4 GiB
+
+	function countUnpacks(unpackr) {
+		const unpackMultiple = unpackr.unpackMultiple;
+		const counter = { calls: 0, bytes: 0 };
+		unpackr.unpackMultiple = function (source) {
+			counter.calls++;
+			counter.bytes += source.length;
+			return unpackMultiple.apply(this, arguments);
+		};
+		return counter;
+	}
+	function chunked(bytes, size) {
+		const chunks = [];
+		for (let start = 0; start < bytes.length; start += size) chunks.push(bytes.subarray(start, start + size));
+		return chunks;
+	}
+	function receive(stream, count) {
+		const received = [];
+		return new Promise(resolve => {
+			stream.on('data', value => {
+				received.push(value);
+				if (received.length === count) resolve({ received });
+			});
+			stream.on('error', error => resolve({ received, error }));
+		});
+	}
+
+	test('a large declared bin is unpacked once, not once per chunk', async () => {
+		const stream = new UnpackrStream();
+		const counter = countUnpacks(stream.unpackr);
+		let error;
+		stream.on('data', () => {});
+		stream.on('error', e => error = e);
+		stream.write(bin32Header);
+		for (let i = 0; i < 2000; i++) stream.write(Buffer.alloc(16384));
+		await new Promise(resolve => setImmediate(resolve));
+		assert.isUndefined(error, error?.message);
+		assert.equal(counter.calls, 1);
+		assert.equal(stream.incompleteLength, 5 + 2000 * 16384);
+	});
+
+	test('the incomplete buffer size limit still applies while unpacking is skipped', async () => {
+		const stream = new UnpackrStream({ maxIncompleteBufferSize: 5 + 10 * 16384 });
+		const counter = countUnpacks(stream.unpackr);
+		const outcome = receive(stream, 1);
+		stream.write(bin32Header);
+		for (let i = 0; i < 10; i++) stream.write(Buffer.alloc(16384));
+		await new Promise(resolve => setImmediate(resolve));
+		assert.isNotOk(stream.destroyed);
+		stream.write(Buffer.alloc(1));
+		const { error } = await outcome;
+		assert.equal(error?.message, 'Maximum incomplete buffer size exceeded');
+		assert.equal(counter.calls, 1);
+		assert.isNotOk(stream.incompleteBuffer);
+	});
+
+	test('a value is emitted on the chunk that completes it', async () => {
+		const values = [
+			[{ id: 1, payload: Buffer.alloc(1000000, 7) }, 2], // bin 32 inside a map
+			[{ text: 'y'.repeat(1000), list: ['z'.repeat(100000)] }, 2], // str 16, and str 32 inside an array
+			// many small elements only bound the bytes needed a little ahead, so these are unpacked again on most chunks
+			[new Array(5000).fill(0).map((_, i) => ({ i, b: Buffer.alloc(100, i) })), Infinity],
+		];
+		for (const options of [{}, { useRecords: false }]) {
+			const packr = new Packr(options);
+			for (const [value, maxUnpacks] of values) {
+				const stream = new UnpackrStream(options);
+				const counter = countUnpacks(stream.unpackr);
+				const outcome = receive(stream, 1);
+				const encoded = packr.pack(value);
+				for (const chunk of chunked(encoded, 16384)) stream.write(chunk); // not ended: the sender may be waiting
+				const { received, error } = await outcome;
+				assert.isUndefined(error, error?.message);
+				assert.deepStrictEqual(received, [new Unpackr(options).unpack(encoded)]);
+				assert.isAtMost(counter.calls, maxUnpacks);
+			}
+		}
+	});
+
+	test('held bytes are copied in bounded total', () => {
+		// followed by another value, so the completing chunk holds more than the held value needs
+		const encoded = Buffer.concat([new Packr().pack({ id: 1, payload: Buffer.alloc(4000000, 7) }), new Packr().pack({ id: 2 })]);
+		const { allocUnsafe, concat } = Buffer;
+		let allocated = 0;
+		Buffer.allocUnsafe = function (size) {
+			allocated += size;
+			return allocUnsafe.apply(this, arguments);
+		};
+		Buffer.concat = function (list, length) {
+			allocated += length;
+			return concat.apply(this, arguments);
+		};
+		try {
+			const values = [...decodeIter(chunked(encoded, 1000))];
+			assert.equal(values[0].payload.length, 4000000);
+			assert.equal(values[1].id, 2);
+		} finally {
+			Buffer.allocUnsafe = allocUnsafe;
+			Buffer.concat = concat;
+		}
+		assert.isAtMost(allocated, 2.5 * encoded.length);
+	});
+
+	test('a Uint8Array from another realm is accepted while a value is held', async () => {
+		const foreign = vm.runInNewContext('new Uint8Array([1, 2, 3, 4])');
+		assert.deepStrictEqual([...decodeIter([Buffer.from([0xc4, 0x04]), foreign])], [Buffer.from([1, 2, 3, 4])]);
+		const stream = new UnpackrStream();
+		const outcome = receive(stream, 1);
+		stream.write(Buffer.from([0xc4, 0x04]));
+		stream.write(foreign);
+		assert.deepStrictEqual((await outcome).received, [Buffer.from([1, 2, 3, 4])]);
+	});
+
+	test('a chunk that is not bytes is rejected while a value is held', async () => {
+		assert.throws(() => [...decodeIter([Buffer.from([0xc4, 0x04]), 'ab'])], TypeError);
+		const stream = new UnpackrStream();
+		const outcome = receive(stream, 1);
+		stream.write(Buffer.from([0xc4, 0x04]));
+		stream.write('ab');
+		assert.instanceOf((await outcome).error, TypeError);
+	});
+
+	test('a buffer reused by the caller is copied before it is held', async () => {
+		const expected = [Buffer.from([1, 2, 3, 4, 5, 6])];
+		function * chunks() {
+			yield Buffer.from([0xc4, 0x06, 0x01]);
+			const scratch = Buffer.from([2, 3]);
+			yield scratch;
+			scratch.set([4, 5]);
+			yield scratch;
+			yield Buffer.from([6]);
+		}
+		assert.deepStrictEqual([...decodeIter(chunks())], expected);
+		const asyncValues = [];
+		for await (const value of decodeIter((async function * () { yield * chunks(); })())) asyncValues.push(value);
+		assert.deepStrictEqual(asyncValues, expected);
+		const stream = new UnpackrStream();
+		const outcome = receive(stream, 1);
+		for (const chunk of chunks()) await new Promise(resolve => stream.write(chunk, resolve));
+		assert.deepStrictEqual((await outcome).received, expected);
+	});
+
+	test('a value that completes past the limit is still unpacked', () => {
+		assert.deepStrictEqual([...decodeIter([Buffer.from([0xc4, 0x06]), Buffer.from([1, 2, 3, 4, 5, 6])], { maxIncompleteBufferSize: 3 })],
+			[Buffer.from([1, 2, 3, 4, 5, 6])]);
+	});
+
+	test('decodeIter honors maxIncompleteBufferSize', async () => {
+		const chunks = () => [bin32Header, Buffer.alloc(10), Buffer.alloc(10)];
+		const consumed = [];
+		const counted = function * () {
+			for (const chunk of chunks()) {
+				consumed.push(chunk);
+				yield chunk;
+			}
+		};
+		assert.throws(() => [...decodeIter(counted(), { maxIncompleteBufferSize: 15 })], 'Maximum incomplete buffer size exceeded');
+		assert.equal(consumed.length, 3);
+		try {
+			for await (const value of decodeIter((async function * () { yield * chunks(); })(), { maxIncompleteBufferSize: 15 }));
+			assert.fail('should throw');
+		} catch (error) {
+			assert.equal(error.message, 'Maximum incomplete buffer size exceeded');
+		}
+		assert.throws(() => [...decodeIter(chunks(), { maxIncompleteBufferSize: Infinity })], /Unexpected end/);
+		assert.throws(() => [...decodeIter([bin32Header, Buffer.alloc(0x4000000)])], 'Maximum incomplete buffer size exceeded');
+	});
+
+	test('values before an oversized remainder are delivered once, before the error', async () => {
+		const bytes = Buffer.concat([Buffer.from([0x01, 0xa1, 0x61]), bin32Header, Buffer.alloc(20)]);
+		const iterated = [];
+		assert.throws(() => { for (const value of decodeIter([bytes], { maxIncompleteBufferSize: 10 })) iterated.push(value); },
+			'Maximum incomplete buffer size exceeded');
+		assert.deepStrictEqual(iterated, [1, 'a']);
+		const stream = new UnpackrStream({ maxIncompleteBufferSize: 10 });
+		const outcome = receive(stream, 3);
+		stream.write(bytes);
+		const { received, error } = await outcome;
+		assert.deepStrictEqual(received, [1, 'a']);
+		assert.equal(error?.message, 'Maximum incomplete buffer size exceeded');
+	});
+
+	test('values before a remainder that cannot be held are still delivered', () => {
+		const from = Buffer.from;
+		Buffer.from = function () {
+			throw new RangeError('Array buffer allocation failed');
+		};
+		const iterated = [];
+		try {
+			assert.throws(() => { for (const value of decodeIter([new Uint8Array([0x01, 0xc4, 0x06, 0x02])])) iterated.push(value); },
+				'Array buffer allocation failed');
+		} finally {
+			Buffer.from = from;
+		}
+		assert.deepStrictEqual(iterated, [1]);
+	});
+
+	test('empty chunks while waiting do not unpack again', async () => {
+		const chunks = [Buffer.from([0x01, 0xa1]), ...new Array(1000).fill(Buffer.alloc(0)), Buffer.from([0x61])];
+		assert.deepStrictEqual([...decodeIter(chunks)], [1, 'a']);
+		const stream = new UnpackrStream();
+		const counter = countUnpacks(stream.unpackr);
+		const outcome = receive(stream, 2);
+		for (const chunk of chunks) stream.write(chunk);
+		assert.deepStrictEqual((await outcome).received, [1, 'a']);
+		assert.equal(counter.calls, 2);
+	});
+
+	test('input ending before the declared length is reported', async () => {
+		assert.throws(() => [...decodeIter([bin32Header, Buffer.alloc(100)])], /Unexpected end/);
+		const stream = new UnpackrStream();
+		const outcome = receive(stream, 1);
+		stream.write(bin32Header);
+		stream.write(Buffer.alloc(100));
+		stream.end();
+		assert.match((await outcome).error?.message, /Unexpected end/);
+	});
+
+	test('a length read past the end argument gives no hint', () => {
+		// the array 16 length bytes are physically present but past end; dc 00 00 would complete it with two bytes
+		const error = assertIncomplete(() => new Unpackr().unpack(Buffer.from([0xdc, 0xc1, 0xc1]), 1), 'dc');
+		assert.isUndefined(error.missingBytes);
+		assert.equal(assertIncomplete(() => new Unpackr().unpack(Buffer.from([0xdc, 0x00, 0x05])), 'dc 00 05').missingBytes, 5);
+	});
+
+	test('independent streams interleaved', async () => {
+		const packr = new Packr();
+		const values = [{ a: Buffer.alloc(100000, 1) }, ['x'.repeat(70000), 3]];
+		const streams = values.map(() => new UnpackrStream());
+		const outcomes = streams.map(stream => receive(stream, 1));
+		const chunkLists = values.map(value => chunked(packr.pack(value), 1000));
+		for (let i = 0; i < Math.max(...chunkLists.map(list => list.length)); i++)
+			chunkLists.forEach((list, s) => list[i] && streams[s].write(list[i]));
+		for (let s = 0; s < values.length; s++)
+			assert.deepStrictEqual((await outcomes[s]).received, [values[s]]);
+	});
+
+	const sequence = [{ a: 'hello', bin: Buffer.alloc(300, 1) }, 'x'.repeat(300), 'k'.repeat(70000), [1, 2.5, 'three'],
+		new Array(300).fill(0).map((_, i) => i), new Map([[1, Buffer.alloc(70000, 2)]]), { a: 'again', b: [1] }];
+	test('decodeIter reassembles a sequence cut into chunks of every size', () => {
+		for (const options of [{}, { useRecords: false }]) {
+			const packr = new Packr(options);
+			const encoded = Buffer.concat(sequence.map(item => packr.pack(item)));
+			const expected = new Unpackr(options).unpackMultiple(encoded);
+			for (let size = 1; size < encoded.length; size = size < 64 ? size + 1 : size * 2 + 1)
+				assert.deepStrictEqual([...decodeIter(chunked(encoded, size), options)], expected, `${JSON.stringify(options)} size ${size}`);
+		}
 	});
 });

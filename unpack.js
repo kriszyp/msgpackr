@@ -7,6 +7,7 @@ var srcEnd;
 var position = 0;
 var alreadySet;
 const EMPTY_ARRAY = [];
+const EXTRACTION_FAILED = [];
 var strings = EMPTY_ARRAY;
 var stringPosition = 0;
 var currentUnpackr = {};
@@ -342,11 +343,13 @@ export function read() {
 				// bin 16
 				value = dataView.getUint16(position);
 				position += 2;
+				if (value > srcEnd - position) throw endOfMessagePackError(position + value);
 				return readBin(value);
 			case 0xc6:
 				// bin 32
 				value = dataView.getUint32(position);
 				position += 4;
+				if (value > srcEnd - position) throw endOfMessagePackError(position + value);
 				return readBin(value);
 			case 0xc7:
 				// ext 8
@@ -474,6 +477,7 @@ export function read() {
 			// str 16
 				value = dataView.getUint16(position);
 				position += 2;
+				if (value > srcEnd - position) throw endOfMessagePackError(position + value);
 				if (srcStringEnd >= position) {
 					return srcString.slice(position - srcStringStart, (position += value) - srcStringStart);
 				}
@@ -482,6 +486,7 @@ export function read() {
 			// str 32
 				value = dataView.getUint32(position);
 				position += 4;
+				if (value > srcEnd - position) throw endOfMessagePackError(position + value);
 				if (srcStringEnd >= position) {
 					return srcString.slice(position - srcStringStart, (position += value) - srcStringStart);
 				}
@@ -595,14 +600,28 @@ export function setExtractor(extractStrings) {
 	readString8 = readString(2);
 	readString16 = readString(3);
 	readString32 = readString(5);
+	// kept out of readString, where a try block measurably slowed string-heavy unpacking
+	function tryExtractStrings(start, end, buffer) {
+		try {
+			return extractStrings(start, end, buffer);
+		} catch (error) {
+			return EXTRACTION_FAILED;
+		}
+	}
 	function readString(headerLength) {
 		return function readString(length) {
 			let string = strings[stringPosition++];
 			if (string == null) {
-				if (bundledStrings)
+				if (bundledStrings || strings === EXTRACTION_FAILED)
 					return readStringJS(length);
 				let byteOffset = src.byteOffset;
-				let extraction = extractStrings(position - headerLength + byteOffset, srcEnd + byteOffset, src.buffer);
+				let extraction = tryExtractStrings(position - headerLength + byteOffset, srcEnd + byteOffset, src.buffer);
+				if (extraction === EXTRACTION_FAILED) {
+					// the extractor scans ahead to srcEnd and fails on any truncated value there, even a later one,
+					// so read the rest of this source in JS, which fails where the bytes actually run out
+					strings = EXTRACTION_FAILED;
+					return readStringJS(length);
+				}
 				if (typeof extraction == 'string') {
 					string = extraction;
 					strings = EMPTY_ARRAY;
@@ -717,16 +736,21 @@ export function readString(source, start, length) {
 	}
 }
 
-function endOfMessagePackError() {
+// end: the least offset the value must reach, from a length header that runs past srcEnd. As missingBytes it
+// lets a stream wait for that many more bytes before unpacking again. A header itself read past srcEnd came
+// from bytes after an end argument, so it says nothing about the value.
+function endOfMessagePackError(end) {
 	let error = new Error('Unexpected end of MessagePack data');
 	error.incomplete = true;
+	if (end > srcEnd && position <= srcEnd)
+		error.missingBytes = end - srcEnd;
 	return error;
 }
 
 function readArray(length) {
 	// every element occupies at least one byte, so a length beyond what remains in the source can never
 	// be satisfied; check before allocating so a small header can not force a large allocation
-	if (length > srcEnd - position) throw endOfMessagePackError();
+	if (length > srcEnd - position) throw endOfMessagePackError(position + length);
 	let array = new Array(length);
 	for (let i = 0; i < length; i++) {
 		array[i] = read();
@@ -737,7 +761,7 @@ function readArray(length) {
 }
 
 function readMap(length) {
-	if (length > (srcEnd - position) / 2) throw endOfMessagePackError(); // each entry needs at least two bytes
+	if (length > (srcEnd - position) / 2) throw endOfMessagePackError(position + 2 * length); // each entry needs at least two bytes
 	if (currentUnpackr.mapsAsObjects) {
 		let object = {};
 		for (let i = 0; i < length; i++) {
@@ -948,7 +972,7 @@ function readBin(length) {
 }
 function readExt(length) {
 	// the payload is handed to the extension, so it must be complete
-	if (length >= srcEnd - position) throw endOfMessagePackError();
+	if (length >= srcEnd - position) throw endOfMessagePackError(position + 1 + length);
 	let type = src[position++];
 	if (currentExtensions[type]) {
 		let end;
@@ -979,7 +1003,7 @@ function readKey() {
 		position--;
 		return asSafeString(read());
 	}
-	if (length > srcEnd - position) throw endOfMessagePackError();
+	if (length > srcEnd - position) throw endOfMessagePackError(position + length);
 	let key = ((length << 5) ^ (length > 1 ? dataView.getUint16(position) : length > 0 ? src[position] : 0)) & 0xfff;
 	let entry = keyCache[key];
 	let checkPosition = position;
