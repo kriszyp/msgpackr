@@ -173,6 +173,7 @@ The following options properties can be provided to the Packr or Unpackr constru
 * `useRecords` - Setting this to `false` disables the record extension and stores JavaScript objects as MessagePack maps, and unpacks maps as JavaScript `Object`s, which ensures compatibilty with other decoders. Setting this to a function will use records for objects where `useRecords(object)` returns `true`.
 * `structures` - Provides the array of structures that is to be used for record extension, if you want the structures saved and used again. This array will be modified in place with new record structures that are serialized (if less than 32 structures are in the array).
 * `moreTypes` - Enable serialization of additional built-in types/classes including typed arrays, `Set`s, `Map`s, and `Error`s.
+* `useToJSON` - Setting this to `false` stops the encoder from calling an object's `toJSON()` method to decide how to serialize it; the object's own properties are encoded instead. This defaults to `true`, and is worth disabling when the encoded form is durable state rather than a message: `toJSON()` is a serialization convention shared with `JSON.stringify`, so a class that defines it for its API/response shape would otherwise have that shape written to storage. (Note that cbor-x has the same option with the opposite default.)
 * `structuredClone` - This enables the structured cloning extensions that will encode object/cyclic references. `moreTypes` is enabled by default when this is enabled.
 * `mapsAsObjects` - If `true`, this will decode MessagePack maps and JS `Object`s with the map entries decoded to object properties. If `false`, maps are decoded as JavaScript `Map`s. This is disabled by default if `useRecords` is enabled (which allows `Map`s to be preserved), and is enabled by default if `useRecords` is disabled.
 * `useFloat32` - This will enable msgpackr to encode non-integer numbers as `float32`. See next section for possible values.
@@ -181,6 +182,7 @@ The following options properties can be provided to the Packr or Unpackr constru
 * `copyBuffers` - When decoding a MessagePack with binary data (Buffers are encoded as binary data), copy the buffer rather than providing a slice/view of the buffer. If you want your input data to be collected or modified while the decoded embedded buffer continues to live on, you can use this option (there is extra overhead to copying).
 * `useTimestamp32` - Encode JS `Date`s in 32-bit format when possible by dropping the milliseconds. This is a more efficient encoding of dates. You can also cause dates to use 32-bit format by manually setting the milliseconds to zero (`date.setMilliseconds(0)`).
 * `sequential` - Encode structures in serialized data, and reference previously encoded structures with expectation that decoder will read the encoded structures in the same order as encoded, with `unpackMultiple`.
+* `maxIncompleteBufferSize` - For `UnpackrStream` and `decodeIter`, the most bytes held for a value that has started to arrive but is not complete yet. Holding more fails with "Maximum incomplete buffer size exceeded". This limits what is held between chunks, not the size of a value: a value completed by the chunk that takes it past the limit is still unpacked. Defaults to 64MB; `Infinity` disables it.
 * `largeBigIntToFloat` - If a bigint needs to be encoded that is larger than will fit in 64-bit integers, it will be encoded as a float-64 (otherwise will throw a RangeError).
 * `largeBigIntToString` - If a bigint needs to be encoded that is larger than will fit in 64-bit integers, it will be encoded as a string (otherwise will throw a RangeError).
 * `useBigIntExtension` - If a bigint needs to be encoded that is larger than will fit in 64-bit integers, it will be encoded using a custom extension that supports up to about 1000-bits of integer precision.
@@ -281,6 +283,8 @@ addExtension({
 	}
 });
 ```
+An extension's `pack` function may call `pack` on the same `Packr`. When that `Packr` uses shared `structures` with `saveStructures`, the nested buffer only references shared structures that are already saved. Any new shapes are written as inline record definitions, so the nested buffer can be decoded on its own. When the outermost `pack` finishes without error, those new shapes are added to the shared structures (as permitted by `maxSharedStructures` and `shouldShareStructure`) and saved, so later `pack` calls can use the shorter shared form.
+
 If you want to use msgpackr to encode and decode the data within your extensions, you can use the `read` and `write` functions and read and write data/objects that will be encoded and decoded by msgpackr, which can be easier and faster than creating and receiving separate buffers:
 
 ```js

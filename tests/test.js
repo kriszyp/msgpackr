@@ -645,6 +645,596 @@ suite('msgpackr basic tests', function() {
 		assert.equal(deserialized.getDouble(), 8);
 	});
 
+	test('reentrant pack on same instance with nonzero start', function() {
+		class NestedBlob {
+			constructor(meta, prepacked) {
+				this.meta = meta;
+				if (prepacked)
+					this.prepacked = prepacked;
+			}
+		}
+		addExtension({
+			Class: NestedBlob,
+			type: 16,
+			pack(blob) {
+				return blob.prepacked || pack(blob.meta);
+			},
+			unpack(buffer) {
+				return new NestedBlob(unpack(buffer));
+			}
+		});
+
+		const innerPrepacked = Buffer.from(pack({ inner: true }));
+		const metaPrepacked = Buffer.from(pack({
+			name: 'file.txt',
+			size: 40020,
+			nested: new NestedBlob(null, innerPrepacked)
+		}));
+		const expectedBytes = Buffer.from(pack({
+			id: 'rec-1',
+			blob: new NestedBlob(null, metaPrepacked),
+			after: 'tail'
+		}));
+
+		const warmup = pack({ control: 'warmup-frame', seq: 1 });
+		assert.deepEqual(unpack(warmup), { control: 'warmup-frame', seq: 1 });
+
+		const payload = {
+			id: 'rec-1',
+			blob: new NestedBlob({
+				name: 'file.txt',
+				size: 40020,
+				nested: new NestedBlob({ inner: true })
+			}),
+			after: 'tail'
+		};
+		const serialized = pack(payload);
+		assert.equal(serialized.length, expectedBytes.length);
+		assert.deepEqual(Buffer.from(serialized), expectedBytes);
+		const deserialized = unpack(serialized);
+		assert.deepEqual(deserialized, payload);
+	});
+
+	test('reentrant pack with records, bundleStrings, and structuredClone', function() {
+		let activePackr;
+		class NestedRecordExt {
+			constructor(value) {
+				this.value = value;
+			}
+		}
+		addExtension({
+			Class: NestedRecordExt,
+			type: 17,
+			pack(inst) {
+				return activePackr.pack(inst.value);
+			},
+			unpack(buffer) {
+				return new NestedRecordExt(activePackr.unpack(buffer));
+			}
+		});
+
+		activePackr = new Packr({ bundleStrings: true, structuredClone: true });
+		activePackr.pack({ warmup: 'initial frame to advance buffer position' });
+
+		const sharedOuter = { label: 'shared-outer-string' };
+		const sharedInner = { label: 'shared-inner-string' };
+		const richPayload = {
+			first: { a: 'first-bundled-string', b: 1 },
+			ref1: sharedOuter,
+			ext: new NestedRecordExt({
+				sameShape: { a: 'inner-bundled-string', b: 2 },
+				innerOther: { x: 'another-inner-string', y: 3 },
+				innerRef1: sharedInner,
+				innerRef2: sharedInner
+			}),
+			second: { a: 'second-bundled-string', b: 4 },
+			third: { c: 'third-bundled-string', d: 5 },
+			ref2: sharedOuter
+		};
+		const richSerialized = activePackr.pack(richPayload);
+		const richDeserialized = activePackr.unpack(richSerialized);
+		assert.deepEqual(richDeserialized, richPayload);
+		assert.equal(richDeserialized.ref1, richDeserialized.ref2);
+		assert.equal(richDeserialized.ext.value.innerRef1, richDeserialized.ext.value.innerRef2);
+	});
+
+	let activePackr;
+	let capturedNestedBuffers = [];
+	class SharedNestedExt {
+		constructor(value) {
+			this.value = value;
+		}
+	}
+	addExtension({
+		Class: SharedNestedExt,
+		type: 18,
+		pack(inst) {
+			const buf = Buffer.from(activePackr.pack(inst.value));
+			capturedNestedBuffers.push(buf);
+			return buf;
+		},
+		unpack(buffer) {
+			return new SharedNestedExt(activePackr.unpack(buffer));
+		}
+	});
+
+	test('reentrant pack clears leftover unpack structures before nested pack', function() {
+		const leftoverPackr = new Packr({
+			structures: []
+		});
+		leftoverPackr.unpack(new Packr().pack({ leftoverA: 1 }));
+		activePackr = leftoverPackr;
+		const leftoverEncoded = leftoverPackr.pack([new SharedNestedExt({ a: 1 })]);
+		const leftoverReader = new Packr({
+			structures: leftoverPackr.structures.slice(0, leftoverPackr.structures.sharedLength)
+		});
+		activePackr = leftoverReader;
+		assert.deepEqual(leftoverReader.unpack(leftoverEncoded), [new SharedNestedExt({ a: 1 })]);
+	});
+
+	test('reentrant pack with shared structures, saveStructures decline, and promotion', function() {
+		let persistedStructures = [['concurrentA', 'concurrentB']];
+		let saveCount = 0;
+		let declinedOnce = false;
+		activePackr = new Packr({
+			structures: [],
+			saveStructures(structures, isCompatible) {
+				if (!isCompatible(persistedStructures.slice(0))) {
+					declinedOnce = true;
+					return false;
+				}
+				saveCount++;
+				persistedStructures = structures.slice(0);
+			}
+		});
+
+		capturedNestedBuffers = [];
+		const nestedPayload = {
+			beforeNested: { sharedBothA: 1, sharedBothB: 2 },
+			nested: new SharedNestedExt({
+				sameAsOuter: { sharedBothA: 3, sharedBothB: 4 },
+				innerShape: { innerA: 30, innerB: 40 },
+				nestedOnly: { onlyInnerA: 50, onlyInnerB: 60 }
+			}),
+			outerShape: { outerA: 10, outerB: 20 },
+			afterInner: { innerA: 70, innerB: 80 }
+		};
+		const encoded = activePackr.pack(nestedPayload);
+		assert.equal(declinedOnce, true);
+		assert.equal(saveCount, 1);
+		assert.equal(persistedStructures.length, 7);
+		assert.equal(capturedNestedBuffers.length, 2);
+
+		const encodedSecond = activePackr.pack(nestedPayload);
+		assert.equal(saveCount, 1);
+		assert.equal(capturedNestedBuffers.length, 3);
+		assert(capturedNestedBuffers[2].length < capturedNestedBuffers[1].length, 'second pack should reuse promoted nested-only structures as shared references');
+
+		const readerPackr = new Packr({ structures: persistedStructures });
+		activePackr = readerPackr;
+		assert.deepEqual(readerPackr.unpack(encoded), nestedPayload);
+		assert.deepEqual(readerPackr.unpack(encodedSecond), nestedPayload);
+		assert.deepEqual(new Packr({ structures: [['concurrentA', 'concurrentB']] }).unpack(capturedNestedBuffers[0]), {
+			sameAsOuter: { sharedBothA: 3, sharedBothB: 4 },
+			innerShape: { innerA: 30, innerB: 40 },
+			nestedOnly: { onlyInnerA: 50, onlyInnerB: 60 }
+		}, 'escaped nested buffer from declined first attempt should decode standalone');
+
+		let packedStructuresBlob;
+		const selfSavingPackr = new Packr({
+			structures: [],
+			saveStructures(structures) {
+				packedStructuresBlob = Buffer.from(selfSavingPackr.pack(structures));
+			}
+		});
+		activePackr = selfSavingPackr;
+		const selfSavedPayload = {
+			outer: { a: 1, b: 2 },
+			nested: new SharedNestedExt({ innerKey: 3 })
+		};
+		const selfSavedEncoded = Buffer.from(selfSavingPackr.pack(selfSavedPayload));
+		const unpackedStructures = selfSavingPackr.unpack(packedStructuresBlob);
+		const selfSavedReader = new Packr({ structures: unpackedStructures });
+		activePackr = selfSavedReader;
+		assert.deepEqual(selfSavedReader.unpack(selfSavedEncoded), selfSavedPayload, 'saveStructures packing on same Packr instance should round-trip');
+
+		let sharedStore = [['baseA', 'baseB']];
+		const makeStorePackr = () => new Packr({
+			getStructures() {
+				return sharedStore.map(keys => keys.slice(0));
+			},
+			saveStructures(structures, isCompatible) {
+				if (!isCompatible(sharedStore.map(keys => keys.slice(0))))
+					return false;
+				sharedStore = structures.map(keys => keys.slice(0));
+			},
+			shouldShareStructure(keys) {
+				return !keys.includes('ownOnlyKey');
+			}
+		});
+		const writer1 = makeStorePackr();
+		const writer2 = makeStorePackr();
+		writer1.pack({ baseA: 1, baseB: 2 });
+		writer2.pack([
+			{ w2Slot1A: 10, w2Slot1B: 20 },
+			{ w2Slot2A: 30, w2Slot2B: 40 }
+		]);
+		const writer2Buf = Buffer.from(writer2.pack({ w2Slot2A: 30, w2Slot2B: 40 }));
+		let unpackedDuringPack = [];
+		class UnpackBeforeNestedPack {
+			constructor(value) {
+				this.value = value;
+			}
+			toJSON() {
+				unpackedDuringPack.push(writer1.unpack(writer2Buf));
+				return new SharedNestedExt(this.value);
+			}
+		}
+		activePackr = writer1;
+		capturedNestedBuffers = [];
+		const midPackMergePayload = [
+			{ outerUnsavedA: 1, outerUnsavedB: 2 },
+			{ ownOnlyKey: 3, extra: 4 },
+			new UnpackBeforeNestedPack({
+				sameAsUnsavedOuter: { outerUnsavedA: 5, outerUnsavedB: 6 },
+				sameAsW2: { w2Slot1A: 7, w2Slot1B: 8 },
+				nestedFresh: { freshNestedA: 9, freshNestedB: 10 }
+			}),
+			{ ownOnlyKey: 11, extra: 12 },
+			{ outerUnsavedA: 13, outerUnsavedB: 14 }
+		];
+		const midPackMergeEncoded = Buffer.from(writer1.pack(midPackMergePayload));
+		assert.equal(unpackedDuringPack.length, 2, 'outer pack should retry after mid-pack unpack structure merge and declined first save');
+		assert.equal(capturedNestedBuffers.length, 2);
+		const standaloneStoreReader = makeStorePackr();
+		activePackr = standaloneStoreReader;
+		assert.deepEqual(standaloneStoreReader.unpack(capturedNestedBuffers[0]), {
+			sameAsUnsavedOuter: { outerUnsavedA: 5, outerUnsavedB: 6 },
+			sameAsW2: { w2Slot1A: 7, w2Slot1B: 8 },
+			nestedFresh: { freshNestedA: 9, freshNestedB: 10 }
+		}, 'escaped nested buffer after mid-pack unpack merge must not emit unsaved outer shared ids');
+		assert.deepEqual(standaloneStoreReader.unpack(midPackMergeEncoded), [
+			{ outerUnsavedA: 1, outerUnsavedB: 2 },
+			{ ownOnlyKey: 3, extra: 4 },
+			new SharedNestedExt({
+				sameAsUnsavedOuter: { outerUnsavedA: 5, outerUnsavedB: 6 },
+				sameAsW2: { w2Slot1A: 7, w2Slot1B: 8 },
+				nestedFresh: { freshNestedA: 9, freshNestedB: 10 }
+			}),
+			{ ownOnlyKey: 11, extra: 12 },
+			{ outerUnsavedA: 13, outerUnsavedB: 14 }
+		], 'outer pack should preserve own structures and re-pack cleanly after mid-pack unpack merge');
+
+		const writer2Buf2 = Buffer.from(writer2.pack({ w2Slot3A: 50, w2Slot3B: 60 }));
+		let cleanMergeUnpacked = 0;
+		class UnpackCleanMergeBeforeNestedPack {
+			toJSON() {
+				cleanMergeUnpacked++;
+				writer1.unpack(writer2Buf2);
+				return new SharedNestedExt({ cleanNestedKey: 77 });
+			}
+		}
+		activePackr = writer1;
+		const cleanMergeEncoded = Buffer.from(writer1.pack([
+			{ baseA: 1, baseB: 2 },
+			new UnpackCleanMergeBeforeNestedPack(),
+			{ afterCleanMergeA: 88, afterCleanMergeB: 99 }
+		]));
+		assert.equal(cleanMergeUnpacked, 1, 'clean mid-pack unpack merge without prior unsaved outer structures should commit on first save');
+		activePackr = standaloneStoreReader;
+		assert.deepEqual(standaloneStoreReader.unpack(cleanMergeEncoded), [
+			{ baseA: 1, baseB: 2 },
+			new SharedNestedExt({ cleanNestedKey: 77 }),
+			{ afterCleanMergeA: 88, afterCleanMergeB: 99 }
+		]);
+
+		let zeroOwnStore = [];
+		const zeroOwnPackr = new Packr({
+			structures: zeroOwnStore,
+			maxOwnStructures: 0,
+			maxSharedStructures: 2,
+			saveStructures(structures) {
+				zeroOwnStore = structures.slice(0);
+			}
+		});
+		activePackr = zeroOwnPackr;
+		capturedNestedBuffers = [];
+		const zeroOwnPayload = {
+			outerKey: 1,
+			nested: new SharedNestedExt({ newKey: 2 })
+		};
+		const zeroOwnEncoded1 = Buffer.from(zeroOwnPackr.pack(zeroOwnPayload));
+		const zeroOwnEncoded2 = Buffer.from(zeroOwnPackr.pack(zeroOwnPayload));
+		assert.equal(zeroOwnStore.length, 2, 'nested structure should be promoted when maxOwnStructures is 0');
+		assert(capturedNestedBuffers[1].length < capturedNestedBuffers[0].length, 'second pack with maxOwnStructures 0 should use promoted shared structure');
+		const zeroOwnOverflow = {
+			overflowOuter: 3,
+			nested: new SharedNestedExt({ overflowInner: 4 })
+		};
+		const zeroOwnEncoded3 = Buffer.from(zeroOwnPackr.pack(zeroOwnOverflow));
+		const zeroOwnReader = new Packr({
+			structures: zeroOwnStore,
+			maxOwnStructures: 0,
+			maxSharedStructures: 2,
+			mapsAsObjects: true
+		});
+		activePackr = zeroOwnReader;
+		assert.deepEqual(zeroOwnReader.unpack(zeroOwnEncoded1), zeroOwnPayload, 'maxOwnStructures 0 first pack should fall back to plain map for nested new shape');
+		assert.deepEqual(zeroOwnReader.unpack(zeroOwnEncoded2), zeroOwnPayload, 'maxOwnStructures 0 second pack should round-trip with promoted structure');
+		assert.deepEqual(zeroOwnReader.unpack(zeroOwnEncoded3), zeroOwnOverflow, 'maxOwnStructures 0 should fall back to plain map when maxSharedStructures is full');
+
+		let twoByteStore = Array.from({ length: 32 }, (_, i) => ['pre' + i]);
+		const twoBytePackr = new Packr({
+			structures: twoByteStore.slice(0),
+			maxSharedStructures: 64,
+			saveStructures(structures) {
+				twoByteStore = structures.slice(0);
+			}
+		});
+		activePackr = twoBytePackr;
+		capturedNestedBuffers = [];
+		const twoBytePayload = {
+			pre0: 1,
+			nested: new SharedNestedExt({ twoBytePromotedA: 2, twoBytePromotedB: 3 })
+		};
+		const twoByteEncoded1 = Buffer.from(twoBytePackr.pack(twoBytePayload));
+		const twoByteEncoded2 = Buffer.from(twoBytePackr.pack(twoBytePayload));
+		assert.equal(twoByteStore.length, 34);
+		assert.equal(twoByteStore[33].highByte, 0, 'promoted structure at index >= 32 should set two-byte highByte');
+		assert(capturedNestedBuffers[1].length < capturedNestedBuffers[0].length, 'second pack should use two-byte promoted shared structure');
+		const twoByteReader = new Packr({
+			structures: twoByteStore,
+			maxSharedStructures: 64
+		});
+		activePackr = twoByteReader;
+		assert.deepEqual(twoByteReader.unpack(twoByteEncoded1), twoBytePayload);
+		assert.deepEqual(twoByteReader.unpack(twoByteEncoded2), twoBytePayload);
+	});
+
+	test('clearSharedData resets lastNamedStructuresLength after pack', function() {
+		let persistedStructures = [['initialA', 'initialB']];
+		let saveCount = 0;
+		activePackr = new Packr({
+			structures: persistedStructures.slice(0),
+			saveStructures(structures, isCompatible) {
+				if (!isCompatible(persistedStructures.slice(0)))
+					return false;
+				saveCount++;
+				persistedStructures = structures.slice(0);
+			}
+		});
+		activePackr.pack({ beforeClear: 1 });
+		assert.equal(saveCount, 1);
+		assert.equal(activePackr.lastNamedStructuresLength, 2);
+		activePackr.clearSharedData();
+		assert.equal(activePackr.lastNamedStructuresLength, 0);
+		persistedStructures = [];
+		const afterClearEncoded = activePackr.pack({ clearedA: 1, clearedB: 2 });
+		assert.equal(saveCount, 2);
+		assert.deepEqual(new Packr({ structures: persistedStructures }).unpack(afterClearEncoded), {
+			clearedA: 1,
+			clearedB: 2
+		});
+	});
+
+	test('reentrant pack rolls back shared structures on encode error or saveStructures throw', function() {
+		class FailingToJSON {
+			toJSON() {
+				throw new Error('abort outer pack');
+			}
+		}
+		let persistedStructures = [['outerA', 'outerB']];
+		let saveCount = 0;
+		activePackr = new Packr({
+			structures: persistedStructures.slice(0),
+			saveStructures(structures) {
+				saveCount++;
+				persistedStructures = structures.slice(0);
+			}
+		});
+		const countBeforeError = persistedStructures.length;
+		assert.throws(() => {
+			activePackr.pack({
+				nested: new SharedNestedExt({ transientKeyA: 1, transientKeyB: 2 }),
+				bad: new FailingToJSON()
+			});
+		}, /abort outer pack/);
+		assert.equal(saveCount, 0);
+		assert.equal(activePackr.structures.length, countBeforeError);
+
+		let throwOnSave = true;
+		activePackr = new Packr({
+			structures: persistedStructures.slice(0),
+			saveStructures(structures) {
+				if (throwOnSave)
+					throw new Error('save failed');
+				saveCount++;
+				persistedStructures = structures.slice(0);
+			}
+		});
+		assert.throws(() => {
+			activePackr.pack({ transientAfterSaveThrow: 1, b: 2 });
+		}, /save failed/);
+		assert.equal(saveCount, 0);
+		assert.equal(activePackr.structures.length, countBeforeError);
+		throwOnSave = false;
+
+		const followUp = {
+			outerShape: { outerA: 1, outerB: 2 },
+			transientAfterSaveThrow: 3,
+			b: 4
+		};
+		const followUpEncoded = activePackr.pack(followUp);
+		assert.equal(saveCount, 1);
+		const freshReader = new Packr({ structures: persistedStructures });
+		assert.deepEqual(freshReader.unpack(followUpEncoded), followUp);
+
+		const preamblePackr = new Packr({ maxSharedStructures: 0, maxOwnStructures: 1 });
+		class CaughtNestedToJSON {
+			toJSON() {
+				let throwOnReset = true;
+				let currentNextOwnId = preamblePackr.structures.nextOwnId;
+				Object.defineProperty(preamblePackr.structures, 'nextOwnId', {
+					configurable: true,
+					get() {
+						return currentNextOwnId;
+					},
+					set(val) {
+						if (throwOnReset) {
+							throwOnReset = false;
+							throw new Error('preamble failed');
+						}
+						currentNextOwnId = val;
+					}
+				});
+				try {
+					preamblePackr.pack({ inner: 1 });
+				} catch (err) {
+					return { fallback: err.message };
+				} finally {
+					delete preamblePackr.structures.nextOwnId;
+					preamblePackr.structures.nextOwnId = currentNextOwnId;
+				}
+			}
+		}
+		const outerWithCaughtNested = {
+			first: { ownA: 1, ownB: 2 },
+			caught: new CaughtNestedToJSON(),
+			second: { ownA: 3, ownB: 4 }
+		};
+		assert.deepEqual(preamblePackr.unpack(preamblePackr.pack(outerWithCaughtNested)), {
+			first: { ownA: 1, ownB: 2 },
+			caught: { fallback: 'preamble failed' },
+			second: { ownA: 3, ownB: 4 }
+		}, 'caught saveState preamble error after clearing own structures should restore outer own structures');
+	});
+
+	test('reentrant pack restores nextId and nextOwnId and skips shouldShareStructure past limit', function() {
+		const nextIdPackr = new Packr();
+		activePackr = nextIdPackr;
+		const nextIdPayload = {
+			a: { x: 1 },
+			b: { y: 1 },
+			n: new SharedNestedExt({ z: 1 }),
+			c: { w: 1 },
+			d: { x: 2 }
+		};
+		assert.deepEqual(nextIdPackr.unpack(nextIdPackr.pack(nextIdPayload)), nextIdPayload);
+
+		let shareCheckCalls = 0;
+		const ownIdPackr = new Packr({
+			structures: [],
+			maxSharedStructures: 4,
+			shouldShareStructure(keys) {
+				shareCheckCalls++;
+				return !keys.includes('ownOnly');
+			}
+		});
+		activePackr = ownIdPackr;
+		const ownIdPayload = {
+			firstOwn: { ownOnly: 1, firstKey: 2 },
+			nested: new SharedNestedExt({
+				innerShared: { sharedKey: 5 }
+			}),
+			secondOwn: { ownOnly: 6, secondKey: 7 },
+			reuseFirstOwn: { ownOnly: 8, firstKey: 9 }
+		};
+		const ownIdEncoded = ownIdPackr.pack(ownIdPayload);
+		assert.strictEqual(ownIdPackr.structures.sharedLength, 3);
+		const ownIdReader = new Packr({
+			structures: ownIdPackr.structures.slice(0, ownIdPackr.structures.sharedLength),
+			maxSharedStructures: 4
+		});
+		activePackr = ownIdReader;
+		assert.deepEqual(ownIdReader.unpack(ownIdEncoded), ownIdPayload);
+		ownIdPackr.pack({ s4: { k4: 1 } });
+		assert.strictEqual(ownIdPackr.structures.sharedLength, 4);
+		const callsAtLimit = shareCheckCalls;
+		ownIdPackr.pack({ overLimitA: { k5: 2 }, overLimitB: { k6: 3 } });
+		assert.strictEqual(shareCheckCalls, callsAtLimit);
+	});
+
+	test('reentrant pack with sequential mode', function() {
+		const seqWriter = new Packr({ sequential: true });
+		activePackr = seqWriter;
+		const seqPayload = {
+			first: { seqA: 1, seqB: 2 },
+			nested: new SharedNestedExt({ innerSeqA: 3, innerSeqB: 4 }),
+			second: { seqA: 5, seqB: 6 },
+			third: { innerSeqA: 7, innerSeqB: 8 }
+		};
+		const seqPayload2 = {
+			fourth: { seqA: 9, seqB: 10 },
+			fifth: { seqC: 11, seqD: 12 }
+		};
+		const seqEncoded = seqWriter.pack(seqPayload);
+		const seqEncoded2 = seqWriter.pack(seqPayload2);
+		const seqReader = new Packr({ sequential: true });
+		activePackr = seqReader;
+		assert.deepEqual(seqReader.unpack(seqEncoded), seqPayload);
+		assert.deepEqual(seqReader.unpack(seqEncoded2), seqPayload2);
+	});
+
+	test('cross-instance reentrant pack in toJSON and write with bundleStrings', function() {
+		const outerPackr = new Packr({ bundleStrings: true });
+		const innerPackr = new Packr({ bundleStrings: true });
+		let capturedFromWrite;
+		let capturedFromToJSON;
+
+		class CrossWriteItem {
+			constructor(data) {
+				this.data = data;
+			}
+		}
+		addExtension({
+			Class: CrossWriteItem,
+			type: 19,
+			write(item) {
+				capturedFromWrite = Buffer.from(innerPackr.pack({
+					innerWrite: 'bundled-inside-write-callback',
+					extra: item.data
+				}));
+				return item.data;
+			},
+			read(data) {
+				return new CrossWriteItem(data);
+			}
+		});
+
+		class CrossToJSONItem {
+			toJSON() {
+				capturedFromToJSON = Buffer.from(innerPackr.pack({
+					innerToJSON: 'bundled-inside-tojson-callback',
+					count: 42
+				}));
+				return 'returned-from-tojson-string';
+			}
+		}
+
+		const outerPayload = {
+			prefix: 'outer-bundled-string-prefix',
+			item: new CrossWriteItem('cross-write-payload-string'),
+			viaToJSON: new CrossToJSONItem(),
+			suffix: 'outer-bundled-string-suffix'
+		};
+
+		const outerEncoded = outerPackr.pack(outerPayload);
+		assert.deepEqual(outerPackr.unpack(outerEncoded), {
+			prefix: 'outer-bundled-string-prefix',
+			item: new CrossWriteItem('cross-write-payload-string'),
+			viaToJSON: 'returned-from-tojson-string',
+			suffix: 'outer-bundled-string-suffix'
+		});
+		assert.deepEqual(innerPackr.unpack(capturedFromWrite), {
+			innerWrite: 'bundled-inside-write-callback',
+			extra: 'cross-write-payload-string'
+		});
+		assert.deepEqual(innerPackr.unpack(capturedFromToJSON), {
+			innerToJSON: 'bundled-inside-tojson-callback',
+			count: 42
+		});
+	});
+
 	test.skip('convert Date to string', function(){
 		var data = {
 			aDate: new Date(),
@@ -1282,6 +1872,19 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(unpacked, { '1,2,3': 1, '1,2,foo,3.14': 2 });
 	});
 
+	test('non-string map key into object suggests mapsAsObjects: false (#127)', function() {
+		const msgpackr = new Packr({ mapsAsObjects: true });
+		const map = new Map();
+		map.set({ nested: 'key' }, 1);
+		const packed = msgpackr.pack(map);
+		assert.throws(() => msgpackr.unpack(packed), /mapsAsObjects: false/);
+		// and the suggested option does preserve the key
+		const asMaps = new Packr({ mapsAsObjects: false });
+		const unpacked = asMaps.unpack(packed);
+		assert.equal(unpacked instanceof Map, true);
+		assert.deepEqual(Array.from(unpacked.keys())[0], { nested: 'key' });
+	});
+
 	test('utf16 causing expansion', function() {
 		this.timeout(10000);
 		let data = {fixstr: 'ᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝ', str8:'ᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝᾐᾑᾒᾓᾔᾕᾖᾗᾘᾙᾚᾛᾜᾝ'};
@@ -1316,6 +1919,56 @@ suite('msgpackr basic tests', function() {
 		const deserialized = unpack(serialized);
 		assert.deepStrictEqual(deserialized, { someData: [1, 2, 3, 4] });
 	});
+	test('useToJSON: false encodes own properties instead of the toJSON form', () => {
+		class Record {
+			constructor() {
+				this.id = 1;
+				this.stored = 'own property';
+			}
+			// A response shape, not the durable shape: the API adds a derived field.
+			toJSON() {
+				return { id: this.id, stored: this.stored, derived: 'response only' };
+			}
+		}
+		assert.deepStrictEqual(unpack(pack(new Record)), { id: 1, stored: 'own property', derived: 'response only' });
+
+		const honoring = new Packr({ useToJSON: true });
+		assert.deepStrictEqual(honoring.unpack(honoring.pack(new Record)), {
+			id: 1,
+			stored: 'own property',
+			derived: 'response only',
+		});
+
+		const ignoring = new Packr({ useToJSON: false });
+		assert.deepStrictEqual(ignoring.unpack(ignoring.pack(new Record)), { id: 1, stored: 'own property' });
+	});
+
+	test('useToJSON: false is honored for a class whose toJSON returns this', () => {
+		class Serializable {
+			constructor() {
+				this.someData = [1, 2, 3, 4];
+			}
+			toJSON() {
+				return this;
+			}
+		}
+		const ignoring = new Packr({ useToJSON: false });
+		assert.deepStrictEqual(ignoring.unpack(ignoring.pack(new Serializable)), { someData: [1, 2, 3, 4] });
+	});
+
+	test('useToJSON: false leaves an inherited toJSON alone', () => {
+		class Base {
+			toJSON() {
+				return { fromPrototype: true };
+			}
+		}
+		const record = new Base();
+		record.stored = 'own';
+		const ignoring = new Packr({ useToJSON: false });
+		assert.deepStrictEqual(ignoring.unpack(ignoring.pack(record)), { stored: 'own' });
+		assert.deepStrictEqual(unpack(pack(record)), { fromPrototype: true });
+	});
+
 	test('skip values', function () {
 		var data = {
 			data: [
