@@ -683,9 +683,10 @@ export class Packr extends Unpackr {
 								// so without this their hook was skipped and their own fields were
 								// written instead. Date and Buffer do have a built-in toJSON and it is
 								// how msgpackr serializes them (timestamp and byte extensions), so
-								// those two must keep the extension.
-								if (packr.useToJSON !== false && value.toJSON !== undefined &&
-										builtInToJSON.indexOf(value.toJSON) === -1) {
+								// those two must keep the extension. Instances of the extension class
+								// itself skip the lookup, which keeps packing plain Dates and Sets fast.
+								if (value.constructor !== extensionClass && packr.useToJSON !== false &&
+										value.toJSON !== undefined && value.toJSON !== dateToJSON && value.toJSON !== bufferToJSON) {
 									break; // fall through to the generic toJSON handling below
 								}
 								let extension = extensions[i];
@@ -1138,8 +1139,8 @@ export class Packr extends Unpackr {
 }
 
 // toJSON implementations that belong to the built-ins msgpackr serializes with extensions
-let builtInToJSON = [ Date.prototype.toJSON ];
-if (typeof Buffer !== 'undefined') builtInToJSON.push(Buffer.prototype.toJSON);
+const dateToJSON = Date.prototype.toJSON;
+const bufferToJSON = typeof Buffer !== 'undefined' ? Buffer.prototype.toJSON : dateToJSON;
 extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/, DataView, C1Type ];
 extensions = [{
 	pack(date, allocateForWrite, pack) {
