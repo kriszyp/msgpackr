@@ -90,6 +90,7 @@ export function unpackChunk (state, chunk) {
   if (chunk.length === 0) return [];
   let source = chunk;
   if (state.incompleteBuffer) {
+    if (!(chunk instanceof Uint8Array)) throw new TypeError('Chunk must be a Uint8Array or Buffer');
     const length = state.incompleteLength + chunk.length;
     if (length < state.incompleteNeeded) {
       // the value is known to need more bytes than this, so unpacking again could not succeed yet
@@ -100,7 +101,13 @@ export function unpackChunk (state, chunk) {
       holdIncomplete(state, chunk, length);
       return [];
     }
-    source = Buffer.concat([state.incompleteBuffer.subarray(0, state.incompleteLength), chunk], length);
+    if (length <= state.incompleteBuffer.length) {
+      // only a buffer grown by holdIncomplete has spare room, and nothing unpacked from it is referenced yet
+      state.incompleteBuffer.set(chunk, state.incompleteLength);
+      source = state.incompleteBuffer.subarray(0, length);
+    } else {
+      source = Buffer.concat([state.incompleteBuffer.subarray(0, state.incompleteLength), chunk], length);
+    }
     state.incompleteBuffer = null;
   }
   try {
@@ -124,8 +131,9 @@ export function unpackChunk (state, chunk) {
 function holdIncomplete (state, chunk, length) {
   let buffer = state.incompleteBuffer;
   if (length > buffer.length) {
-    // grow geometrically, so a value arriving in many small chunks is copied a bounded number of times
-    const grown = Buffer.allocUnsafe(Math.min(Math.max(length, buffer.length * 2), state.incompleteNeeded, state.maxIncompleteBufferSize));
+    // grow geometrically, so a value arriving in many small chunks is copied a bounded number of times, with
+    // room for the needed bytes plus a chunk like this one, so the completing chunk can usually be added in place
+    const grown = Buffer.allocUnsafe(Math.min(Math.max(length, buffer.length * 2), state.incompleteNeeded + chunk.length, state.maxIncompleteBufferSize));
     buffer.copy(grown, 0, 0, state.incompleteLength);
     buffer = state.incompleteBuffer = grown;
   }

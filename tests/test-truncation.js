@@ -283,7 +283,7 @@ suite('end of input', function () {
 	});
 });
 
-// A value whose declared length has not all arrived is not unpacked again on every chunk (#210)
+// A value whose declared length has not all arrived is not unpacked again on every chunk
 suite('values split across many chunks', function () {
 	this.timeout(20000);
 	const bin32Header = Buffer.from([0xc6, 0xff, 0xff, 0xff, 0xff]); // bin 32 declaring 4 GiB
@@ -368,7 +368,8 @@ suite('values split across many chunks', function () {
 	});
 
 	test('held bytes are copied in bounded total', () => {
-		const encoded = new Packr().pack({ id: 1, payload: Buffer.alloc(4000000, 7) });
+		// followed by another value, so the completing chunk holds more than the held value needs
+		const encoded = Buffer.concat([new Packr().pack({ id: 1, payload: Buffer.alloc(4000000, 7) }), new Packr().pack({ id: 2 })]);
 		const { allocUnsafe, concat } = Buffer;
 		let allocated = 0;
 		Buffer.allocUnsafe = function (size) {
@@ -382,11 +383,21 @@ suite('values split across many chunks', function () {
 		try {
 			const values = [...decodeIter(chunked(encoded, 1000))];
 			assert.equal(values[0].payload.length, 4000000);
+			assert.equal(values[1].id, 2);
 		} finally {
 			Buffer.allocUnsafe = allocUnsafe;
 			Buffer.concat = concat;
 		}
-		assert.isAtMost(allocated, 4 * encoded.length);
+		assert.isAtMost(allocated, 2.5 * encoded.length);
+	});
+
+	test('a chunk that is not bytes is rejected while a value is held', async () => {
+		assert.throws(() => [...decodeIter([Buffer.from([0xc4, 0x04]), 'ab'])], TypeError);
+		const stream = new UnpackrStream();
+		const outcome = receive(stream, 1);
+		stream.write(Buffer.from([0xc4, 0x04]));
+		stream.write('ab');
+		assert.instanceOf((await outcome).error, TypeError);
 	});
 
 	test('a buffer reused by the caller is copied before it is held', async () => {
