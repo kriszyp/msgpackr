@@ -283,7 +283,6 @@ suite('end of input', function () {
 	});
 });
 
-// A value whose declared length has not all arrived is not unpacked again on every chunk
 suite('values split across many chunks', function () {
 	this.timeout(20000);
 	const bin32Header = Buffer.from([0xc6, 0xff, 0xff, 0xff, 0xff]); // bin 32 declaring 4 GiB
@@ -303,7 +302,6 @@ suite('values split across many chunks', function () {
 		for (let start = 0; start < bytes.length; start += size) chunks.push(bytes.subarray(start, start + size));
 		return chunks;
 	}
-	// resolves once the stream has emitted count values or errored, without ending it
 	function receive(stream, count) {
 		const received = [];
 		return new Promise(resolve => {
