@@ -115,18 +115,22 @@ export function unpackChunk (state, chunk) {
     return state.unpackr.unpackMultiple(source);
   } catch (error) {
     if (!error.incomplete) throw error;
-    const remainder = source.subarray(error.lastPosition);
-    if (remainder.length > state.maxIncompleteBufferSize) {
-      const fatalError = new Error('Maximum incomplete buffer size exceeded');
-      fatalError.values = error.values;
-      throw fatalError;
+    try {
+      holdRemainder(state, source.subarray(error.lastPosition), source === chunk, error.missingBytes);
+    } catch (holdError) {
+      holdError.values = error.values;
+      throw holdError;
     }
-    // copy what was passed in, so the caller can reuse its buffer
-    state.incompleteBuffer = source === chunk ? Buffer.from(remainder) : remainder;
-    state.incompleteLength = remainder.length;
-    state.incompleteNeeded = remainder.length + (error.missingBytes || 1); // with no hint, any byte may complete it
     return error.values || [];
   }
+}
+
+function holdRemainder (state, remainder, borrowed, missingBytes) {
+  if (remainder.length > state.maxIncompleteBufferSize) throw new Error('Maximum incomplete buffer size exceeded');
+  // copy what the caller passed in, so it can reuse its buffer
+  state.incompleteBuffer = borrowed ? Buffer.from(remainder) : remainder;
+  state.incompleteLength = remainder.length;
+  state.incompleteNeeded = remainder.length + (missingBytes || 1); // with no hint, any byte may complete it
 }
 
 function holdIncomplete (state, chunk, length) {

@@ -470,6 +470,21 @@ suite('values split across many chunks', function () {
 		assert.equal(error?.message, 'Maximum incomplete buffer size exceeded');
 	});
 
+	test('values before a remainder that cannot be held are still delivered', () => {
+		const from = Buffer.from;
+		Buffer.from = function () {
+			throw new RangeError('Array buffer allocation failed');
+		};
+		const iterated = [];
+		try {
+			assert.throws(() => { for (const value of decodeIter([new Uint8Array([0x01, 0xc4, 0x06, 0x02])])) iterated.push(value); },
+				'Array buffer allocation failed');
+		} finally {
+			Buffer.from = from;
+		}
+		assert.deepStrictEqual(iterated, [1]);
+	});
+
 	test('empty chunks while waiting do not unpack again', async () => {
 		const chunks = [Buffer.from([0x01, 0xa1]), ...new Array(1000).fill(Buffer.alloc(0)), Buffer.from([0x61])];
 		assert.deepStrictEqual([...decodeIter(chunks)], [1, 'a']);
