@@ -283,6 +283,8 @@ addExtension({
 	}
 });
 ```
+An extension's `pack` function may call `pack` on the same `Packr`. When that `Packr` uses shared `structures` with `saveStructures`, the nested buffer only references shared structures that are already saved. Any new shapes are written as inline record definitions, so the nested buffer can be decoded on its own. When the outermost `pack` finishes without error, those new shapes are added to the shared structures (as permitted by `maxSharedStructures` and `shouldShareStructure`) and saved, so later `pack` calls can use the shorter shared form.
+
 If you want to use msgpackr to encode and decode the data within your extensions, you can use the `read` and `write` functions and read and write data/objects that will be encoded and decoded by msgpackr, which can be easier and faster than creating and receiving separate buffers:
 
 ```js
