@@ -332,7 +332,7 @@ suite('values split across many chunks', function () {
 		const counter = countUnpacks(stream.unpackr);
 		const outcome = receive(stream, 1);
 		stream.write(bin32Header);
-		for (let i = 0; i < 10; i++) stream.write(Buffer.alloc(16384)); // reaches the limit exactly
+		for (let i = 0; i < 10; i++) stream.write(Buffer.alloc(16384));
 		await new Promise(resolve => setImmediate(resolve));
 		assert.isNotOk(stream.destroyed);
 		stream.write(Buffer.alloc(1));
@@ -443,7 +443,7 @@ suite('values split across many chunks', function () {
 			}
 		};
 		assert.throws(() => [...decodeIter(counted(), { maxIncompleteBufferSize: 15 })], 'Maximum incomplete buffer size exceeded');
-		assert.equal(consumed.length, 3); // 5 + 10 bytes is at the limit, the third chunk passes it
+		assert.equal(consumed.length, 3);
 		try {
 			for await (const value of decodeIter((async function * () { yield * chunks(); })(), { maxIncompleteBufferSize: 15 }));
 			assert.fail('should throw');

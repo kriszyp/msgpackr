@@ -343,11 +343,13 @@ export function read() {
 				// bin 16
 				value = dataView.getUint16(position);
 				position += 2;
+				if (value > srcEnd - position) throw endOfMessagePackError(position + value);
 				return readBin(value);
 			case 0xc6:
 				// bin 32
 				value = dataView.getUint32(position);
 				position += 4;
+				if (value > srcEnd - position) throw endOfMessagePackError(position + value);
 				return readBin(value);
 			case 0xc7:
 				// ext 8
@@ -963,7 +965,6 @@ function readOnlyJSString() {
 
 
 function readBin(length) {
-	if (length > srcEnd - position) throw endOfMessagePackError(position + length);
 	return currentUnpackr.copyBuffers ?
 		// specifically use the copying slice (not the node one)
 		Uint8Array.prototype.slice.call(src, position, position += length) :
