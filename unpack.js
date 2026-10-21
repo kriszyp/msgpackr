@@ -113,16 +113,31 @@ export class Unpackr {
 		return checkedRead(options);
 	}
 	unpackMultiple(source, forEach) {
+		if (src) {
+			return saveState(() => {
+				clearSource();
+				try {
+					return this ? this.unpackMultiple(source, forEach) : defaultUnpackr.unpackMultiple(source, forEach);
+				} catch (error) {
+					if (error && typeof error == 'object')
+						nestedUnpackErrors.add(error);
+					throw error;
+				}
+			});
+		}
 		let values, lastPosition = 0;
 		try {
 			sequentialMode = true;
 			let size = source.length;
 			let value = this ? this.unpack(source, size) : defaultUnpackr.unpack(source, size);
 			if (forEach) {
-				if (forEach(value, lastPosition, position) === false) return;
-				while(position < size) {
-					lastPosition = position;
-					if (forEach(checkedRead(), lastPosition, position) === false) {
+				let end = position;
+				if (forEach(value, lastPosition, end) === false) return;
+				while(end < size) {
+					lastPosition = end;
+					value = checkedRead();
+					end = position;
+					if (forEach(value, lastPosition, end) === false) {
 						return;
 					}
 				}
