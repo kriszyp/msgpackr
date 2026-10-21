@@ -1802,6 +1802,31 @@ suite('msgpackr basic tests', function() {
 		let off = new Packr({ moreTypes: true, useToJSON: false });
 		assert.isTrue(off.unpack(off.pack(new CustomSet([1]))) instanceof Set);
 	});
+	test('a Buffer polyfill with its own toJSON is still packed as binary', function(){
+		// stands in for the buffer package used in browsers: a Uint8Array subclass whose toJSON
+		// is not the global Buffer.prototype.toJSON
+		class PolyfillBuffer extends Uint8Array {
+			toJSON() { return { type: 'Buffer', data: Array.from(this) }; }
+		}
+		class CustomDataView extends DataView {
+			toJSON() { return { kind: 'view' }; }
+		}
+
+		let packr = new Packr();
+		let bytes = packr.unpack(packr.pack(PolyfillBuffer.from([1, 2, 3])));
+		assert.isTrue(bytes instanceof Uint8Array);
+		assert.deepEqual(Array.from(bytes), [1, 2, 3]);
+
+		let nested = packr.unpack(packr.pack({ payload: PolyfillBuffer.from([4, 5]) }));
+		assert.isTrue(nested.payload instanceof Uint8Array);
+		assert.deepEqual(Array.from(nested.payload), [4, 5]);
+
+		// a DataView subclass keeps its extension as well
+		let morePackr = new Packr({ moreTypes: true });
+		let view = morePackr.unpack(morePackr.pack(new CustomDataView(new Uint8Array([6, 7]).buffer)));
+		assert.isTrue(view instanceof DataView);
+		assert.deepEqual([view.getUint8(0), view.getUint8(1)], [6, 7]);
+	});
 	test('numbers', function(){
 		var data = {
 			bigEncodable: 48978578104322,
