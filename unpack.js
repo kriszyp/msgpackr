@@ -79,6 +79,8 @@ export class Unpackr {
 			position = 0;
 			srcEnd = options > -1 ? options : source.length;
 		}
+		// the native string extractor reads the underlying ArrayBuffer, which can hold other data past this view
+		if (srcEnd > source.length) srcEnd = source.length;
 		stringPosition = 0;
 		srcStringEnd = 0;
 		srcString = null;

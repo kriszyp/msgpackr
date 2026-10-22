@@ -535,3 +535,22 @@ suite('values split across many chunks', function () {
 		}
 	});
 });
+
+suite('end beyond the source', function () {
+	test('reads nothing past the end of the source view', () => {
+		// a Buffer view into a shared ArrayBuffer (as Node's Buffer pool hands out), followed by other data
+		const shared = new Uint8Array(256);
+		shared.set(Buffer.from('SECRET-PASSWORD!'), 2);
+		const view = Buffer.from(shared.buffer, 0, 2);
+		view[0] = 0x91; view[1] = 0xb0; // [fixstr(16)], whose body lies outside the view
+		for (const end of [18, 200]) {
+			try {
+				const value = new Unpackr().unpack(view, { end });
+				assert.fail('should not unpack: ' + JSON.stringify(value));
+			} catch (error) {
+				assert.notInclude(error.message, 'SECRET', `end ${end}`);
+				assert.isTrue(error.incomplete, error.message);
+			}
+		}
+	});
+});
