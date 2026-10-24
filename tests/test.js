@@ -1933,6 +1933,11 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(values, [[1,0,1], [2,1,2], [3,2,3], [4,3,4]]);
 	});
 
+	test('reentrant unpackMultiple inside an extension keeps the outer value', () => {
+		addExtension({ type: 0x30, unpack: bytes => new Unpackr().unpackMultiple(bytes) });
+		assert.deepEqual(new Unpackr().unpack(Buffer.from([0x92, 0xd6, 0x30, 0x01, 0x02, 0x03, 0x04, 0x05])), [[1, 2, 3, 4], 5]);
+	});
+
 	test('pack toJSON returning this', () => {
 		class Serializable {
 			someData = [1, 2, 3, 4];

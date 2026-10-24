@@ -115,6 +115,14 @@ export class Unpackr {
 		return checkedRead(options);
 	}
 	unpackMultiple(source, forEach) {
+		if (src) {
+			// re-entrant execution from an extension: every value in the loop is read from the source below, so
+			// keep the outer source and its state intact for the caller, as unpack() does for a single value
+			return saveState(() => {
+				clearSource();
+				return this ? this.unpackMultiple(source, forEach) : defaultUnpackr.unpackMultiple(source, forEach);
+			});
+		}
 		let values, lastPosition = 0;
 		try {
 			sequentialMode = true;
