@@ -138,8 +138,12 @@ export class Unpackr {
 				return values;
 			}
 		} catch(error) {
-			error.lastPosition = lastPosition;
-			error.values = values;
+			// a value thrown by an extension need not be an object, and assigning to it would throw a TypeError
+			// that hides the original failure (unpack() already leaves such values untouched)
+			if (error && typeof error == 'object') {
+				error.lastPosition = lastPosition;
+				error.values = values;
+			}
 			throw error;
 		} finally {
 			sequentialMode = false;
