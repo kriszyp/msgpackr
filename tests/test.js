@@ -2214,6 +2214,22 @@ suite('msgpackr performance tests', function(){
 		}
 		//console.log('serialized', serialized.length, global.propertyComparisons)
 	});
+	test('performance unpack 16-31 byte fixstrs', function() {
+		this.timeout(10000);
+		const runs = ITERATIONS * 10;
+		for (const len of [16, 24, 31]) {
+			const structures = [];
+			const packr = new Packr({ structures });
+			const str = 'x'.repeat(len - 2) + (len % 10) + '!';
+			const buf = Buffer.from(packr.pack({ id: 1, title: str }));
+			const u8 = new Uint8Array(buf.length);
+			u8.set(buf);
+			for (let i = 0; i < runs; i++) {
+				packr.unpack(buf);
+				packr.unpack(u8);
+			}
+		}
+	});
 });
 
 suite('msgpackr – two-byte record definitions (over-cap own records with a shared store)', function () {
