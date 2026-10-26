@@ -789,16 +789,27 @@ function readMap(length) {
 var fromCharCode = String.fromCharCode;
 function longStringInJS(length) {
 	let start = position;
+	if (src.latin1Slice) {
+		let end = start + length;
+		if (end > srcEnd)
+			return;
+		for (let i = start; i < end; i++) {
+			if ((src[i] & 0x80) > 0)
+				return;
+		}
+		position = end;
+		return src.latin1Slice(start, end);
+	}
 	let bytes = new Array(length);
 	for (let i = 0; i < length; i++) {
 		const byte = src[position++];
 		if ((byte & 0x80) > 0) {
-				position = start;
-				return;
-			}
-			bytes[i] = byte;
+			position = start;
+			return;
 		}
-		return fromCharCode.apply(String, bytes);
+		bytes[i] = byte;
+	}
+	return fromCharCode.apply(String, bytes);
 }
 function shortStringInJS(length) {
 	if (length < 4) {
