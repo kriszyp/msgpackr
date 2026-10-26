@@ -2042,6 +2042,131 @@ suite('msgpackr basic tests', function() {
 		var deserialized = packr.unpack(serialized);
 		assert.deepEqual(deserialized, expected);
 	});
+
+	test('longStringInJS 16-31 byte fixstr and 32+ byte str8 across Buffer and Uint8Array', async function () {
+		const noExtractUrl = new URL('../unpack.js?no-extract', import.meta.url);
+		const noExtract = await import(noExtractUrl);
+		assert.strictEqual(noExtract.isNativeAccelerationEnabled, false);
+
+		const toPlainUint8Array = (buf) => {
+			const u8 = new Uint8Array(buf.length);
+			u8.set(buf);
+			assert.strictEqual(u8.latin1Slice, undefined);
+			return u8;
+		};
+		const toOffsetBuffer = (buf) => {
+			const padded = Buffer.alloc(buf.length + 16, 0xff);
+			buf.copy(padded, 8);
+			const sub = padded.subarray(8, 8 + buf.length);
+			assert.strictEqual(typeof sub.latin1Slice, 'function');
+			assert.strictEqual(sub.byteOffset > 0, true);
+			return sub;
+		};
+		const spyLatin1Slice = (buf, fn) => {
+			const calls = [];
+			const orig = buf.latin1Slice;
+			buf.latin1Slice = function (start, end) {
+				calls.push(orig.call(this, start, end));
+				return calls[calls.length - 1];
+			};
+			try {
+				fn(calls);
+			} finally {
+				buf.latin1Slice = orig;
+			}
+		};
+
+		let keySeq = 0;
+		for (const UnpackrImpl of [Unpackr, noExtract.Unpackr]) {
+			for (const len of [16, 24, 31]) {
+				const str = 'x'.repeat(len - 2) + (len % 10) + '!';
+				const unpackrInstance = new UnpackrImpl();
+				const packedStr = Buffer.from(pack(str));
+				spyLatin1Slice(packedStr, (calls) => {
+					assert.strictEqual(unpackrInstance.unpack(packedStr), str);
+					assert.deepStrictEqual(calls, [str]);
+				});
+
+				const packrRec = new Packr({ useRecords: true });
+				const unpackrRec = new UnpackrImpl({ useRecords: true });
+				const packedRec = Buffer.from(packrRec.pack({ id: len, value: str }));
+				spyLatin1Slice(packedRec, (calls) => {
+					assert.deepStrictEqual(unpackrRec.unpack(packedRec), { id: len, value: str });
+					assert.deepStrictEqual(calls, [str]);
+				});
+
+				const uncachedKey = `unique_key_${++keySeq}_` + 'k'.repeat(len - 13);
+				assert.strictEqual(uncachedKey.length, len);
+				const packrMap = new Packr({ useRecords: false });
+				const unpackrMap = new UnpackrImpl({ useRecords: false });
+				const packedMap = Buffer.from(packrMap.pack({ [uncachedKey]: str }));
+				spyLatin1Slice(packedMap, (calls) => {
+					assert.deepStrictEqual(unpackrMap.unpack(packedMap), { [uncachedKey]: str });
+					assert.deepStrictEqual(calls, [uncachedKey, str]);
+				});
+			}
+
+			for (const len of [16, 17, 24, 30, 31, 32, 33, 48, 64, 65, 100]) {
+				const ascii = 'a'.repeat(len - 2) + 'z!';
+				assert.strictEqual(ascii.length, len);
+
+				const packrRec = new Packr({ useRecords: true });
+				const unpackrRec = new UnpackrImpl({ useRecords: true });
+				const recPayload = { id: len, value: ascii };
+				const packedRec = Buffer.from(packrRec.pack(recPayload));
+				if (len <= 31) assert.isBelow(packedRec.length, 140);
+
+				assert.deepStrictEqual(unpackrRec.unpack(packedRec), recPayload);
+				assert.deepStrictEqual(unpackrRec.unpack(toOffsetBuffer(packedRec)), recPayload);
+				assert.deepStrictEqual(unpackrRec.unpack(toPlainUint8Array(packedRec)), recPayload);
+
+				const keyStr = 'k'.repeat(Math.min(len, 31) - 1) + (len % 10);
+				const packrMap = new Packr({ useRecords: false });
+				const unpackrMap = new UnpackrImpl({ useRecords: false });
+				const mapPayload = { [keyStr]: ascii, n: 1 };
+				const packedMap = Buffer.from(packrMap.pack(mapPayload));
+				if (len <= 31) assert.isBelow(packedMap.length, 140);
+
+				assert.deepStrictEqual(unpackrMap.unpack(packedMap), mapPayload);
+				assert.deepStrictEqual(unpackrMap.unpack(toOffsetBuffer(packedMap)), mapPayload);
+				assert.deepStrictEqual(unpackrMap.unpack(toPlainUint8Array(packedMap)), mapPayload);
+			}
+
+			const nonAsciiCases = [
+				'é' + 'a'.repeat(15),
+				'a'.repeat(8) + 'é' + 'b'.repeat(8),
+				'a'.repeat(7) + 'ᾐ' + 'b'.repeat(7),
+				'a'.repeat(7) + '🚀' + 'b'.repeat(7),
+				'a'.repeat(15) + 'é',
+				'a'.repeat(29) + 'é',
+			];
+			for (const str of nonAsciiCases) {
+				const byteLen = Buffer.byteLength(str);
+				assert.isAtLeast(byteLen, 16);
+				assert.isAtMost(byteLen, 31);
+
+				const packrRec = new Packr({ useRecords: true });
+				const unpackrRec = new UnpackrImpl({ useRecords: true });
+				const recPayload = { id: 1, text: str, after: 'sixteen-byte-str' };
+				const packedRec = Buffer.from(packrRec.pack(recPayload));
+				assert.isBelow(packedRec.length, 140);
+
+				assert.deepStrictEqual(unpackrRec.unpack(packedRec), recPayload);
+				assert.deepStrictEqual(unpackrRec.unpack(toOffsetBuffer(packedRec)), recPayload);
+				assert.deepStrictEqual(unpackrRec.unpack(toPlainUint8Array(packedRec)), recPayload);
+
+				const packrMap = new Packr({ useRecords: false });
+				const unpackrMap = new UnpackrImpl({ useRecords: false });
+				const mapPayload = { [str]: str, follow: 'twenty-four-char-string!' };
+				const packedMap = Buffer.from(packrMap.pack(mapPayload));
+				assert.isBelow(packedMap.length, 140);
+
+				assert.deepStrictEqual(unpackrMap.unpack(packedMap), mapPayload);
+				assert.deepStrictEqual(unpackrMap.unpack(toOffsetBuffer(packedMap)), mapPayload);
+				assert.deepStrictEqual(unpackrMap.unpack(toPlainUint8Array(packedMap)), mapPayload);
+			}
+		}
+	});
 });
 suite('msgpackr performance tests', function(){
 	test('performance JSON.parse', function() {
