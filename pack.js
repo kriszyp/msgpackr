@@ -1218,7 +1218,7 @@ extensions = [{
 		if (this.moreTypes)
 			writeExtBuffer(arrayBuffer, 0x10, allocateForWrite);
 		else
-			writeBuffer(hasNodeBuffer ? Buffer.from(arrayBuffer) : new Uint8Array(arrayBuffer), allocateForWrite);
+			writeBuffer(arrayBuffer, allocateForWrite);
 	}
 }, {
 	pack(typedArray, allocateForWrite) {
@@ -1233,7 +1233,7 @@ extensions = [{
 		if (this.moreTypes)
 			writeExtBuffer(arrayBuffer, 0x11, allocateForWrite);
 		else
-			writeBuffer(hasNodeBuffer ? Buffer.from(arrayBuffer) : new Uint8Array(arrayBuffer), allocateForWrite);
+			writeBuffer(arrayBuffer, allocateForWrite);
 	}
 }, {
 	pack(c1, allocateForWrite) { // specific 0xC1 object
@@ -1265,6 +1265,13 @@ function writeExtBuffer(typedArray, type, allocateForWrite, encode) {
 	target.set(new Uint8Array(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength), position);
 }
 function writeBuffer(buffer, allocateForWrite) {
+	// `target.set` copies element-wise, so a TypedArray view cannot be passed as-is: a Uint16Array
+	// with N elements wrote only N of its 2N bytes (the declared tail stayed uninitialized heap),
+	// a BigInt64Array threw "Cannot mix BigInt and other types", and Buffer.from(DataView) is
+	// empty. A byte view over the same range copies exactly the bytes the view spans.
+	if (buffer.buffer) {
+		buffer = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+	}
 	let length = buffer.byteLength;
 	var target, position;
 	if (length < 0x100) {
