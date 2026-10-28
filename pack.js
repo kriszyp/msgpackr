@@ -1201,7 +1201,14 @@ extensions = [{
 			target[position++] = 0x65; // 'e' for error
 			target[position++] = 0;
 		}
-		pack([ error.name, error.message, error.cause ]);
+		let errorData = [error.name, error.message, error.cause];
+		// AggregateError's first constructor argument is the iterable of errors, not a message, so
+		// the flat [name, message, cause] shape cannot rebuild one: the unpacker would pass the
+		// message as the iterable and the options object as the message. Carry the errors too.
+		if (typeof AggregateError === 'function' && error instanceof AggregateError) {
+			errorData.push(error.errors);
+		}
+		pack(errorData);
 	}
 }, {
 	pack(regex, allocateForWrite, pack) {

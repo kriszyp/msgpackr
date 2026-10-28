@@ -1144,6 +1144,13 @@ let errors = {
 };
 currentExtensions[0x65] = () => {
 	let data = read();
+	if (data[0] === 'AggregateError' && errors.AggregateError) {
+		// AggregateError(errors, message, options): the flat [name, message, cause] shape used for
+		// other errors would put the message where the iterable goes, which is how a round-tripped
+		// AggregateError ended up with message "[object Object]" and errors spelling out the message.
+		// A payload written before errors were carried has only three entries; give it an empty list.
+		return new errors.AggregateError(data[3] || [], data[1], { cause: data[2] });
+	}
 	if (!errors[data[0]]) {
 		let error = Error(data[1], { cause: data[2] });
 		error.name = data[0];
