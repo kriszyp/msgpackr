@@ -685,8 +685,12 @@ export class Packr extends Unpackr {
 								// how msgpackr serializes them (timestamp and byte extensions), so
 								// those two must keep the extension. Instances of the extension class
 								// itself skip the lookup, which keeps packing plain Dates and Sets fast.
-								if (value.constructor !== extensionClass && packr.useToJSON !== false &&
-										value.toJSON !== undefined && value.toJSON !== dateToJSON && value.toJSON !== bufferToJSON) {
+								// An extension registered with addExtension is an explicit choice of
+								// encoding for that class and its subclasses, so it always wins over
+								// toJSON; addExtension prepends, so the built-ins are the last entries.
+								if (value.constructor !== extensionClass && i >= l - builtInExtensionCount &&
+										packr.useToJSON !== false && value.toJSON !== undefined &&
+										value.toJSON !== dateToJSON && value.toJSON !== bufferToJSON) {
 									break; // fall through to the generic toJSON handling below
 								}
 								let extension = extensions[i];
@@ -1241,6 +1245,7 @@ extensions = [{
 		target[position] = 0xc1;
 	}
 }];
+const builtInExtensionCount = extensions.length;
 
 function writeExtBuffer(typedArray, type, allocateForWrite, encode) {
 	let length = typedArray.byteLength;

@@ -1802,6 +1802,32 @@ suite('msgpackr basic tests', function() {
 		let off = new Packr({ moreTypes: true, useToJSON: false });
 		assert.isTrue(off.unpack(off.pack(new CustomSet([1]))) instanceof Set);
 	});
+	test('a registered extension wins over toJSON on a subclass of its class', function(){
+		// e.g. a Blob extension and a file-backed Blob subclass whose toJSON is an API shape
+		class Stored { constructor(data) { this.data = data; } }
+		class FileBackedStored extends Stored { toJSON() { return { description: 'placeholder' }; } }
+		addExtension({
+			Class: Stored,
+			type: 20,
+			pack: (stored) => Buffer.from(stored.data),
+			unpack: (buffer) => new Stored(buffer.toString()),
+		});
+		let packr = new Packr();
+		let decoded = packr.unpack(packr.pack({ blob: new FileBackedStored('contents') }));
+		assert.instanceOf(decoded.blob, Stored);
+		assert.equal(decoded.blob.data, 'contents');
+
+		// a registered extension for a built-in class also wins over a subclass's toJSON
+		class TaggedSet extends Set { toJSON() { return { kind: 'set' }; } }
+		addExtension({
+			Class: TaggedSet,
+			type: 21,
+			pack: (set) => packr.pack(Array.from(set)),
+			unpack: (buffer) => new TaggedSet(packr.unpack(buffer)),
+		});
+		class SubTaggedSet extends TaggedSet { toJSON() { return { kind: 'sub' }; } }
+		assert.instanceOf(packr.unpack(packr.pack(new SubTaggedSet([1]))), TaggedSet);
+	});
 	test('numbers', function(){
 		var data = {
 			bigEncodable: 48978578104322,
