@@ -1279,6 +1279,12 @@ function saveState(callback) {
 	fragmentEnd = 0;
 	try {
 		return callback();
+	} catch (error) {
+		// the callback decodes its own source (a stored structures blob, or an extension's embedded data), so a
+		// truncation there cannot be completed by more of the outer input; classifyIncomplete() clears the flag
+		if (error && typeof error == 'object')
+			nestedUnpackErrors.add(error);
+		throw error;
 	} finally {
 		srcEnd = savedSrcEnd;
 		position = savedPosition;

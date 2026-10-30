@@ -1588,6 +1588,22 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(reader.unpack(b), { x: 7, y: 6 });
 	});
 
+	test('a truncated structures store is a fatal error, not an incomplete read', () => {
+		// getStructures() may unpack a stored blob (see the test above). That nested unpack has its own source,
+		// so a truncation there cannot be completed by more bytes from the outer stream, and must not be
+		// reported as incomplete or UnpackrStream would keep buffering until maxIncompleteBufferSize.
+		const meta = new Packr();
+		const full = meta.pack([['a']]);
+		const store = full.subarray(0, full.length - 1);
+		const reader = new Unpackr({ structures: [], getStructures: () => meta.unpack(store) });
+		try {
+			reader.unpack(Buffer.from([0x40])); // record id 0, i.e. the structure held in the store
+			assert.fail('should not unpack');
+		} catch (error) {
+			assert.isNotOk(error.incomplete, 'a truncated structures store is not incomplete');
+		}
+	});
+
 	test('big buffer', function() {
 		var size = 100000000;
 		var data = new Uint8Array(size).fill(1);
