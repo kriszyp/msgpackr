@@ -1651,6 +1651,17 @@ suite('msgpackr basic tests', function() {
 		assert.equal(deserialized.ancient.getTime(), -3532219539133);
 		assert.equal(deserialized.invalidDate.toString(), 'Invalid Date');
 	});
+	test('timestamp 64 for dates after 2106', function(){
+		let packr = new Packr();
+		let serialized = packr.pack(new Date(0x100000000 * 1000));
+		assert.deepEqual(Array.from(serialized), [0xd7, 0xff, 0, 0, 0, 1, 0, 0, 0, 0]);
+		let date = new Date('2514-05-30T01:53:03.999Z');
+		serialized = packr.pack(date);
+		assert.equal(serialized.length, 10);
+		assert.equal(packr.unpack(serialized).getTime(), date.getTime());
+		serialized = packr.pack(new Date(0x400000000 * 1000));
+		assert.equal(serialized.length, 15);
+	});
 	test('map/date with options', function(){
 		var map = new Map();
 		map.set(4, 'four');
