@@ -209,6 +209,29 @@ suite('resumable stream structure scan', function () {
 		assert.deepStrictEqual(countedDecode(chunks(bytes, 1)).values, expected);
 	});
 
+	test('keys counted from an extension argument that refers to a record defined earlier in the value', async () => {
+		addExtension({ type: 0x3e, read: value => typeof value === 'number' ? [] : ['a'] });
+		const bytes = Buffer.from('92d4724090d47241d43e0040a3616263', 'hex');
+		const expected = [[{}, { a: 'abc' }]];
+		assert.deepStrictEqual([new Unpackr().unpack(bytes)], expected);
+		const parts = [bytes.subarray(0, 1), bytes.subarray(1, 12), bytes.subarray(12)];
+		assert.deepStrictEqual(countedDecode(parts).values, expected);
+		assert.deepStrictEqual((await streamed(parts)).values, expected);
+	});
+
+	test('structures are loaded again for each missing id, as unpack does', async () => {
+		const options = () => {
+			let calls = 0;
+			return { getStructures: () => calls++ ? [['a'], ['b']] : [['a']] };
+		};
+		const bytes = Buffer.from('9240a17841a179', 'hex');
+		const expected = [[{ a: 'x' }, { b: 'y' }]];
+		assert.deepStrictEqual([new Unpackr(options()).unpack(bytes)], expected);
+		const parts = [bytes.subarray(0, 1), bytes.subarray(1, 5), bytes.subarray(5)];
+		assert.deepStrictEqual(countedDecode(parts, options()).values, expected);
+		assert.deepStrictEqual((await streamed(parts, options())).values, expected);
+	});
+
 	test('an extension reading past its data through its read callback is rejected on fragmented input', () => {
 		addExtension({ type: 0x3c, unpack: (data, readAt) => readAt(5) });
 		const bytes = Buffer.from([0x91, 0xd5, 0x3c, 0, 0, 0xa1, 0x78]);

@@ -16,6 +16,7 @@ export class StructureScanner {
 		this.unpackr = unpackr;
 		this.frames = [];
 		this.records = new Map(); // definitions within this value: { length, highByte }
+		this.extensions = new Set(); // custom extension types in this value
 		this.reset();
 	}
 
@@ -25,10 +26,10 @@ export class StructureScanner {
 		this.neededLength = 0;
 		this.postBundlePosition = 0;
 		this.bundled = false; // after a bundle, 0xc1 is followed by a string length, as in read()
-		this.loadedStructures = false;
 		this.headers = 0;
 		this.unframeable = false;
 		this.records.clear();
+		this.extensions.clear();
 		this.push(ITEMS, 1);
 	}
 
@@ -60,11 +61,9 @@ export class StructureScanner {
 		if (record) return record;
 		const unpackr = this.unpackr;
 		let structure = unpackr.structures && unpackr.structures[id];
-		if (!structure && unpackr.getStructures && !this.loadedStructures) {
-			// read() would load them here too, and keeps what it loaded
-			this.loadedStructures = true;
+		// read() loads them for each missing id too, and keeps what it loaded
+		if (!structure && unpackr.getStructures)
 			structure = unpackr._mergeStructures(unpackr.getStructures(), unpackr.structures)[id];
-		}
 		return structure;
 	}
 
@@ -89,8 +88,8 @@ export class StructureScanner {
 		const start = this.position;
 		if (start >= end) return this.need(start + 1);
 		const token = source[start];
-		let size = 1; // of the header
-		let length = 0; // of the data after it
+		let size = 1;
+		let length = 0;
 		let items = 0;
 		let extension = -1;
 		if (token < 0xc0) {
@@ -101,7 +100,6 @@ export class StructureScanner {
 					if (structure) {
 						let position = start + 1;
 						while (structure.highByte === 0) {
-							// a second byte selects the record, as in createSecondByteReader
 							if (position >= end) return this.need(position + 1);
 							const highByte = source[position++];
 							if (highByte === 0) break;
@@ -118,9 +116,7 @@ export class StructureScanner {
 			} else if (token < 0x90) items = (token - 0x80) * 2;
 			else if (token < 0xa0) items = token - 0x90;
 			else length = token - 0xa0;
-		} else if (token >= 0xe0) {
-			// a negative fixint
-		} else {
+		} else if (token < 0xe0) {
 			switch (token) {
 				case 0xc1: if (this.bundled) items = 1; break;
 				case 0xc4: case 0xcc: case 0xd0: case 0xd9: size = 2; break;
@@ -169,6 +165,7 @@ export class StructureScanner {
 		const dataStart = start + size;
 		if (extension >= 0) {
 			const follows = _stream.extensionFollows(extension, token === 0xd4);
+			if (_stream.isCustomExtension(extension)) this.extensions.add(extension);
 			if (follows < 0 || follows === 2 && length < 4) {
 				// unpack reads the data before it fails
 				if (dataStart + length > end) return this.need(dataStart + length);
@@ -213,7 +210,6 @@ export class StructureScanner {
 				count = readUint32(source, position + 1);
 				position += 5;
 			} else {
-				// keys from an extension are unpacked to count them, once complete
 				frame.schemaStart = position;
 				frame.stage = 2;
 				this.push(ITEMS, 1);
@@ -228,6 +224,8 @@ export class StructureScanner {
 		}
 		let length = frame.length;
 		if (frame.stage === 2) {
+			// unpacking the keys alone can not see definitions earlier in this value
+			if (this.records.size) return this.invalid(end);
 			try {
 				length = _stream.countKeys(this.unpackr, source.subarray(frame.schemaStart, this.position));
 			} catch (error) {

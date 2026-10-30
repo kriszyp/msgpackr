@@ -1295,7 +1295,7 @@ export function clearSource() {
 }
 
 const builtinExtensions = currentExtensions.slice(0);
-const customExtensionTypes = new Set();
+const extensionGuards = [];
 
 function unframedExtensionError(type) {
 	return new Error('Extension type ' + type + ' read beyond its own data, so a value with it can not be unpacked from fragmented stream input');
@@ -1370,7 +1370,10 @@ export const _stream = {
 			return type === 0x62 ? 2 : (type === 0x65 || type === 0x69 || type === 0x73 || type === 0x78) ? 1 : 0;
 		return fixext1 && extension.read ? 1 : 0;
 	},
-	// keys that are not a plain array are counted without changing the unpackr's structures
+	isCustomExtension(type) {
+		let extension = currentExtensions[type];
+		return extension !== undefined && extension !== builtinExtensions[type];
+	},
 	countKeys(unpackr, bytes) {
 		let isolated = Object.create(unpackr);
 		if (unpackr.structures) {
@@ -1382,15 +1385,17 @@ export const _stream = {
 		return isolated.unpack(bytes).map(asSafeString).length;
 	},
 	// the first value, ending at end, arrived in fragments
-	unpackFragmented(unpackr, source, end) {
+	unpackFragmented(unpackr, source, end, extensionTypes) {
 		let guarded = [];
 		let readers = isNativeAccelerationEnabled && [readFixedString, readString8, readString16, readString32];
 		try {
-			for (let type of customExtensionTypes) {
+			for (let type of extensionTypes) {
 				let extension = currentExtensions[type];
-				let guard = guardExtension(type, extension);
-				guarded.push(type, extension, guard);
-				currentExtensions[type] = guard;
+				let cached = extensionGuards[type];
+				if (!cached || cached.extension !== extension)
+					cached = extensionGuards[type] = { extension, guard: guardExtension(type, extension) };
+				guarded.push(type, extension, cached.guard);
+				currentExtensions[type] = cached.guard;
 			}
 			if (readers) {
 				readFixedString = boundStrings(readers[0]);
@@ -1417,10 +1422,6 @@ export function addExtension(extension) {
 		currentExtensions[extension.type] = extension.unpack;
 	else
 		currentExtensions[extension.type] = extension;
-	if (currentExtensions[extension.type] && currentExtensions[extension.type] !== builtinExtensions[extension.type])
-		customExtensionTypes.add(extension.type);
-	else
-		customExtensionTypes.delete(extension.type);
 }
 
 export const mult10 = new Array(147); // this is a table matching binary exponents to the multiplier to determine significant digit rounding

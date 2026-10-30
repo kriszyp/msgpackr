@@ -123,7 +123,7 @@ export function unpackChunk (state, chunk) {
     state.incompleteBuffer = null;
   }
   try {
-    return scannedEnd ? _stream.unpackFragmented(state.unpackr, source, scannedEnd) : state.unpackr.unpackMultiple(source);
+    return scannedEnd ? _stream.unpackFragmented(state.unpackr, source, scannedEnd, state.incompleteScanner.extensions) : state.unpackr.unpackMultiple(source);
   } catch (error) {
     if (!error.incomplete) throw error;
     if (scannedEnd && error.lastPosition === 0) {
