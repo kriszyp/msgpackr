@@ -108,7 +108,8 @@ export function unpackChunk (state, chunk) {
         complete = scanner.scan(state.incompleteBuffer, length);
       } catch (error) {
         state.incompleteBuffer = null;
-        throw error;
+        // the adapters test for a thrown error by its truthiness
+        throw typeof error === 'object' && error !== null ? error : new Error('Unpacking failed with a thrown non-object value', { cause: error });
       }
       if (!complete) {
         state.incompleteNeeded = scanner.neededLength;

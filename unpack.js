@@ -1377,7 +1377,6 @@ export const _stream = {
 	countKeys(unpackr, bytes) {
 		let isolated = Object.create(unpackr);
 		if (unpackr.getStructures) {
-			// what it returns can depend on when it is called, so a missing id is left to read(), in order
 			isolated.getStructures = () => { throw new Error('Structures not loaded'); };
 		}
 		if (unpackr.structures) {
