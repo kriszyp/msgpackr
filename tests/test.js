@@ -2366,3 +2366,24 @@ suite('msgpackr – two-byte record definitions (over-cap own records with a sha
 		}
 	});
 });
+	test('structured cloning: AggregateError', function() {
+		let packr = new Packr({ moreTypes: true, structuredClone: true });
+		let original = new AggregateError([new Error('first'), new TypeError('second')], 'aggregate boom');
+		let round = packr.unpack(packr.pack(original));
+		assert.equal(round.name, 'AggregateError');
+		assert.equal(round.message, 'aggregate boom');
+		assert.deepEqual(
+			round.errors.map((e) => [e.name, e.message]),
+			[
+				['Error', 'first'],
+				['TypeError', 'second'],
+			]
+		);
+		// A payload written before the errors were carried (three entries) still decodes to the
+		// right message and name, with no errors rather than an error list spelled from the message.
+		let legacy = Buffer.from('d4650093ae4167677265676174654572726f72ae61676772656761746520626f6f6dd40000', 'hex');
+		let legacyRound = packr.unpack(legacy);
+		assert.equal(legacyRound.name, 'AggregateError');
+		assert.equal(legacyRound.message, 'aggregate boom');
+		assert.deepEqual(legacyRound.errors, []);
+	});
