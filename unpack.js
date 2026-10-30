@@ -20,6 +20,7 @@ var referenceMap;
 var currentExtensions = [];
 var dataView;
 var arrayAllocationBudget;
+var fragmentEnd = 0;
 var defaultOptions = {
 	useRecords: false,
 	mapsAsObjects: true
@@ -203,9 +204,9 @@ export function checkedRead(options) {
 			position = bundledStrings.postBundlePosition;
 			bundledStrings = null;
 		}
-		if (sequentialMode)
+		if (sequentialMode && position <= srcEnd)
 			// we only need to restore the structures if there was an error, but if we completed a read,
-			// we can clear this out and keep the structures we read
+			// we can clear this out and keep the structures we read (an over-read is an error, thrown below)
 			currentStructures.restoreStructures = null;
 
 		if (position == srcEnd) {
@@ -1093,9 +1094,11 @@ const recordDefinition = (id, highByte) => {
 	let existingStructure = currentStructures[id];
 	// If it is a shared structure, we need to restore any changes after reading.
 	// Also in sequential mode, we may get incomplete reads and thus errors, and we need to restore
-	// to the state prior to an incomplete read in order to properly resume.
-	if (existingStructure && (existingStructure.isShared || sequentialMode)) {
-		(currentStructures.restoreStructures || (currentStructures.restoreStructures = []))[id] = existingStructure;
+	// to the state prior to an incomplete read in order to properly resume, including ids that were undefined.
+	if (sequentialMode || existingStructure && existingStructure.isShared) {
+		let restore = currentStructures.restoreStructures || (currentStructures.restoreStructures = []);
+		if (!(id in restore)) // the first is from before this read
+			restore[id] = existingStructure;
 	}
 	currentStructures[id] = structure;
 	structure.read = createStructureReader(structure, firstByte);
@@ -1272,6 +1275,8 @@ function saveState(callback) {
 	let savedStructuresContents = currentStructures.slice(0, currentStructures.length);
 	let savedPackr = currentUnpackr;
 	let savedSequentialMode = sequentialMode;
+	let savedFragmentEnd = fragmentEnd;
+	fragmentEnd = 0;
 	try {
 		return callback();
 	} finally {
@@ -1287,6 +1292,7 @@ function saveState(callback) {
 		arrayAllocationBudget = savedArrayAllocationBudget;
 		src = savedSrc;
 		sequentialMode = savedSequentialMode;
+		fragmentEnd = savedFragmentEnd;
 		currentStructures = savedStructures;
 		currentStructures.splice(0, currentStructures.length, ...savedStructuresContents);
 		currentUnpackr = savedPackr;
@@ -1298,6 +1304,133 @@ export function clearSource() {
 	referenceMap = null;
 	currentStructures = null;
 }
+
+const builtinExtensions = currentExtensions.slice(0);
+const extensionGuards = [];
+
+function unframedExtensionError(type) {
+	return new Error('Extension type ' + type + ' read beyond its own data, so a value with it can not be unpacked from fragmented stream input');
+}
+// the structure scanner assumes an extension reads only its data, or the one value a read extension is given
+function guardRead(type, handler, receiver) {
+	return function(data, readAt) {
+		let start = position;
+		// an extension's data is read before it is called, so one in a later value starts past fragmentEnd
+		if (start > fragmentEnd)
+			return handler.apply(receiver || this, arguments);
+		let args = arguments;
+		if (typeof readAt === 'function') {
+			args = [data, (readPosition) => {
+				position = readPosition;
+				try {
+					let value = read();
+					if (position > start)
+						throw unframedExtensionError(type);
+					return value;
+				} finally {
+					position = start;
+				}
+			}];
+		}
+		let value;
+		try {
+			value = handler.apply(receiver || this, args);
+		} catch (error) {
+			if (error && error.incomplete && !nestedUnpackErrors.has(error))
+				throw unframedExtensionError(type);
+			throw error;
+		}
+		if (position !== start)
+			throw unframedExtensionError(type);
+		return value;
+	};
+}
+function guardExtension(type, extension) {
+	let guard = typeof extension === 'function' ? guardRead(type, extension) : Object.create(extension);
+	// defined rather than assigned, since a frozen extension's properties are read-only on its descendants
+	if (typeof extension.read === 'function')
+		Object.defineProperty(guard, 'read', { value: guardRead(type, extension.read, extension) });
+	if (extension.noBuffer)
+		Object.defineProperty(guard, 'noBuffer', { value: true });
+	return guard;
+}
+
+// the native extractor reads strings ahead to srcEnd, and fails on an incomplete value after the fragmented one
+function boundStrings(readString) {
+	return function(length) {
+		if (position > fragmentEnd)
+			return readString(length);
+		let savedSrcEnd = srcEnd;
+		srcEnd = fragmentEnd;
+		try {
+			return readString(length);
+		} finally {
+			srcEnd = savedSrcEnd;
+		}
+	};
+}
+
+// Internal hooks for the streaming structure scanner (scan.js); not part of the public API.
+export const _stream = {
+	// -1 for an unknown type, else how many values it reads after its data, with 2 for a string bundle
+	extensionFollows(type, fixext1) {
+		let extension = currentExtensions[type];
+		if (!extension)
+			return -1;
+		if (extension === builtinExtensions[type])
+			return type === 0x62 ? 2 : (type === 0x65 || type === 0x69 || type === 0x73 || type === 0x78) ? 1 : 0;
+		return fixext1 && extension.read ? 1 : 0;
+	},
+	isCustomExtension(type) {
+		let extension = currentExtensions[type];
+		return extension !== undefined && extension !== builtinExtensions[type];
+	},
+	countKeys(unpackr, bytes) {
+		let isolated = Object.create(unpackr);
+		if (unpackr.getStructures) {
+			isolated.getStructures = () => { throw new Error('Structures not loaded'); };
+		}
+		if (unpackr.structures) {
+			// assigned rather than sliced, to include negative ids
+			let structures = isolated.structures = Object.assign([], unpackr.structures);
+			structures.restoreStructures = null;
+			structures.sharedLength = structures.length;
+		}
+		return isolated.unpack(bytes).map(asSafeString).length;
+	},
+	unpackFragmented(unpackr, source, end, extensionTypes) {
+		let guarded = [];
+		let readers = isNativeAccelerationEnabled && [readFixedString, readString8, readString16, readString32];
+		try {
+			for (let type of extensionTypes) {
+				let extension = currentExtensions[type];
+				let cached = extensionGuards[type];
+				if (!cached || cached.extension !== extension || cached.read !== extension.read || cached.noBuffer !== extension.noBuffer) {
+					cached = extensionGuards[type] = { extension, read: extension.read, noBuffer: extension.noBuffer,
+						guard: guardExtension(type, extension) };
+				}
+				guarded.push(type, extension, cached.guard);
+				currentExtensions[type] = cached.guard;
+			}
+			if (readers) {
+				readFixedString = boundStrings(readers[0]);
+				readString8 = boundStrings(readers[1]);
+				readString16 = boundStrings(readers[2]);
+				readString32 = boundStrings(readers[3]);
+			}
+			fragmentEnd = end;
+			return unpackr.unpackMultiple(source);
+		} finally {
+			fragmentEnd = 0;
+			if (readers)
+				[readFixedString, readString8, readString16, readString32] = readers;
+			for (let i = 0; i < guarded.length; i += 3) {
+				if (currentExtensions[guarded[i]] === guarded[i + 2])
+					currentExtensions[guarded[i]] = guarded[i + 1];
+			}
+		}
+	}
+};
 
 export function addExtension(extension) {
 	if (extension.unpack)

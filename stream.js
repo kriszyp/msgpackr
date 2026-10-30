@@ -1,7 +1,7 @@
 import { Transform } from 'stream';
 import { Packr } from './pack.js';
 import { Unpackr } from './unpack.js';
-import { unpackChunk, DEFAULT_MAX_INCOMPLETE_BUFFER_SIZE } from './iterators.js';
+import { unpackChunk, streamUnpackr, DEFAULT_MAX_INCOMPLETE_BUFFER_SIZE } from './iterators.js';
 var DEFAULT_OPTIONS = {objectMode: true};
 
 export class PackrStream extends Transform {
@@ -27,7 +27,7 @@ export class UnpackrStream extends Transform {
 		super(options);
 		options.structures = [];
 		this.maxIncompleteBufferSize = options.maxIncompleteBufferSize !== undefined ? options.maxIncompleteBufferSize : DEFAULT_MAX_INCOMPLETE_BUFFER_SIZE;
-		this.unpackr = options.unpackr || new Unpackr(options);
+		this.unpackr = streamUnpackr(options.unpackr || new Unpackr(options));
 	}
 	_transform(chunk, encoding, callback) {
 		let values, fatalError;
