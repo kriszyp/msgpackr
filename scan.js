@@ -210,6 +210,7 @@ export class StructureScanner {
 				position += 5;
 			} else {
 				frame.schemaStart = position;
+				frame.priorExtensions = this.extensions.size;
 				frame.stage = 2;
 				this.push(ITEMS, 1);
 				return true;
@@ -223,9 +224,9 @@ export class StructureScanner {
 		}
 		let length = frame.length;
 		if (frame.stage === 2) {
-			// unpacked alone, the keys' bytes (including an extension's opaque data) can not see definitions or bundled
-			// strings earlier in this value
-			if (this.records.size || this.bundled) return this.invalid(end);
+			// unpacked alone, the keys' bytes can not see definitions, bundled strings or custom extension effects earlier
+			// in this value
+			if (this.records.size || this.bundled || frame.priorExtensions) return this.invalid(end);
 			try {
 				length = _stream.countKeys(this.unpackr, source.subarray(frame.schemaStart, this.position));
 			} catch (error) {
