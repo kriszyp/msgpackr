@@ -20,6 +20,7 @@ var referenceMap;
 var currentExtensions = [];
 var dataView;
 var arrayAllocationBudget;
+var fragmentEnd = 0; // while unpacking a value that arrived in fragments, where it ends
 var defaultOptions = {
 	useRecords: false,
 	mapsAsObjects: true
@@ -203,9 +204,9 @@ export function checkedRead(options) {
 			position = bundledStrings.postBundlePosition;
 			bundledStrings = null;
 		}
-		if (sequentialMode)
+		if (sequentialMode && position <= srcEnd)
 			// we only need to restore the structures if there was an error, but if we completed a read,
-			// we can clear this out and keep the structures we read
+			// we can clear this out and keep the structures we read (an over-read is an error, thrown below)
 			currentStructures.restoreStructures = null;
 
 		if (position == srcEnd) {
@@ -619,7 +620,8 @@ export function setExtractor(extractStrings) {
 				if (bundledStrings || strings === EXTRACTION_FAILED)
 					return readStringJS(length);
 				let byteOffset = src.byteOffset;
-				let extraction = tryExtractStrings(position - headerLength + byteOffset, srcEnd + byteOffset, src.buffer);
+				// a value that arrived in fragments may be followed by an incomplete one, which would fail the extraction
+				let extraction = tryExtractStrings(position - headerLength + byteOffset, (fragmentEnd > position ? fragmentEnd : srcEnd) + byteOffset, src.buffer);
 				if (extraction === EXTRACTION_FAILED) {
 					// the extractor scans ahead to srcEnd and fails on any truncated value there, even a later one,
 					// so read the rest of this source in JS, which fails where the bytes actually run out
@@ -1082,9 +1084,11 @@ const recordDefinition = (id, highByte) => {
 	let existingStructure = currentStructures[id];
 	// If it is a shared structure, we need to restore any changes after reading.
 	// Also in sequential mode, we may get incomplete reads and thus errors, and we need to restore
-	// to the state prior to an incomplete read in order to properly resume.
-	if (existingStructure && (existingStructure.isShared || sequentialMode)) {
-		(currentStructures.restoreStructures || (currentStructures.restoreStructures = []))[id] = existingStructure;
+	// to the state prior to an incomplete read in order to properly resume, including ids that were undefined.
+	if (sequentialMode || existingStructure && existingStructure.isShared) {
+		let restore = currentStructures.restoreStructures || (currentStructures.restoreStructures = []);
+		if (!(id in restore)) // the first is from before this read
+			restore[id] = existingStructure;
 	}
 	currentStructures[id] = structure;
 	structure.read = createStructureReader(structure, firstByte);
@@ -1261,6 +1265,8 @@ function saveState(callback) {
 	let savedStructuresContents = currentStructures.slice(0, currentStructures.length);
 	let savedPackr = currentUnpackr;
 	let savedSequentialMode = sequentialMode;
+	let savedFragmentEnd = fragmentEnd;
+	fragmentEnd = 0;
 	try {
 		return callback();
 	} finally {
@@ -1276,6 +1282,7 @@ function saveState(callback) {
 		arrayAllocationBudget = savedArrayAllocationBudget;
 		src = savedSrc;
 		sequentialMode = savedSequentialMode;
+		fragmentEnd = savedFragmentEnd;
 		currentStructures = savedStructures;
 		currentStructures.splice(0, currentStructures.length, ...savedStructuresContents);
 		currentUnpackr = savedPackr;
@@ -1287,6 +1294,84 @@ export function clearSource() {
 	referenceMap = null;
 	currentStructures = null;
 }
+
+const builtinExtensions = currentExtensions.slice(0);
+
+function unframedExtensionError(type) {
+	return new Error('Extension type ' + type + ' read beyond its own data, so a value with it can not be unpacked from fragmented stream input');
+}
+// reads by an extension must stay within its data (or the one value a read extension is given), which is what the
+// structure scanner assumed when it found where the value ends
+function guardRead(type, read, receiver) {
+	return function() {
+		let start = position;
+		if (start >= fragmentEnd)
+			return read.apply(receiver || this, arguments);
+		let value;
+		try {
+			value = read.apply(receiver || this, arguments);
+		} catch (error) {
+			if (error && error.incomplete && !nestedUnpackErrors.has(error))
+				throw unframedExtensionError(type);
+			throw error;
+		}
+		if (position !== start)
+			throw unframedExtensionError(type);
+		return value;
+	};
+}
+function guardExtension(type, extension) {
+	let guard = typeof extension === 'function' ? guardRead(type, extension) : Object.create(extension);
+	if (typeof extension.read === 'function')
+		guard.read = guardRead(type, extension.read, extension);
+	if (extension.noBuffer)
+		guard.noBuffer = true;
+	return guard;
+}
+
+// Internal hooks for the streaming structure scanner (scan.js); not part of the public API.
+export const _stream = {
+	// what an extension reads after its data: -1 for an unknown type, 0 nothing, 1 one value, 2 a string bundle
+	extensionFollows(type, fixext1) {
+		let extension = currentExtensions[type];
+		if (!extension)
+			return -1;
+		if (extension === builtinExtensions[type])
+			return type === 0x62 ? 2 : (type === 0x65 || type === 0x69 || type === 0x73 || type === 0x78) ? 1 : 0;
+		return fixext1 && extension.read ? 1 : 0;
+	},
+	// the number of keys of a record definition that are not a plain array, unpacked without changing the unpackr
+	countKeys(unpackr, bytes) {
+		let isolated = Object.create(unpackr);
+		if (unpackr.structures) {
+			isolated.structures = unpackr.structures.slice(0);
+			isolated.structures.sharedLength = isolated.structures.length;
+		}
+		return isolated.unpack(bytes).map(asSafeString).length;
+	},
+	// unpackMultiple, where the first value, ending at end, arrived in fragments
+	unpackFragmented(unpackr, source, end) {
+		let guarded = [];
+		for (let type = 0; type < currentExtensions.length; type++) {
+			let extension = currentExtensions[type];
+			if (extension && extension !== builtinExtensions[type]) {
+				let guard = guardExtension(type, extension);
+				guarded.push(type, extension, guard);
+				currentExtensions[type] = guard;
+			}
+		}
+		fragmentEnd = end;
+		try {
+			return unpackr.unpackMultiple(source);
+		} finally {
+			fragmentEnd = 0;
+			for (let i = 0; i < guarded.length; i += 3) {
+				if (currentExtensions[guarded[i]] === guarded[i + 2])
+					currentExtensions[guarded[i]] = guarded[i + 1];
+			}
+		}
+	}
+};
 
 export function addExtension(extension) {
 	if (extension.unpack)

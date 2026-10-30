@@ -1,4 +1,5 @@
 import { Packr, Unpackr, UnpackrStream, decodeIter, addExtension } from '../node-index.js';
+import { unpackChunk, streamUnpackr } from '../iterators.js';
 import { assert } from 'chai';
 
 function chunks(bytes, size) {
@@ -140,6 +141,91 @@ suite('resumable stream structure scan', function () {
 		const parts = [bytes.subarray(0, 19), bytes.subarray(19)];
 		assert.deepStrictEqual(countedDecode(parts, { structures: [['a']] }).values, expected);
 		assert.deepStrictEqual((await streamed(parts, { structures: [['a']] })).values, expected);
+	});
+
+	test('each header is scanned once', () => {
+		const count = 50000;
+		const bytes = new Packr({ useRecords: false }).pack(Array.from({ length: count }, (_, i) => 'item ' + i));
+		const state = { unpackr: streamUnpackr(new Unpackr()), maxIncompleteBufferSize: Infinity };
+		const values = [];
+		for (const part of chunks(bytes, 100)) values.push(...unpackChunk(state, part));
+		assert.equal(values[0].length, count);
+		assert.equal(state.incompleteScanner.headers, count + 1);
+	});
+
+	test('a record definition with extension-produced keys is counted once it is complete', async () => {
+		addExtension({ type: 0x37, read: value => value ? ['a', 'b'] : ['a'] });
+		for (const [input, expected] of [[0, { a: 10 }], [1, { a: 10, b: 20 }]]) {
+			const bytes = Buffer.from([0xd4, 0x72, 0x40, 0xd4, 0x37, 0, input, 10, ...(input ? [20] : []), 0x40, 30, ...(input ? [40] : []), 7]);
+			const values = [expected, input ? { a: 30, b: 40 } : { a: 30 }, 7];
+			assert.deepStrictEqual(new Unpackr().unpackMultiple(bytes), values);
+			for (let split = 1; split < bytes.length; split++) {
+				const parts = [bytes.subarray(0, split), bytes.subarray(split)];
+				assert.deepStrictEqual(countedDecode(parts).values, values, `iterator split ${split}`);
+				assert.deepStrictEqual((await streamed(parts)).values, values, `stream split ${split}`);
+			}
+			assert.deepStrictEqual(countedDecode(chunks(bytes, 1)).values, values);
+		}
+	});
+
+	test('a custom extension that reads past its data is rejected only on fragmented input', async () => {
+		class Pair {
+			constructor(first, second) { this.first = first; this.second = second; }
+		}
+		// reads a second value after the one it is given, outside the documented extension contract
+		addExtension({ Class: Pair, type: 0x38, write: pair => pair.first, read: first => new Pair(first, new Unpackr().unpack(Buffer.from([0xc0]))) });
+		const sibling = { type: 0x39, unpack: () => readSibling() };
+		let readSibling;
+		const { read } = await import('../unpack.js');
+		readSibling = () => read();
+		addExtension(sibling);
+		const bytes = Buffer.from([0x92, 0xd4, 0x39, 0, 0xa3, 0x61, 0x62, 0x63, 5]);
+		assert.deepStrictEqual(new Unpackr().unpack(bytes), ['abc', 5]);
+		assert.deepStrictEqual(countedDecode([bytes]).values, [['abc', 5]]);
+		for (let split = 1; split < bytes.length; split++) {
+			const parts = [bytes.subarray(0, split), bytes.subarray(split)];
+			assert.throws(() => countedDecode(parts), /Extension type 57 read beyond its own data/, `iterator split ${split}`);
+			let error;
+			await streamed(parts).catch(e => error = e);
+			assert.match(error && error.message, /Extension type 57 read beyond its own data/, `stream split ${split}`);
+		}
+		// one that unpacks other data while reading is unaffected
+		const nested = new Packr().pack([new Pair('x'), 1]);
+		assert.deepStrictEqual(countedDecode(chunks(nested, 1)).values, [[new Pair('x', null), 1]]);
+	});
+
+	test('unframeable values report the same error as whole-buffer unpacking', async () => {
+		const unknownExtension = [0x92, 0xa1, 0x61, 0xd4, 0x5f, 0];
+		const undefinedRecordId = [0x92, 0xd5, 0x72, 0x60, 0, 0x91, 0xa1, 0x61, 1, 0x60, 5];
+		const nonStringBundle = [0x92, 0xd6, 0x62, 0, 0, 0, 6, 0xc1, 1, 1, 2];
+		for (const bytes of [unknownExtension, undefinedRecordId, nonStringBundle].map(bytes => Buffer.from(bytes))) {
+			let expected;
+			try { new Unpackr().unpack(bytes); } catch (error) { expected = error.message; }
+			assert.isString(expected);
+			for (let split = 1; split < bytes.length; split++) {
+				assert.throws(() => countedDecode([bytes.subarray(0, split), bytes.subarray(split)]), expected, `split ${split}`);
+			}
+		}
+	});
+
+	test('held values honour maxIncompleteBufferSize and a completing chunk may exceed it', () => {
+		const bytes = new Packr().pack(['x'.repeat(1000), 'y'.repeat(1000)]);
+		assert.throws(() => [...decodeIter(chunks(bytes, 100), { maxIncompleteBufferSize: 1500 })], /Maximum incomplete buffer size exceeded/);
+		const parts = [bytes.subarray(0, 1000), bytes.subarray(1000)];
+		assert.deepStrictEqual([...decodeIter(parts, { maxIncompleteBufferSize: 1500 })], [['x'.repeat(1000), 'y'.repeat(1000)]]);
+	});
+
+	test('a reused caller buffer and binary views are not aliased with held bytes', () => {
+		const bytes = new Packr().pack([Buffer.from([1, 2, 3]), 'after', Buffer.from([4, 5])]);
+		const reused = Buffer.alloc(3);
+		const state = { unpackr: streamUnpackr(new Unpackr()), maxIncompleteBufferSize: Infinity };
+		const results = [];
+		for (let i = 0; i < bytes.length; i += 3) {
+			bytes.subarray(i, i + 3).copy(reused);
+			results.push(...unpackChunk(state, reused.subarray(0, Math.min(3, bytes.length - i))));
+		}
+		reused.fill(0xff);
+		assert.deepStrictEqual(results, [[Buffer.from([1, 2, 3]), 'after', Buffer.from([4, 5])]]);
 	});
 
 	test('async decodeIter resumes a scan and returns trailing values', async () => {

@@ -1,5 +1,6 @@
 import { Packr } from './pack.js';
-import { Unpackr } from './unpack.js';
+import { Unpackr, _stream } from './unpack.js';
+import { StructureScanner } from './scan.js';
 
 /**
  * Given an Iterable first argument, returns an Iterable where each value is packed as a Buffer
@@ -49,7 +50,7 @@ export function unpackIter (bufferIterator, options = {}) {
   }
 
   const state = {
-    unpackr: new Unpackr(options),
+    unpackr: streamUnpackr(new Unpackr(options)),
     maxIncompleteBufferSize: options.maxIncompleteBufferSize !== undefined ? options.maxIncompleteBufferSize : DEFAULT_MAX_INCOMPLETE_BUFFER_SIZE
   };
   let fatalError;
@@ -85,38 +86,54 @@ export function unpackIter (bufferIterator, options = {}) {
  * Unpacks the values in the next chunk of a sequence, holding the start of a value that continues
  * into later chunks. state carries the unpackr and maxIncompleteBufferSize, and the held bytes
  * between calls. A fatal error is thrown with the values that preceded it as error.values.
+ * A held value is scanned as chunks arrive (see StructureScanner), and unpacked once it is complete.
  */
 export function unpackChunk (state, chunk) {
   if (chunk.length === 0) return [];
   let source = chunk;
+  let scannedEnd = 0;
   if (state.incompleteBuffer) {
     if (!(ArrayBuffer.isView(chunk) && chunk.BYTES_PER_ELEMENT === 1)) throw new TypeError('Chunk must be a Uint8Array or Buffer');
     const length = state.incompleteLength + chunk.length;
-    if (length < state.incompleteNeeded) {
-      if (length > state.maxIncompleteBufferSize) {
-        state.incompleteBuffer = null;
-        throw new Error('Maximum incomplete buffer size exceeded');
-      }
-      holdIncomplete(state, chunk, length);
-      return [];
+    if (length < state.incompleteNeeded && length > state.maxIncompleteBufferSize) {
+      state.incompleteBuffer = null;
+      throw new Error('Maximum incomplete buffer size exceeded');
     }
-    if (length <= state.incompleteBuffer.length) {
-      // only a buffer grown by holdIncomplete has spare room, and nothing unpacked from it is referenced yet.
-      // Unpacked binaries are views of it, so the uninitialized bytes after the data are cleared.
-      state.incompleteBuffer.set(chunk, state.incompleteLength);
-      state.incompleteBuffer.fill(0, length);
-      source = state.incompleteBuffer.subarray(0, length);
-    } else {
-      source = Buffer.concat([state.incompleteBuffer.subarray(0, state.incompleteLength), chunk], length);
+    holdIncomplete(state, chunk, length);
+    if (length < state.incompleteNeeded) return [];
+    source = state.incompleteBuffer.subarray(0, length);
+    const scanner = state.incompleteScanner;
+    if (scanner) {
+      let complete;
+      try {
+        complete = scanner.scan(state.incompleteBuffer, length);
+      } catch (error) {
+        state.incompleteBuffer = null;
+        throw error;
+      }
+      if (!complete) {
+        state.incompleteNeeded = scanner.neededLength;
+        if (length > state.maxIncompleteBufferSize) {
+          state.incompleteBuffer = null;
+          throw new Error('Maximum incomplete buffer size exceeded');
+        }
+        return [];
+      }
+      scannedEnd = scanner.position;
     }
     state.incompleteBuffer = null;
   }
   try {
-    return state.unpackr.unpackMultiple(source);
+    return scannedEnd ? _stream.unpackFragmented(state.unpackr, source, scannedEnd) : state.unpackr.unpackMultiple(source);
   } catch (error) {
     if (!error.incomplete) throw error;
+    if (scannedEnd && error.lastPosition === 0) {
+      // the scan found the whole value, so more bytes can not complete it
+      error.incomplete = false;
+      throw error;
+    }
     try {
-      holdRemainder(state, source.subarray(error.lastPosition), source === chunk, error.missingBytes);
+      holdRemainder(state, source.subarray(error.lastPosition), error.missingBytes);
     } catch (holdError) {
       holdError.values = error.values;
       throw holdError;
@@ -125,20 +142,38 @@ export function unpackChunk (state, chunk) {
   }
 }
 
-function holdRemainder (state, remainder, borrowed, missingBytes) {
+/**
+ * Prepares an unpackr for a stream: record definitions in one chunk apply to the values in later ones, as they
+ * do between values in one buffer.
+ */
+export function streamUnpackr (unpackr) {
+  if (!unpackr.structures) unpackr.structures = [];
+  return unpackr;
+}
+
+function holdRemainder (state, remainder, missingBytes) {
   if (remainder.length > state.maxIncompleteBufferSize) throw new Error('Maximum incomplete buffer size exceeded');
-  // copy what the caller passed in, so it can reuse its buffer
-  state.incompleteBuffer = borrowed ? Buffer.from(remainder) : remainder;
+  // copied, so the caller can reuse its buffer, and so this does not keep the buffer that unpacked values are views of
+  state.incompleteBuffer = Buffer.from(remainder);
   state.incompleteLength = remainder.length;
   state.incompleteNeeded = remainder.length + (missingBytes || 1); // with no hint, any byte may complete it
+  const unpackr = state.unpackr;
+  if (unpackr._readStruct && remainder[0] >= 0x20 && remainder[0] < 0x40) {
+    // a struct extends to the end of the source, so it is unpacked again as each chunk arrives
+    state.incompleteScanner = null;
+  } else {
+    if (!state.incompleteScanner) state.incompleteScanner = new StructureScanner(unpackr);
+    state.incompleteScanner.reset();
+  }
 }
 
 function holdIncomplete (state, chunk, length) {
   let buffer = state.incompleteBuffer;
   if (length > buffer.length) {
-    // grow geometrically, so a value arriving in many small chunks is copied a bounded number of times, with
-    // room for the needed bytes plus a chunk like this one, so the completing chunk can usually be added in place
-    const grown = Buffer.allocUnsafe(Math.min(Math.max(length, buffer.length * 2), state.incompleteNeeded + chunk.length, state.maxIncompleteBufferSize));
+    // grow geometrically, so a value arriving in many small chunks is copied a bounded number of times
+    const grown = Buffer.allocUnsafe(Math.max(length, Math.min(buffer.length * 2, state.maxIncompleteBufferSize)));
+    // unpacked binaries are views of this buffer, so the bytes after the data are cleared
+    grown.fill(0, length);
     buffer.copy(grown, 0, 0, state.incompleteLength);
     buffer = state.incompleteBuffer = grown;
   }
