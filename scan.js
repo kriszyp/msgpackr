@@ -8,8 +8,8 @@ const MAX_DEPTH = 16384;
 /**
  * Finds where an incomplete MessagePack value ends without constructing it, resuming as more bytes arrive, so a
  * value split across many chunks is scanned once and unpacked once. Positions are relative to the start of the
- * value. A value it can not frame (an unknown extension, an undefined record id, a malformed bundle) is reported
- * complete at the bytes so far, so that unpacking reports the error.
+ * value. A value it can not frame (an unknown extension, an undefined record id, a malformed bundle, keys it can not
+ * count) is marked unframeable, and is unpacked again as each chunk arrives, as before scanning.
  */
 export class StructureScanner {
 	constructor(unpackr) {
@@ -27,6 +27,7 @@ export class StructureScanner {
 		this.bundled = false; // after a bundle, 0xc1 is followed by a string length, as in read()
 		this.loadedStructures = false;
 		this.headers = 0;
+		this.unframeable = false;
 		this.records.clear();
 		this.push(ITEMS, 1);
 	}
@@ -50,6 +51,7 @@ export class StructureScanner {
 		this.depth = 0;
 		this.postBundlePosition = 0;
 		this.position = end;
+		this.unframeable = true;
 		return true;
 	}
 
@@ -87,8 +89,8 @@ export class StructureScanner {
 		const start = this.position;
 		if (start >= end) return this.need(start + 1);
 		const token = source[start];
-		let size = 1; // header
-		let length = 0; // data
+		let size = 1; // of the header
+		let length = 0; // of the data after it
 		let items = 0;
 		let extension = -1;
 		if (token < 0xc0) {
@@ -117,7 +119,7 @@ export class StructureScanner {
 			else if (token < 0xa0) items = token - 0x90;
 			else length = token - 0xa0;
 		} else if (token >= 0xe0) {
-			// negative fixint
+			// a negative fixint
 		} else {
 			switch (token) {
 				case 0xc1: if (this.bundled) items = 1; break;
@@ -193,7 +195,6 @@ export class StructureScanner {
 		return true;
 	}
 
-	// the keys, then a record of that many values
 	definition(source, end, frame) {
 		if (frame.stage === 0) {
 			let position = this.position;
@@ -239,7 +240,7 @@ export class StructureScanner {
 		return true;
 	}
 
-	// a string bundle: its two strings at the target, then the value after the extension
+	// a bundle's two strings come before the value after the extension, as in its unpacker
 	bundle(source, end, frame) {
 		if (frame.stage === 0) {
 			if (frame.target < 0) return this.invalid(end);

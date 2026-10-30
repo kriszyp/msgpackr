@@ -86,7 +86,6 @@ export function unpackIter (bufferIterator, options = {}) {
  * Unpacks the values in the next chunk of a sequence, holding the start of a value that continues
  * into later chunks. state carries the unpackr and maxIncompleteBufferSize, and the held bytes
  * between calls. A fatal error is thrown with the values that preceded it as error.values.
- * A held value is scanned as chunks arrive (see StructureScanner), and unpacked once it is complete.
  */
 export function unpackChunk (state, chunk) {
   if (chunk.length === 0) return [];
@@ -119,7 +118,7 @@ export function unpackChunk (state, chunk) {
         }
         return [];
       }
-      scannedEnd = scanner.position;
+      if (!scanner.unframeable) scannedEnd = scanner.position;
     }
     state.incompleteBuffer = null;
   }

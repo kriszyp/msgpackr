@@ -196,17 +196,57 @@ suite('resumable stream structure scan', function () {
 		assert.deepStrictEqual(countedDecode(chunks(nested, 1)).values, [[new Pair('x', null), 1]]);
 	});
 
-	test('unframeable values report the same error as whole-buffer unpacking', async () => {
+	test('keys counted from a record defined earlier in the same value', async () => {
+		addExtension({ type: 0x3b, read: Object.keys });
+		const bytes = Buffer.from([0x92, 0xd4, 0x72, 0x40, 0x91, 0xa1, 0x61, 0, 0xd4, 0x72, 0x41, 0xd4, 0x3b, 0, 0x40, 1, 10]);
+		const expected = [[{ a: 0 }, { a: 10 }]];
+		assert.deepStrictEqual([new Unpackr().unpack(bytes)], expected);
+		for (let split = 1; split < bytes.length; split++) {
+			const parts = [bytes.subarray(0, split), bytes.subarray(split)];
+			assert.deepStrictEqual(countedDecode(parts).values, expected, `iterator split ${split}`);
+			assert.deepStrictEqual((await streamed(parts)).values, expected, `stream split ${split}`);
+		}
+		assert.deepStrictEqual(countedDecode(chunks(bytes, 1)).values, expected);
+	});
+
+	test('an extension reading past its data through its read callback is rejected on fragmented input', () => {
+		addExtension({ type: 0x3c, unpack: (data, readAt) => readAt(5) });
+		const bytes = Buffer.from([0x91, 0xd5, 0x3c, 0, 0, 0xa1, 0x78]);
+		assert.deepStrictEqual(new Unpackr().unpackMultiple(bytes), [['x'], 'x']);
+		for (let split = 1; split < 5; split++)
+			assert.throws(() => countedDecode([bytes.subarray(0, split), bytes.subarray(split)]), /Extension type 60 read beyond/);
+		addExtension({ type: 0x3c, unpack: (data, readAt) => readAt(3) });
+		const within = Buffer.from([0x91, 0xd5, 0x3c, 0xa1, 0x79]);
+		assert.deepStrictEqual(countedDecode(chunks(within, 1)).values, [['y']]);
+	});
+
+	test('a frozen extension is guarded without affecting other values', () => {
+		addExtension(Object.freeze({ type: 0x3d, read: value => ({ frozen: value }) }));
+		const bytes = new Packr().pack([1, 2, 3]);
+		assert.deepStrictEqual(countedDecode(chunks(bytes, 1)).values, [[1, 2, 3]]);
+		const frozen = Buffer.from([0x91, 0xd4, 0x3d, 0, 0xa1, 0x7a]);
+		assert.deepStrictEqual(countedDecode(chunks(frozen, 1)).values, [[{ frozen: 'z' }]]);
+		assert.deepStrictEqual(new Unpackr().unpack(frozen), [{ frozen: 'z' }]);
+	});
+
+	test('a malformed bundle decodes as it does from one buffer', () => {
+		const bytes = Buffer.from([0x91, 0xd6, 0x62, 0, 0, 0, 6, 0xc1, 1, 0, 0xa0]);
+		const expected = [new Unpackr().unpack(bytes)];
+		assert.deepStrictEqual(countedDecode(chunks(bytes, 1)).values, expected);
+	});
+
+	test('unframeable values report the same error as one chunk', async () => {
 		const unknownExtension = [0x92, 0xa1, 0x61, 0xd4, 0x5f, 0];
 		const undefinedRecordId = [0x92, 0xd5, 0x72, 0x60, 0, 0x91, 0xa1, 0x61, 1, 0x60, 5];
 		const nonStringBundle = [0x92, 0xd6, 0x62, 0, 0, 0, 6, 0xc1, 1, 1, 2];
 		for (const bytes of [unknownExtension, undefinedRecordId, nonStringBundle].map(bytes => Buffer.from(bytes))) {
 			let expected;
-			try { new Unpackr().unpack(bytes); } catch (error) { expected = error.message; }
+			try { countedDecode([bytes]); } catch (error) { expected = error.message; }
 			assert.isString(expected);
 			for (let split = 1; split < bytes.length; split++) {
 				assert.throws(() => countedDecode([bytes.subarray(0, split), bytes.subarray(split)]), expected, `split ${split}`);
 			}
+			assert.throws(() => countedDecode(chunks(bytes, 1)), expected);
 		}
 	});
 

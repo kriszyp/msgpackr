@@ -1301,15 +1301,29 @@ function unframedExtensionError(type) {
 	return new Error('Extension type ' + type + ' read beyond its own data, so a value with it can not be unpacked from fragmented stream input');
 }
 // the structure scanner assumes an extension reads only its data, or the one value a read extension is given
-function guardRead(type, read, receiver) {
-	return function() {
+function guardRead(type, handler, receiver) {
+	return function(data, readAt) {
 		let start = position;
 		// an extension's data is read before it is called, so one in a later value starts past fragmentEnd
 		if (start > fragmentEnd)
-			return read.apply(receiver || this, arguments);
+			return handler.apply(receiver || this, arguments);
+		let args = arguments;
+		if (typeof readAt === 'function') {
+			args = [data, (readPosition) => {
+				position = readPosition;
+				try {
+					let value = read();
+					if (position > start)
+						throw unframedExtensionError(type);
+					return value;
+				} finally {
+					position = start;
+				}
+			}];
+		}
 		let value;
 		try {
-			value = read.apply(receiver || this, arguments);
+			value = handler.apply(receiver || this, args);
 		} catch (error) {
 			if (error && error.incomplete && !nestedUnpackErrors.has(error))
 				throw unframedExtensionError(type);
@@ -1322,10 +1336,11 @@ function guardRead(type, read, receiver) {
 }
 function guardExtension(type, extension) {
 	let guard = typeof extension === 'function' ? guardRead(type, extension) : Object.create(extension);
+	// defined rather than assigned, since a frozen extension's properties are read-only on its descendants
 	if (typeof extension.read === 'function')
-		guard.read = guardRead(type, extension.read, extension);
+		Object.defineProperty(guard, 'read', { value: guardRead(type, extension.read, extension) });
 	if (extension.noBuffer)
-		guard.noBuffer = true;
+		Object.defineProperty(guard, 'noBuffer', { value: true });
 	return guard;
 }
 
@@ -1359,29 +1374,31 @@ export const _stream = {
 	countKeys(unpackr, bytes) {
 		let isolated = Object.create(unpackr);
 		if (unpackr.structures) {
-			isolated.structures = unpackr.structures.slice(0);
-			isolated.structures.sharedLength = isolated.structures.length;
+			// assigned rather than sliced, to include negative ids
+			let structures = isolated.structures = Object.assign([], unpackr.structures);
+			structures.restoreStructures = null;
+			structures.sharedLength = structures.length;
 		}
 		return isolated.unpack(bytes).map(asSafeString).length;
 	},
-	// unpackMultiple, where the first value, ending at end, arrived in fragments
+	// the first value, ending at end, arrived in fragments
 	unpackFragmented(unpackr, source, end) {
 		let guarded = [];
-		for (let type of customExtensionTypes) {
-			let extension = currentExtensions[type];
-			let guard = guardExtension(type, extension);
-			guarded.push(type, extension, guard);
-			currentExtensions[type] = guard;
-		}
 		let readers = isNativeAccelerationEnabled && [readFixedString, readString8, readString16, readString32];
-		if (readers) {
-			readFixedString = boundStrings(readers[0]);
-			readString8 = boundStrings(readers[1]);
-			readString16 = boundStrings(readers[2]);
-			readString32 = boundStrings(readers[3]);
-		}
-		fragmentEnd = end;
 		try {
+			for (let type of customExtensionTypes) {
+				let extension = currentExtensions[type];
+				let guard = guardExtension(type, extension);
+				guarded.push(type, extension, guard);
+				currentExtensions[type] = guard;
+			}
+			if (readers) {
+				readFixedString = boundStrings(readers[0]);
+				readString8 = boundStrings(readers[1]);
+				readString16 = boundStrings(readers[2]);
+				readString32 = boundStrings(readers[3]);
+			}
+			fragmentEnd = end;
 			return unpackr.unpackMultiple(source);
 		} finally {
 			fragmentEnd = 0;
