@@ -2315,7 +2315,7 @@ suite('msgpackr – two-byte record definitions (over-cap own records with a sha
 
 	test('cap=256 + shared store round-trips every over-cap shape (two-byte mode)', function () {
 		const store = sharedStore();
-		const o = { randomAccessStructure: true, useRecords: true, useBigIntExtension: true, maxOwnStructures: 256, ...store };
+		const o = { useRecords: true, maxOwnStructures: 256, ...store };
 		const w = new Packr(o), r = new Packr(o);
 		const records = makeRecords(3000);
 		let sawTwoByteDef = false;
@@ -2329,7 +2329,7 @@ suite('msgpackr – two-byte record definitions (over-cap own records with a sha
 
 	test('over-cap own records do not grow the shared dictionary without bound', function () {
 		const store = sharedStore();
-		const o = { randomAccessStructure: true, useRecords: true, useBigIntExtension: true, maxOwnStructures: 256, ...store };
+		const o = { useRecords: true, maxOwnStructures: 256, ...store };
 		const w = new Packr(o);
 		for (const rec of makeRecords(3000)) w.pack(rec);
 		const saved = store.peek();
@@ -2359,7 +2359,7 @@ suite('msgpackr – two-byte record definitions (over-cap own records with a sha
 
 	test('one-byte path (maxOwn=32) keeps working with a shared store', function () {
 		const store = sharedStore();
-		const o = { randomAccessStructure: true, useRecords: true, useBigIntExtension: true, maxOwnStructures: 32, ...store };
+		const o = { useRecords: true, maxOwnStructures: 32, ...store };
 		const w = new Packr(o), r = new Packr(o);
 		for (const rec of makeRecords(3000)) {
 			assert.deepEqual(r.unpack(w.pack(rec)), rec);
