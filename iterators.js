@@ -128,12 +128,11 @@ export function unpackChunk (state, chunk) {
   } catch (error) {
     if (!error.incomplete) throw error;
     if (scannedEnd && error.lastPosition === 0) {
-      // the scan found the whole value, so more bytes can not complete it
-      error.incomplete = false;
+      error.incomplete = false; // the scan found all of the value
       throw error;
     }
     try {
-      holdRemainder(state, source.subarray(error.lastPosition), error.missingBytes);
+      holdRemainder(state, source.subarray(error.lastPosition), source === chunk, error.missingBytes);
     } catch (holdError) {
       holdError.values = error.values;
       throw holdError;
@@ -151,10 +150,10 @@ export function streamUnpackr (unpackr) {
   return unpackr;
 }
 
-function holdRemainder (state, remainder, missingBytes) {
+function holdRemainder (state, remainder, borrowed, missingBytes) {
   if (remainder.length > state.maxIncompleteBufferSize) throw new Error('Maximum incomplete buffer size exceeded');
-  // copied, so the caller can reuse its buffer, and so this does not keep the buffer that unpacked values are views of
-  state.incompleteBuffer = Buffer.from(remainder);
+  // copy what the caller passed in, so it can reuse its buffer
+  state.incompleteBuffer = borrowed ? Buffer.from(remainder) : remainder;
   state.incompleteLength = remainder.length;
   state.incompleteNeeded = remainder.length + (missingBytes || 1); // with no hint, any byte may complete it
   const unpackr = state.unpackr;

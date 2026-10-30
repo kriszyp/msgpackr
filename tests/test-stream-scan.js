@@ -172,24 +172,26 @@ suite('resumable stream structure scan', function () {
 		class Pair {
 			constructor(first, second) { this.first = first; this.second = second; }
 		}
-		// reads a second value after the one it is given, outside the documented extension contract
 		addExtension({ Class: Pair, type: 0x38, write: pair => pair.first, read: first => new Pair(first, new Unpackr().unpack(Buffer.from([0xc0]))) });
 		const sibling = { type: 0x39, unpack: () => readSibling() };
 		let readSibling;
 		const { read } = await import('../unpack.js');
 		readSibling = () => read();
 		addExtension(sibling);
-		const bytes = Buffer.from([0x92, 0xd4, 0x39, 0, 0xa3, 0x61, 0x62, 0x63, 5]);
-		assert.deepStrictEqual(new Unpackr().unpack(bytes), ['abc', 5]);
-		assert.deepStrictEqual(countedDecode([bytes]).values, [['abc', 5]]);
-		for (let split = 1; split < bytes.length; split++) {
-			const parts = [bytes.subarray(0, split), bytes.subarray(split)];
-			assert.throws(() => countedDecode(parts), /Extension type 57 read beyond its own data/, `iterator split ${split}`);
-			let error;
-			await streamed(parts).catch(e => error = e);
-			assert.match(error && error.message, /Extension type 57 read beyond its own data/, `stream split ${split}`);
+		const abc = [0xd4, 0x39, 0, 0xa3, 0x61, 0x62, 0x63];
+		for (const [bytes, expected] of [[[0x92, ...abc, 5], ['abc', 5]], [[0x91, ...abc], ['abc']], [abc, 'abc']].map(([bytes, expected]) => [Buffer.from(bytes), expected])) {
+			assert.deepStrictEqual(new Unpackr().unpack(bytes), expected);
+			assert.deepStrictEqual(countedDecode([bytes]).values, [expected]);
+			const splits = [];
+			for (let split = 1; split < bytes.length; split++) splits.push([bytes.subarray(0, split), bytes.subarray(split)]);
+			splits.push(chunks(bytes, 1));
+			for (const parts of splits) {
+				assert.throws(() => countedDecode(parts), /Extension type 57 read beyond its own data/, `iterator split ${parts[0].length}`);
+				let error;
+				await streamed(parts).catch(e => error = e);
+				assert.match(error && error.message, /Extension type 57 read beyond its own data/, `stream split ${parts[0].length}`);
+			}
 		}
-		// one that unpacks other data while reading is unaffected
 		const nested = new Packr().pack([new Pair('x'), 1]);
 		assert.deepStrictEqual(countedDecode(chunks(nested, 1)).values, [[new Pair('x', null), 1]]);
 	});

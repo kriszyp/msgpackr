@@ -20,7 +20,7 @@ var referenceMap;
 var currentExtensions = [];
 var dataView;
 var arrayAllocationBudget;
-var fragmentEnd = 0; // while unpacking a value that arrived in fragments, where it ends
+var fragmentEnd = 0;
 var defaultOptions = {
 	useRecords: false,
 	mapsAsObjects: true
@@ -620,8 +620,7 @@ export function setExtractor(extractStrings) {
 				if (bundledStrings || strings === EXTRACTION_FAILED)
 					return readStringJS(length);
 				let byteOffset = src.byteOffset;
-				// a value that arrived in fragments may be followed by an incomplete one, which would fail the extraction
-				let extraction = tryExtractStrings(position - headerLength + byteOffset, (fragmentEnd > position ? fragmentEnd : srcEnd) + byteOffset, src.buffer);
+				let extraction = tryExtractStrings(position - headerLength + byteOffset, srcEnd + byteOffset, src.buffer);
 				if (extraction === EXTRACTION_FAILED) {
 					// the extractor scans ahead to srcEnd and fails on any truncated value there, even a later one,
 					// so read the rest of this source in JS, which fails where the bytes actually run out
@@ -1296,16 +1295,17 @@ export function clearSource() {
 }
 
 const builtinExtensions = currentExtensions.slice(0);
+const customExtensionTypes = new Set();
 
 function unframedExtensionError(type) {
 	return new Error('Extension type ' + type + ' read beyond its own data, so a value with it can not be unpacked from fragmented stream input');
 }
-// reads by an extension must stay within its data (or the one value a read extension is given), which is what the
-// structure scanner assumed when it found where the value ends
+// the structure scanner assumes an extension reads only its data, or the one value a read extension is given
 function guardRead(type, read, receiver) {
 	return function() {
 		let start = position;
-		if (start >= fragmentEnd)
+		// an extension's data is read before it is called, so one in a later value starts past fragmentEnd
+		if (start > fragmentEnd)
 			return read.apply(receiver || this, arguments);
 		let value;
 		try {
@@ -1329,9 +1329,24 @@ function guardExtension(type, extension) {
 	return guard;
 }
 
+// the native extractor reads strings ahead to srcEnd, and fails on an incomplete value after the fragmented one
+function boundStrings(readString) {
+	return function(length) {
+		if (position > fragmentEnd)
+			return readString(length);
+		let savedSrcEnd = srcEnd;
+		srcEnd = fragmentEnd;
+		try {
+			return readString(length);
+		} finally {
+			srcEnd = savedSrcEnd;
+		}
+	};
+}
+
 // Internal hooks for the streaming structure scanner (scan.js); not part of the public API.
 export const _stream = {
-	// what an extension reads after its data: -1 for an unknown type, 0 nothing, 1 one value, 2 a string bundle
+	// -1 for an unknown type, else how many values it reads after its data, with 2 for a string bundle
 	extensionFollows(type, fixext1) {
 		let extension = currentExtensions[type];
 		if (!extension)
@@ -1340,7 +1355,7 @@ export const _stream = {
 			return type === 0x62 ? 2 : (type === 0x65 || type === 0x69 || type === 0x73 || type === 0x78) ? 1 : 0;
 		return fixext1 && extension.read ? 1 : 0;
 	},
-	// the number of keys of a record definition that are not a plain array, unpacked without changing the unpackr
+	// keys that are not a plain array are counted without changing the unpackr's structures
 	countKeys(unpackr, bytes) {
 		let isolated = Object.create(unpackr);
 		if (unpackr.structures) {
@@ -1352,19 +1367,26 @@ export const _stream = {
 	// unpackMultiple, where the first value, ending at end, arrived in fragments
 	unpackFragmented(unpackr, source, end) {
 		let guarded = [];
-		for (let type = 0; type < currentExtensions.length; type++) {
+		for (let type of customExtensionTypes) {
 			let extension = currentExtensions[type];
-			if (extension && extension !== builtinExtensions[type]) {
-				let guard = guardExtension(type, extension);
-				guarded.push(type, extension, guard);
-				currentExtensions[type] = guard;
-			}
+			let guard = guardExtension(type, extension);
+			guarded.push(type, extension, guard);
+			currentExtensions[type] = guard;
+		}
+		let readers = isNativeAccelerationEnabled && [readFixedString, readString8, readString16, readString32];
+		if (readers) {
+			readFixedString = boundStrings(readers[0]);
+			readString8 = boundStrings(readers[1]);
+			readString16 = boundStrings(readers[2]);
+			readString32 = boundStrings(readers[3]);
 		}
 		fragmentEnd = end;
 		try {
 			return unpackr.unpackMultiple(source);
 		} finally {
 			fragmentEnd = 0;
+			if (readers)
+				[readFixedString, readString8, readString16, readString32] = readers;
 			for (let i = 0; i < guarded.length; i += 3) {
 				if (currentExtensions[guarded[i]] === guarded[i + 2])
 					currentExtensions[guarded[i]] = guarded[i + 1];
@@ -1378,6 +1400,10 @@ export function addExtension(extension) {
 		currentExtensions[extension.type] = extension.unpack;
 	else
 		currentExtensions[extension.type] = extension;
+	if (currentExtensions[extension.type] && currentExtensions[extension.type] !== builtinExtensions[extension.type])
+		customExtensionTypes.add(extension.type);
+	else
+		customExtensionTypes.delete(extension.type);
 }
 
 export const mult10 = new Array(147); // this is a table matching binary exponents to the multiplier to determine significant digit rounding

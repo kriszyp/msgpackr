@@ -6,17 +6,16 @@ const BUNDLE = 2;
 const MAX_DEPTH = 16384;
 
 /**
- * Finds where an incomplete MessagePack value ends without constructing it, resuming from where it stopped as more
- * bytes arrive, so a value split across many chunks has each of its bytes scanned once and is unpacked only once it
- * is complete. Positions are relative to the start of the value. A value it can not frame (an unknown extension, an
- * undefined record id, a malformed bundle) is reported complete at the end of the bytes so far, so that unpacking
- * reports the error.
+ * Finds where an incomplete MessagePack value ends without constructing it, resuming as more bytes arrive, so a
+ * value split across many chunks is scanned once and unpacked once. Positions are relative to the start of the
+ * value. A value it can not frame (an unknown extension, an undefined record id, a malformed bundle) is reported
+ * complete at the bytes so far, so that unpacking reports the error.
  */
 export class StructureScanner {
 	constructor(unpackr) {
 		this.unpackr = unpackr;
 		this.frames = [];
-		this.records = new Map(); // record definitions within this value, by id: { length, highByte }
+		this.records = new Map(); // definitions within this value: { length, highByte }
 		this.reset();
 	}
 
@@ -67,10 +66,7 @@ export class StructureScanner {
 		return structure;
 	}
 
-	/**
-	 * Scans source up to end, returning true once the value is complete (with position at its end), or false with
-	 * neededLength the length that must be reached before scanning can progress.
-	 */
+	// true once the value is complete, with position at its end; else false, with the length needed to progress
 	scan(source, end) {
 		while (this.depth) {
 			if (this.position > end) return this.need(this.position);
@@ -87,15 +83,14 @@ export class StructureScanner {
 		return true;
 	}
 
-	// the next item of frame, skipping its data and entering any items it contains
 	item(source, end, frame) {
 		const start = this.position;
 		if (start >= end) return this.need(start + 1);
 		const token = source[start];
-		let size = 1; // the header length
-		let length = 0; // data after the header
+		let size = 1; // header
+		let length = 0; // data
 		let items = 0;
-		let extension = -1; // the type of an extension
+		let extension = -1;
 		if (token < 0xc0) {
 			if (token < 0x80) {
 				if (token >= 0x40) {
@@ -155,7 +150,6 @@ export class StructureScanner {
 			if (token >= 0xc7 && token <= 0xc9 || token >= 0xd4 && token <= 0xd8) {
 				extension = source[start + size - 1];
 				if (extension === 0x72 && (token === 0xd4 || token === 0xd5)) {
-					// a record definition, read by recordDefinition
 					if (start + size + length > end) return this.need(start + size + length);
 					const firstId = source[start + 2] & 0x3f;
 					const highByte = token === 0xd5 ? source[start + 3] : undefined;
@@ -173,9 +167,13 @@ export class StructureScanner {
 		const dataStart = start + size;
 		if (extension >= 0) {
 			const follows = _stream.extensionFollows(extension, token === 0xd4);
-			if (follows < 0) return this.invalid(end);
+			if (follows < 0 || follows === 2 && length < 4) {
+				// unpack reads the data before it fails
+				if (dataStart + length > end) return this.need(dataStart + length);
+				return this.invalid(end);
+			}
 			if (follows === 2) {
-				// a string bundle, whose payload holds the offset of its two strings
+				// the data holds the offset of the bundle's two strings
 				if (dataStart + length > end) return this.need(dataStart + length);
 				const bundle = this.push(BUNDLE, 2);
 				bundle.target = dataStart + ((source[dataStart] << 24) + (source[dataStart + 1] << 16) +
@@ -195,7 +193,7 @@ export class StructureScanner {
 		return true;
 	}
 
-	// a record definition: the key array, then a record of that many values
+	// the keys, then a record of that many values
 	definition(source, end, frame) {
 		if (frame.stage === 0) {
 			let position = this.position;
@@ -214,7 +212,7 @@ export class StructureScanner {
 				count = readUint32(source, position + 1);
 				position += 5;
 			} else {
-				// keys from something else, such as an extension, are counted by unpacking them once they are complete
+				// keys from an extension are unpacked to count them, once complete
 				frame.schemaStart = position;
 				frame.stage = 2;
 				this.push(ITEMS, 1);
@@ -241,7 +239,7 @@ export class StructureScanner {
 		return true;
 	}
 
-	// a string bundle: its two strings at the target, then the one value after the extension
+	// a string bundle: its two strings at the target, then the value after the extension
 	bundle(source, end, frame) {
 		if (frame.stage === 0) {
 			if (frame.target < 0) return this.invalid(end);
