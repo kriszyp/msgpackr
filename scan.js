@@ -4,6 +4,7 @@ const ITEMS = 0;
 const DEFINITION = 1;
 const BUNDLE = 2;
 const MAX_DEPTH = 16384;
+const UNLOADED = {};
 
 /**
  * Finds where an incomplete MessagePack value ends without constructing it, resuming as more bytes arrive, so a
@@ -15,7 +16,7 @@ export class StructureScanner {
 	constructor(unpackr) {
 		this.unpackr = unpackr;
 		this.frames = [];
-		this.records = new Map(); // definitions within this value: { length, highByte }
+		this.records = new Map();
 		this.extensions = new Set();
 		this.reset();
 	}
@@ -60,11 +61,9 @@ export class StructureScanner {
 		const record = this.records.get(id);
 		if (record) return record;
 		const unpackr = this.unpackr;
-		let structure = unpackr.structures && unpackr.structures[id];
-		// read() loads them for each missing id too, and keeps what it loaded
-		if (!structure && unpackr.getStructures)
-			structure = unpackr._mergeStructures(unpackr.getStructures(), unpackr.structures)[id];
-		return structure;
+		const structure = unpackr.structures && unpackr.structures[id];
+		// what getStructures returns can depend on when it is called, so it is left to read() to call it, in order
+		return !structure && unpackr.getStructures ? UNLOADED : structure;
 	}
 
 	scan(source, end) {
@@ -96,6 +95,7 @@ export class StructureScanner {
 				if (token >= 0x40) {
 					const firstId = token & 0x3f;
 					let structure = this.structure(firstId);
+					if (structure === UNLOADED) return this.invalid(end);
 					if (structure) {
 						let position = start + 1;
 						while (structure.highByte === 0) {
@@ -103,7 +103,7 @@ export class StructureScanner {
 							const highByte = source[position++];
 							if (highByte === 0) break;
 							structure = this.structure(firstId < 32 ? -(firstId + (highByte << 5)) : firstId + (highByte << 5));
-							if (!structure) return this.invalid(end);
+							if (!structure || structure === UNLOADED) return this.invalid(end);
 						}
 						this.position = position;
 						this.headers++;

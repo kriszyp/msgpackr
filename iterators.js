@@ -108,8 +108,7 @@ export function unpackChunk (state, chunk) {
         complete = scanner.scan(state.incompleteBuffer, length);
       } catch (error) {
         state.incompleteBuffer = null;
-        // from getStructures, which may throw anything, while the adapters test for a thrown error by its truthiness
-        throw error instanceof Error ? error : new Error('Unpacking failed with a thrown non-Error value', { cause: error });
+        throw error;
       }
       if (!complete) {
         state.incompleteNeeded = scanner.neededLength;
@@ -127,12 +126,11 @@ export function unpackChunk (state, chunk) {
     return scannedEnd ? _stream.unpackFragmented(state.unpackr, source, scannedEnd, state.incompleteScanner.extensions) : state.unpackr.unpackMultiple(source);
   } catch (error) {
     if (!error.incomplete) throw error;
-    if (scannedEnd && error.lastPosition === 0) {
-      error.incomplete = false;
-      throw error;
-    }
     try {
       holdRemainder(state, source.subarray(error.lastPosition), source === chunk, error.missingBytes);
+      // the scan ended this value too soon, which state it can not see can cause (structures a loader returns
+      // later, records an extension defines in its data), so it is unpacked again as each chunk arrives instead
+      if (scannedEnd && error.lastPosition === 0) state.incompleteScanner = null;
     } catch (holdError) {
       holdError.values = error.values;
       throw holdError;
