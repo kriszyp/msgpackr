@@ -109,7 +109,7 @@ export function unpackChunk (state, chunk) {
       } catch (error) {
         state.incompleteBuffer = null;
         // from getStructures, which may throw anything, while the adapters test for a thrown error by its truthiness
-        throw error instanceof Error ? error : new Error('Unpacking failed: ' + String(error), { cause: error });
+        throw error instanceof Error ? error : new Error('Unpacking failed with a thrown non-Error value', { cause: error });
       }
       if (!complete) {
         state.incompleteNeeded = scanner.neededLength;

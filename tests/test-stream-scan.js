@@ -219,14 +219,25 @@ suite('resumable stream structure scan', function () {
 		assert.deepStrictEqual((await streamed(parts)).values, expected);
 	});
 
-	test('keys from an extension that does not use earlier records stay linear', () => {
+	test('keys from an extension stay linear when the value defines no records before them', () => {
 		addExtension({ type: 0x3f, read: () => ['x'] });
 		const tail = Buffer.alloc(2048);
 		for (let i = 0; i < 2048; i += 2) tail.set([0xa1, 0x61], i);
-		const bytes = Buffer.concat([Buffer.from('93d4724090d47241d43f000001dc0400', 'hex'), tail]);
+		const bytes = Buffer.concat([Buffer.from('92d47240d43f000001dc0400', 'hex'), tail]);
 		const result = countedDecode(chunks(bytes, 1));
 		assert.deepStrictEqual(result.values, [new Unpackr().unpack(bytes)]);
 		assert.isAtMost(result.calls, 2);
+	});
+
+	test('keys from an extension whose data refers to an earlier record', async () => {
+		const { getPosition } = await import('../unpack.js');
+		addExtension({ type: 0x31, unpack: (data, readAt) => Object.keys(readAt(getPosition() - data.length)) });
+		const bytes = Buffer.from('92d4724091a16100d47241d5314001a178', 'hex');
+		const expected = [[{ a: 0 }, { a: 'x' }]];
+		assert.deepStrictEqual([new Unpackr().unpack(bytes)], expected);
+		const parts = [bytes.subarray(0, 1), bytes.subarray(1, 15), bytes.subarray(15)];
+		assert.deepStrictEqual(countedDecode(parts).values, expected);
+		assert.deepStrictEqual((await streamed(parts)).values, expected);
 	});
 
 	test('a re-registered, changed extension is guarded with its new read', () => {
@@ -240,7 +251,7 @@ suite('resumable stream structure scan', function () {
 	});
 
 	test('a non-error thrown while scanning is reported as an error', async () => {
-		for (const thrown of [0, false, '', null]) {
+		for (const thrown of [0, false, '', null, { [Symbol.toPrimitive]() { throw 0; } }]) {
 			const options = () => ({ getStructures() { throw thrown; } });
 			const parts = [Buffer.from([0x91]), Buffer.from([0x40])];
 			assert.throws(() => countedDecode(parts, options()), Error);
