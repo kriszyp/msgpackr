@@ -108,7 +108,8 @@ export function unpackChunk (state, chunk) {
         complete = scanner.scan(state.incompleteBuffer, length);
       } catch (error) {
         state.incompleteBuffer = null;
-        throw error;
+        // from getStructures, which may throw anything, while the adapters test for a thrown error by its truthiness
+        throw error instanceof Error ? error : new Error('Unpacking failed: ' + String(error), { cause: error });
       }
       if (!complete) {
         state.incompleteNeeded = scanner.neededLength;
@@ -127,7 +128,7 @@ export function unpackChunk (state, chunk) {
   } catch (error) {
     if (!error.incomplete) throw error;
     if (scannedEnd && error.lastPosition === 0) {
-      error.incomplete = false; // the scan found all of the value
+      error.incomplete = false;
       throw error;
     }
     try {

@@ -219,6 +219,37 @@ suite('resumable stream structure scan', function () {
 		assert.deepStrictEqual((await streamed(parts)).values, expected);
 	});
 
+	test('keys from an extension that does not use earlier records stay linear', () => {
+		addExtension({ type: 0x3f, read: () => ['x'] });
+		const tail = Buffer.alloc(2048);
+		for (let i = 0; i < 2048; i += 2) tail.set([0xa1, 0x61], i);
+		const bytes = Buffer.concat([Buffer.from('93d4724090d47241d43f000001dc0400', 'hex'), tail]);
+		const result = countedDecode(chunks(bytes, 1));
+		assert.deepStrictEqual(result.values, [new Unpackr().unpack(bytes)]);
+		assert.isAtMost(result.calls, 2);
+	});
+
+	test('a re-registered, changed extension is guarded with its new read', () => {
+		const extension = { type: 0x35, read: value => ({ old: value }) };
+		addExtension(extension);
+		const bytes = Buffer.from([0x91, 0xd4, 0x35, 0, 1]);
+		assert.deepStrictEqual(countedDecode(chunks(bytes, 1)).values, [[{ old: 1 }]]);
+		extension.read = value => ({ new: value });
+		addExtension(extension);
+		assert.deepStrictEqual(countedDecode(chunks(bytes, 1)).values, [[{ new: 1 }]]);
+	});
+
+	test('a non-error thrown while scanning is reported as an error', async () => {
+		for (const thrown of [0, false, '', null]) {
+			const options = () => ({ getStructures() { throw thrown; } });
+			const parts = [Buffer.from([0x91]), Buffer.from([0x40])];
+			assert.throws(() => countedDecode(parts, options()), Error);
+			let error;
+			await streamed(parts, options()).catch(e => error = e);
+			assert.instanceOf(error, Error);
+		}
+	});
+
 	test('structures are loaded again for each missing id, as unpack does', async () => {
 		const options = () => {
 			let calls = 0;

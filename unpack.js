@@ -1384,7 +1384,6 @@ export const _stream = {
 		}
 		return isolated.unpack(bytes).map(asSafeString).length;
 	},
-	// the first value, ending at end, arrived in fragments
 	unpackFragmented(unpackr, source, end, extensionTypes) {
 		let guarded = [];
 		let readers = isNativeAccelerationEnabled && [readFixedString, readString8, readString16, readString32];
@@ -1392,8 +1391,10 @@ export const _stream = {
 			for (let type of extensionTypes) {
 				let extension = currentExtensions[type];
 				let cached = extensionGuards[type];
-				if (!cached || cached.extension !== extension)
-					cached = extensionGuards[type] = { extension, guard: guardExtension(type, extension) };
+				if (!cached || cached.extension !== extension || cached.read !== extension.read || cached.noBuffer !== extension.noBuffer) {
+					cached = extensionGuards[type] = { extension, read: extension.read, noBuffer: extension.noBuffer,
+						guard: guardExtension(type, extension) };
+				}
 				guarded.push(type, extension, cached.guard);
 				currentExtensions[type] = cached.guard;
 			}

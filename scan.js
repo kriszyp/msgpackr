@@ -16,7 +16,7 @@ export class StructureScanner {
 		this.unpackr = unpackr;
 		this.frames = [];
 		this.records = new Map(); // definitions within this value: { length, highByte }
-		this.extensions = new Set(); // custom extension types in this value
+		this.extensions = new Set();
 		this.reset();
 	}
 
@@ -28,6 +28,7 @@ export class StructureScanner {
 		this.bundled = false; // after a bundle, 0xc1 is followed by a string length, as in read()
 		this.headers = 0;
 		this.unframeable = false;
+		this.recordUses = 0; // of definitions within this value
 		this.records.clear();
 		this.extensions.clear();
 		this.push(ITEMS, 1);
@@ -58,7 +59,10 @@ export class StructureScanner {
 
 	structure(id) {
 		const record = this.records.get(id);
-		if (record) return record;
+		if (record) {
+			this.recordUses++;
+			return record;
+		}
 		const unpackr = this.unpackr;
 		let structure = unpackr.structures && unpackr.structures[id];
 		// read() loads them for each missing id too, and keeps what it loaded
@@ -211,6 +215,7 @@ export class StructureScanner {
 				position += 5;
 			} else {
 				frame.schemaStart = position;
+				frame.recordUses = this.recordUses;
 				frame.stage = 2;
 				this.push(ITEMS, 1);
 				return true;
@@ -225,7 +230,7 @@ export class StructureScanner {
 		let length = frame.length;
 		if (frame.stage === 2) {
 			// unpacking the keys alone can not see definitions earlier in this value
-			if (this.records.size) return this.invalid(end);
+			if (this.recordUses !== frame.recordUses) return this.invalid(end);
 			try {
 				length = _stream.countKeys(this.unpackr, source.subarray(frame.schemaStart, this.position));
 			} catch (error) {
@@ -238,7 +243,6 @@ export class StructureScanner {
 		return true;
 	}
 
-	// a bundle's two strings come before the value after the extension, as in its unpacker
 	bundle(source, end, frame) {
 		if (frame.stage === 0) {
 			if (frame.target < 0) return this.invalid(end);
