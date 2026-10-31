@@ -1419,6 +1419,26 @@ suite('msgpackr basic tests', function() {
 		assert.equal(deserialized.dataView.constructor.name, 'DataView');
 		assert.equal(deserialized.dataView.getUint16(), 0xbeef);
 	});
+	test('typed array and DataView bytes without moreTypes', function() {
+		// Without moreTypes these are plain bins, so the payload must be the exact bytes the view
+		// spans. Passing the view to target.set copied element-wise: the low byte of each element
+		// with uninitialized memory after it, and an empty bin for a DataView.
+		let packr = new Packr();
+		let src = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
+		let packed = packr.pack(new Uint16Array(src.buffer));
+		assert.equal(Buffer.from(packed).toString('hex'), 'c404deadbeef');
+		assert.equal(Buffer.from(packr.unpack(packed)).toString('hex'), 'deadbeef');
+
+		let packedView = packr.pack(new DataView(new Uint8Array([0xbe, 0xef]).buffer));
+		assert.equal(Buffer.from(packedView).toString('hex'), 'c402beef');
+		assert.equal(Buffer.from(packr.unpack(packedView)).toString('hex'), 'beef');
+
+		let packedArrayBuffer = packr.pack(new Uint8Array([1, 2, 3]).buffer);
+		assert.equal(Buffer.from(packedArrayBuffer).toString('hex'), 'c403010203');
+
+		let packedBig = packr.pack(new BigInt64Array([1n]));
+		assert.equal(Buffer.from(packedBig).toString('hex'), 'c4080100000000000000');
+	});
 	test('big bundledStrings', function() {
 		const MSGPACK_OPTIONS = {bundleStrings: true};
 		const packer = new Packr(MSGPACK_OPTIONS);

@@ -1231,7 +1231,7 @@ extensions = [{
 		if (this.moreTypes)
 			writeExtBuffer(arrayBuffer, 0x10, allocateForWrite);
 		else
-			writeBuffer(hasNodeBuffer ? Buffer.from(arrayBuffer) : new Uint8Array(arrayBuffer), allocateForWrite);
+			writeBuffer(arrayBuffer, allocateForWrite);
 	}
 }, {
 	pack(typedArray, allocateForWrite) {
@@ -1246,7 +1246,7 @@ extensions = [{
 		if (this.moreTypes)
 			writeExtBuffer(arrayBuffer, 0x11, allocateForWrite);
 		else
-			writeBuffer(hasNodeBuffer ? Buffer.from(arrayBuffer) : new Uint8Array(arrayBuffer), allocateForWrite);
+			writeBuffer(arrayBuffer, allocateForWrite);
 	}
 }, {
 	pack(c1, allocateForWrite) { // specific 0xC1 object
@@ -1279,6 +1279,10 @@ function writeExtBuffer(typedArray, type, allocateForWrite, encode) {
 	target.set(new Uint8Array(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength), position);
 }
 function writeBuffer(buffer, allocateForWrite) {
+	// `target.set` copies element-wise and ignores an ArrayBuffer, so anything but a byte array is
+	// re-viewed as the bytes it spans (Buffers and Uint8Arrays skip the allocation)
+	if (buffer.BYTES_PER_ELEMENT !== 1)
+		buffer = buffer.buffer ? new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength) : new Uint8Array(buffer);
 	let length = buffer.byteLength;
 	var target, position;
 	if (length < 0x100) {
