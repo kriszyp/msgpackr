@@ -583,7 +583,15 @@ export class Packr extends Unpackr {
 				if (value >>> 0 === value) {// positive integer, 32-bit or less
 					// positive uint
 					if (value < 0x20 || (value < 0x80 && this.useRecords === false) || (value < 0x40 && !this._writeStruct)) {
-						target[position++] = value;
+						if (value === 0 && 1 / value < 0) {
+							// -0 is a distinct IEEE 754 value that has no integer representation:
+							// the fixint path below would write 0 and lose the sign on unpack.
+							target[position++] = 0xcb;
+							targetView.setFloat64(position, value);
+							position += 8;
+						} else {
+							target[position++] = value;
+						}
 					} else if (value < 0x100) {
 						target[position++] = 0xcc;
 						target[position++] = value;
