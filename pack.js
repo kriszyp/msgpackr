@@ -681,16 +681,19 @@ export class Packr extends Unpackr {
 								// and Map subclasses are already serialized through it. Subclasses of
 								// Set, Error, RegExp and ArrayBuffer match their extension class here,
 								// so without this their hook was skipped and their own fields were
-								// written instead. Date and Buffer do have a built-in toJSON and it is
-								// how msgpackr serializes them (timestamp and byte extensions), so
-								// those two must keep the extension. Instances of the extension class
+								// written instead. Date has a built-in toJSON and is serialized with the
+								// timestamp extension, so it keeps the extension. Byte views (Buffer,
+								// typed arrays, DataView) always keep the byte extension: a Buffer
+								// polyfill (the buffer package, for browsers) has a toJSON of its own,
+								// not the global Buffer's, so comparing toJSON functions misses it and
+								// it would be written as {type, data}. Instances of the extension class
 								// itself skip the lookup, which keeps packing plain Dates and Sets fast.
 								// An extension registered with addExtension is an explicit choice of
 								// encoding for that class and its subclasses, so it always wins over
 								// toJSON; addExtension prepends, so the built-ins are the last entries.
 								if (value.constructor !== extensionClass && i >= l - builtInExtensionCount &&
 										packr.useToJSON !== false && value.toJSON !== undefined &&
-										value.toJSON !== dateToJSON && value.toJSON !== bufferToJSON) {
+										value.toJSON !== dateToJSON && !ArrayBuffer.isView(value)) {
 									break; // fall through to the generic toJSON handling below
 								}
 								let extension = extensions[i];
@@ -1142,9 +1145,8 @@ export class Packr extends Unpackr {
 	}
 }
 
-// toJSON implementations that belong to the built-ins msgpackr serializes with extensions
+// toJSON implementation that belongs to a built-in msgpackr serializes with an extension
 const dateToJSON = Date.prototype.toJSON;
-const bufferToJSON = typeof Buffer !== 'undefined' ? Buffer.prototype.toJSON : dateToJSON;
 extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/, DataView, C1Type ];
 extensions = [{
 	pack(date, allocateForWrite, pack) {
