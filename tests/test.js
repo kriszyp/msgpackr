@@ -2432,3 +2432,18 @@ suite('msgpackr – two-byte record definitions (over-cap own records with a sha
 		assert.equal(legacyRound.message, 'aggregate boom');
 		assert.deepEqual(legacyRound.errors, []);
 	});
+	test('lone surrogates encode as U+FFFD regardless of string length', function() {
+		let packr = new Packr();
+		for (let n of [0, 10, 60, 70]) {
+			let input = 'x'.repeat(n) + '\ud83d';
+			let round = packr.unpack(packr.pack(input));
+			assert.equal(round, 'x'.repeat(n) + '\ufffd', 'prefix ' + n);
+			assert.equal([...round].filter((c) => c === '\ufffd').length, 1, 'one replacement, prefix ' + n);
+		}
+		// A lone low surrogate takes the same path.
+		assert.equal(packr.unpack(packr.pack('a\udc00b')), 'a\ufffdb');
+		// The bytes are valid UTF-8, so strict decoders accept them.
+		let packed = packr.pack('hi \ud83d');
+		let body = packed.subarray(packed.length - 5);
+		assert.equal(Buffer.from(body).toString('hex'), '6920efbfbd');
+	});
