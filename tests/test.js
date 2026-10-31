@@ -1605,6 +1605,22 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(reader.unpack(b), { x: 7, y: 6 });
 	});
 
+	test('a truncated structures store is a fatal error, not an incomplete read', () => {
+		// getStructures() may unpack a stored blob (see the test above). That nested unpack has its own source,
+		// so a truncation there cannot be completed by more bytes from the outer stream, and must not be
+		// reported as incomplete or UnpackrStream would keep buffering until maxIncompleteBufferSize.
+		const meta = new Packr();
+		const full = meta.pack([['a']]);
+		const store = full.subarray(0, full.length - 1);
+		const reader = new Unpackr({ structures: [], getStructures: () => meta.unpack(store) });
+		try {
+			reader.unpack(Buffer.from([0x40])); // record id 0, i.e. the structure held in the store
+			assert.fail('should not unpack');
+		} catch (error) {
+			assert.isNotOk(error.incomplete, 'a truncated structures store is not incomplete');
+		}
+	});
+
 	test('big buffer', function() {
 		var size = 100000000;
 		var data = new Uint8Array(size).fill(1);
@@ -1651,6 +1667,17 @@ suite('msgpackr basic tests', function() {
 		assert.equal(deserialized.fartherFutureDate.toISOString(), '2106-08-05T18:48:20.323Z');
 		assert.equal(deserialized.ancient.getTime(), -3532219539133);
 		assert.equal(deserialized.invalidDate.toString(), 'Invalid Date');
+	});
+	test('timestamp 64 for dates after 2106', function(){
+		let packr = new Packr();
+		let serialized = packr.pack(new Date(0x100000000 * 1000));
+		assert.deepEqual(Array.from(serialized), [0xd7, 0xff, 0, 0, 0, 1, 0, 0, 0, 0]);
+		let date = new Date('2514-05-30T01:53:03.999Z');
+		serialized = packr.pack(date);
+		assert.equal(serialized.length, 10);
+		assert.equal(packr.unpack(serialized).getTime(), date.getTime());
+		serialized = packr.pack(new Date(0x400000000 * 1000));
+		assert.equal(serialized.length, 15);
 	});
 	test('map/date with options', function(){
 		var map = new Map();
@@ -1818,6 +1845,57 @@ suite('msgpackr basic tests', function() {
 		// useToJSON: false keeps the old behaviour
 		let off = new Packr({ moreTypes: true, useToJSON: false });
 		assert.isTrue(off.unpack(off.pack(new CustomSet([1]))) instanceof Set);
+	});
+	test('a Buffer polyfill with its own toJSON is still packed as binary', function(){
+		// stands in for the buffer package used in browsers: a Uint8Array subclass whose toJSON
+		// is not the global Buffer.prototype.toJSON
+		class PolyfillBuffer extends Uint8Array {
+			toJSON() { return { type: 'Buffer', data: Array.from(this) }; }
+		}
+		class CustomDataView extends DataView {
+			toJSON() { return { kind: 'view' }; }
+		}
+
+		let packr = new Packr();
+		let bytes = packr.unpack(packr.pack(PolyfillBuffer.from([1, 2, 3])));
+		assert.isTrue(bytes instanceof Uint8Array);
+		assert.deepEqual(Array.from(bytes), [1, 2, 3]);
+
+		let nested = packr.unpack(packr.pack({ payload: PolyfillBuffer.from([4, 5]) }));
+		assert.isTrue(nested.payload instanceof Uint8Array);
+		assert.deepEqual(Array.from(nested.payload), [4, 5]);
+
+		// a DataView subclass keeps its extension as well
+		let morePackr = new Packr({ moreTypes: true });
+		let view = morePackr.unpack(morePackr.pack(new CustomDataView(new Uint8Array([6, 7]).buffer)));
+		assert.isTrue(view instanceof DataView);
+		assert.deepEqual([view.getUint8(0), view.getUint8(1)], [6, 7]);
+	});
+	test('a registered extension wins over toJSON on a subclass of its class', function(){
+		// e.g. a Blob extension and a file-backed Blob subclass whose toJSON is an API shape
+		class Stored { constructor(data) { this.data = data; } }
+		class FileBackedStored extends Stored { toJSON() { return { description: 'placeholder' }; } }
+		addExtension({
+			Class: Stored,
+			type: 20,
+			pack: (stored) => Buffer.from(stored.data),
+			unpack: (buffer) => new Stored(buffer.toString()),
+		});
+		let packr = new Packr();
+		let decoded = packr.unpack(packr.pack({ blob: new FileBackedStored('contents') }));
+		assert.instanceOf(decoded.blob, Stored);
+		assert.equal(decoded.blob.data, 'contents');
+
+		// a registered extension for a built-in class also wins over a subclass's toJSON
+		class TaggedSet extends Set { toJSON() { return { kind: 'set' }; } }
+		addExtension({
+			Class: TaggedSet,
+			type: 21,
+			pack: (set) => packr.pack(Array.from(set)),
+			unpack: (buffer) => new TaggedSet(packr.unpack(buffer)),
+		});
+		class SubTaggedSet extends TaggedSet { toJSON() { return { kind: 'sub' }; } }
+		assert.instanceOf(packr.unpack(packr.pack(new SubTaggedSet([1]))), TaggedSet);
 	});
 	test('numbers', function(){
 		var data = {
@@ -2279,7 +2357,7 @@ suite('msgpackr – two-byte record definitions (over-cap own records with a sha
 
 	test('cap=256 + shared store round-trips every over-cap shape (two-byte mode)', function () {
 		const store = sharedStore();
-		const o = { randomAccessStructure: true, useRecords: true, useBigIntExtension: true, maxOwnStructures: 256, ...store };
+		const o = { useRecords: true, maxOwnStructures: 256, ...store };
 		const w = new Packr(o), r = new Packr(o);
 		const records = makeRecords(3000);
 		let sawTwoByteDef = false;
@@ -2293,7 +2371,7 @@ suite('msgpackr – two-byte record definitions (over-cap own records with a sha
 
 	test('over-cap own records do not grow the shared dictionary without bound', function () {
 		const store = sharedStore();
-		const o = { randomAccessStructure: true, useRecords: true, useBigIntExtension: true, maxOwnStructures: 256, ...store };
+		const o = { useRecords: true, maxOwnStructures: 256, ...store };
 		const w = new Packr(o);
 		for (const rec of makeRecords(3000)) w.pack(rec);
 		const saved = store.peek();
@@ -2323,10 +2401,31 @@ suite('msgpackr – two-byte record definitions (over-cap own records with a sha
 
 	test('one-byte path (maxOwn=32) keeps working with a shared store', function () {
 		const store = sharedStore();
-		const o = { randomAccessStructure: true, useRecords: true, useBigIntExtension: true, maxOwnStructures: 32, ...store };
+		const o = { useRecords: true, maxOwnStructures: 32, ...store };
 		const w = new Packr(o), r = new Packr(o);
 		for (const rec of makeRecords(3000)) {
 			assert.deepEqual(r.unpack(w.pack(rec)), rec);
 		}
 	});
 });
+	test('structured cloning: AggregateError', function() {
+		let packr = new Packr({ moreTypes: true, structuredClone: true });
+		let original = new AggregateError([new Error('first'), new TypeError('second')], 'aggregate boom');
+		let round = packr.unpack(packr.pack(original));
+		assert.equal(round.name, 'AggregateError');
+		assert.equal(round.message, 'aggregate boom');
+		assert.deepEqual(
+			round.errors.map((e) => [e.name, e.message]),
+			[
+				['Error', 'first'],
+				['TypeError', 'second'],
+			]
+		);
+		// A payload written before the errors were carried (three entries) still decodes to the
+		// right message and name, with no errors rather than an error list spelled from the message.
+		let legacy = Buffer.from('d4650093ae4167677265676174654572726f72ae61676772656761746520626f6f6dd40000', 'hex');
+		let legacyRound = packr.unpack(legacy);
+		assert.equal(legacyRound.name, 'AggregateError');
+		assert.equal(legacyRound.message, 'aggregate boom');
+		assert.deepEqual(legacyRound.errors, []);
+	});

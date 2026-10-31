@@ -234,6 +234,17 @@ suite('complete but invalid input is not incomplete', function () {
 		addExtension({ type: 0x2c, unpack: () => { throw 'invalid'; } });
 		assert.throws(() => new Unpackr().unpack(Buffer.from([0xd4, 0x2c, 0x00])), 'invalid');
 	});
+
+	test('an extension throwing a non-Error value in unpackMultiple', () => {
+		addExtension({ type: 0x2f, unpack: () => { throw 'invalid'; } });
+		try {
+			new Unpackr().unpackMultiple(Buffer.from([0x01, 0xd4, 0x2f, 0x00]));
+			assert.fail('should not unpack');
+		} catch (error) {
+			// the value must reach the caller unchanged instead of being replaced by the TypeError from annotating it
+			assert.strictEqual(error, 'invalid');
+		}
+	});
 });
 
 suite('end of input', function () {
