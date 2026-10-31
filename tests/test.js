@@ -1433,6 +1433,9 @@ suite('msgpackr basic tests', function() {
 		assert.equal(Buffer.from(packedView).toString('hex'), 'c402beef');
 		assert.equal(Buffer.from(packr.unpack(packedView)).toString('hex'), 'beef');
 
+		let packedArrayBuffer = packr.pack(new Uint8Array([1, 2, 3]).buffer);
+		assert.equal(Buffer.from(packedArrayBuffer).toString('hex'), 'c403010203');
+
 		let packedBig = packr.pack(new BigInt64Array([1n]));
 		assert.equal(Buffer.from(packedBig).toString('hex'), 'c4080100000000000000');
 	});
