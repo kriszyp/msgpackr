@@ -234,6 +234,17 @@ suite('complete but invalid input is not incomplete', function () {
 		addExtension({ type: 0x2c, unpack: () => { throw 'invalid'; } });
 		assert.throws(() => new Unpackr().unpack(Buffer.from([0xd4, 0x2c, 0x00])), 'invalid');
 	});
+
+	test('an extension throwing a non-Error value in unpackMultiple', () => {
+		addExtension({ type: 0x2f, unpack: () => { throw 'invalid'; } });
+		try {
+			new Unpackr().unpackMultiple(Buffer.from([0x01, 0xd4, 0x2f, 0x00]));
+			assert.fail('should not unpack');
+		} catch (error) {
+			// the value must reach the caller unchanged instead of being replaced by the TypeError from annotating it
+			assert.strictEqual(error, 'invalid');
+		}
+	});
 });
 
 suite('end of input', function () {
@@ -532,6 +543,25 @@ suite('values split across many chunks', function () {
 			const expected = new Unpackr(options).unpackMultiple(encoded);
 			for (let size = 1; size < encoded.length; size = size < 64 ? size + 1 : size * 2 + 1)
 				assert.deepStrictEqual([...decodeIter(chunked(encoded, size), options)], expected, `${JSON.stringify(options)} size ${size}`);
+		}
+	});
+});
+
+suite('end beyond the source', function () {
+	test('reads nothing past the end of the source view', () => {
+		// a Buffer view into a shared ArrayBuffer (as Node's Buffer pool hands out), followed by other data
+		const shared = new Uint8Array(256);
+		shared.set(Buffer.from('SECRET-PASSWORD!'), 2);
+		const view = Buffer.from(shared.buffer, 0, 2);
+		view[0] = 0x91; view[1] = 0xb0; // [fixstr(16)], whose body lies outside the view
+		for (const end of [18, 200]) {
+			try {
+				const value = new Unpackr().unpack(view, { end });
+				assert.fail('should not unpack: ' + JSON.stringify(value));
+			} catch (error) {
+				assert.notInclude(error.message, 'SECRET', `end ${end}`);
+				assert.isTrue(error.incomplete, error.message);
+			}
 		}
 	});
 });

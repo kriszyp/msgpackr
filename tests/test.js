@@ -1588,6 +1588,22 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(reader.unpack(b), { x: 7, y: 6 });
 	});
 
+	test('a truncated structures store is a fatal error, not an incomplete read', () => {
+		// getStructures() may unpack a stored blob (see the test above). That nested unpack has its own source,
+		// so a truncation there cannot be completed by more bytes from the outer stream, and must not be
+		// reported as incomplete or UnpackrStream would keep buffering until maxIncompleteBufferSize.
+		const meta = new Packr();
+		const full = meta.pack([['a']]);
+		const store = full.subarray(0, full.length - 1);
+		const reader = new Unpackr({ structures: [], getStructures: () => meta.unpack(store) });
+		try {
+			reader.unpack(Buffer.from([0x40])); // record id 0, i.e. the structure held in the store
+			assert.fail('should not unpack');
+		} catch (error) {
+			assert.isNotOk(error.incomplete, 'a truncated structures store is not incomplete');
+		}
+	});
+
 	test('big buffer', function() {
 		var size = 100000000;
 		var data = new Uint8Array(size).fill(1);
@@ -1634,6 +1650,17 @@ suite('msgpackr basic tests', function() {
 		assert.equal(deserialized.fartherFutureDate.toISOString(), '2106-08-05T18:48:20.323Z');
 		assert.equal(deserialized.ancient.getTime(), -3532219539133);
 		assert.equal(deserialized.invalidDate.toString(), 'Invalid Date');
+	});
+	test('timestamp 64 for dates after 2106', function(){
+		let packr = new Packr();
+		let serialized = packr.pack(new Date(0x100000000 * 1000));
+		assert.deepEqual(Array.from(serialized), [0xd7, 0xff, 0, 0, 0, 1, 0, 0, 0, 0]);
+		let date = new Date('2514-05-30T01:53:03.999Z');
+		serialized = packr.pack(date);
+		assert.equal(serialized.length, 10);
+		assert.equal(packr.unpack(serialized).getTime(), date.getTime());
+		serialized = packr.pack(new Date(0x400000000 * 1000));
+		assert.equal(serialized.length, 15);
 	});
 	test('map/date with options', function(){
 		var map = new Map();
@@ -1826,6 +1853,32 @@ suite('msgpackr basic tests', function() {
 		let view = morePackr.unpack(morePackr.pack(new CustomDataView(new Uint8Array([6, 7]).buffer)));
 		assert.isTrue(view instanceof DataView);
 		assert.deepEqual([view.getUint8(0), view.getUint8(1)], [6, 7]);
+	});
+	test('a registered extension wins over toJSON on a subclass of its class', function(){
+		// e.g. a Blob extension and a file-backed Blob subclass whose toJSON is an API shape
+		class Stored { constructor(data) { this.data = data; } }
+		class FileBackedStored extends Stored { toJSON() { return { description: 'placeholder' }; } }
+		addExtension({
+			Class: Stored,
+			type: 20,
+			pack: (stored) => Buffer.from(stored.data),
+			unpack: (buffer) => new Stored(buffer.toString()),
+		});
+		let packr = new Packr();
+		let decoded = packr.unpack(packr.pack({ blob: new FileBackedStored('contents') }));
+		assert.instanceOf(decoded.blob, Stored);
+		assert.equal(decoded.blob.data, 'contents');
+
+		// a registered extension for a built-in class also wins over a subclass's toJSON
+		class TaggedSet extends Set { toJSON() { return { kind: 'set' }; } }
+		addExtension({
+			Class: TaggedSet,
+			type: 21,
+			pack: (set) => packr.pack(Array.from(set)),
+			unpack: (buffer) => new TaggedSet(packr.unpack(buffer)),
+		});
+		class SubTaggedSet extends TaggedSet { toJSON() { return { kind: 'sub' }; } }
+		assert.instanceOf(packr.unpack(packr.pack(new SubTaggedSet([1]))), TaggedSet);
 	});
 	test('numbers', function(){
 		var data = {
@@ -2067,6 +2120,131 @@ suite('msgpackr basic tests', function() {
 		var deserialized = packr.unpack(serialized);
 		assert.deepEqual(deserialized, expected);
 	});
+
+	test('longStringInJS 16-31 byte fixstr and 32+ byte str8 across Buffer and Uint8Array', async function () {
+		const noExtractUrl = new URL('../unpack.js?no-extract', import.meta.url);
+		const noExtract = await import(noExtractUrl);
+		assert.strictEqual(noExtract.isNativeAccelerationEnabled, false);
+
+		const toPlainUint8Array = (buf) => {
+			const u8 = new Uint8Array(buf.length);
+			u8.set(buf);
+			assert.strictEqual(u8.latin1Slice, undefined);
+			return u8;
+		};
+		const toOffsetBuffer = (buf) => {
+			const padded = Buffer.alloc(buf.length + 16, 0xff);
+			buf.copy(padded, 8);
+			const sub = padded.subarray(8, 8 + buf.length);
+			assert.strictEqual(typeof sub.latin1Slice, 'function');
+			assert.strictEqual(sub.byteOffset > 0, true);
+			return sub;
+		};
+		const spyLatin1Slice = (buf, fn) => {
+			const calls = [];
+			const orig = buf.latin1Slice;
+			buf.latin1Slice = function (start, end) {
+				calls.push(orig.call(this, start, end));
+				return calls[calls.length - 1];
+			};
+			try {
+				fn(calls);
+			} finally {
+				buf.latin1Slice = orig;
+			}
+		};
+
+		let keySeq = 0;
+		for (const UnpackrImpl of [Unpackr, noExtract.Unpackr]) {
+			for (const len of [16, 24, 31]) {
+				const str = 'x'.repeat(len - 2) + (len % 10) + '!';
+				const unpackrInstance = new UnpackrImpl();
+				const packedStr = Buffer.from(pack(str));
+				spyLatin1Slice(packedStr, (calls) => {
+					assert.strictEqual(unpackrInstance.unpack(packedStr), str);
+					assert.deepStrictEqual(calls, [str]);
+				});
+
+				const packrRec = new Packr({ useRecords: true });
+				const unpackrRec = new UnpackrImpl({ useRecords: true });
+				const packedRec = Buffer.from(packrRec.pack({ id: len, value: str }));
+				spyLatin1Slice(packedRec, (calls) => {
+					assert.deepStrictEqual(unpackrRec.unpack(packedRec), { id: len, value: str });
+					assert.deepStrictEqual(calls, [str]);
+				});
+
+				const uncachedKey = `unique_key_${++keySeq}_` + 'k'.repeat(len - 13);
+				assert.strictEqual(uncachedKey.length, len);
+				const packrMap = new Packr({ useRecords: false });
+				const unpackrMap = new UnpackrImpl({ useRecords: false });
+				const packedMap = Buffer.from(packrMap.pack({ [uncachedKey]: str }));
+				spyLatin1Slice(packedMap, (calls) => {
+					assert.deepStrictEqual(unpackrMap.unpack(packedMap), { [uncachedKey]: str });
+					assert.deepStrictEqual(calls, [uncachedKey, str]);
+				});
+			}
+
+			for (const len of [16, 17, 24, 30, 31, 32, 33, 48, 64, 65, 100]) {
+				const ascii = 'a'.repeat(len - 2) + 'z!';
+				assert.strictEqual(ascii.length, len);
+
+				const packrRec = new Packr({ useRecords: true });
+				const unpackrRec = new UnpackrImpl({ useRecords: true });
+				const recPayload = { id: len, value: ascii };
+				const packedRec = Buffer.from(packrRec.pack(recPayload));
+				if (len <= 31) assert.isBelow(packedRec.length, 140);
+
+				assert.deepStrictEqual(unpackrRec.unpack(packedRec), recPayload);
+				assert.deepStrictEqual(unpackrRec.unpack(toOffsetBuffer(packedRec)), recPayload);
+				assert.deepStrictEqual(unpackrRec.unpack(toPlainUint8Array(packedRec)), recPayload);
+
+				const keyStr = 'k'.repeat(Math.min(len, 31) - 1) + (len % 10);
+				const packrMap = new Packr({ useRecords: false });
+				const unpackrMap = new UnpackrImpl({ useRecords: false });
+				const mapPayload = { [keyStr]: ascii, n: 1 };
+				const packedMap = Buffer.from(packrMap.pack(mapPayload));
+				if (len <= 31) assert.isBelow(packedMap.length, 140);
+
+				assert.deepStrictEqual(unpackrMap.unpack(packedMap), mapPayload);
+				assert.deepStrictEqual(unpackrMap.unpack(toOffsetBuffer(packedMap)), mapPayload);
+				assert.deepStrictEqual(unpackrMap.unpack(toPlainUint8Array(packedMap)), mapPayload);
+			}
+
+			const nonAsciiCases = [
+				'é' + 'a'.repeat(15),
+				'a'.repeat(8) + 'é' + 'b'.repeat(8),
+				'a'.repeat(7) + 'ᾐ' + 'b'.repeat(7),
+				'a'.repeat(7) + '🚀' + 'b'.repeat(7),
+				'a'.repeat(15) + 'é',
+				'a'.repeat(29) + 'é',
+			];
+			for (const str of nonAsciiCases) {
+				const byteLen = Buffer.byteLength(str);
+				assert.isAtLeast(byteLen, 16);
+				assert.isAtMost(byteLen, 31);
+
+				const packrRec = new Packr({ useRecords: true });
+				const unpackrRec = new UnpackrImpl({ useRecords: true });
+				const recPayload = { id: 1, text: str, after: 'sixteen-byte-str' };
+				const packedRec = Buffer.from(packrRec.pack(recPayload));
+				assert.isBelow(packedRec.length, 140);
+
+				assert.deepStrictEqual(unpackrRec.unpack(packedRec), recPayload);
+				assert.deepStrictEqual(unpackrRec.unpack(toOffsetBuffer(packedRec)), recPayload);
+				assert.deepStrictEqual(unpackrRec.unpack(toPlainUint8Array(packedRec)), recPayload);
+
+				const packrMap = new Packr({ useRecords: false });
+				const unpackrMap = new UnpackrImpl({ useRecords: false });
+				const mapPayload = { [str]: str, follow: 'twenty-four-char-string!' };
+				const packedMap = Buffer.from(packrMap.pack(mapPayload));
+				assert.isBelow(packedMap.length, 140);
+
+				assert.deepStrictEqual(unpackrMap.unpack(packedMap), mapPayload);
+				assert.deepStrictEqual(unpackrMap.unpack(toOffsetBuffer(packedMap)), mapPayload);
+				assert.deepStrictEqual(unpackrMap.unpack(toPlainUint8Array(packedMap)), mapPayload);
+			}
+		}
+	});
 });
 suite('msgpackr performance tests', function(){
 	test('performance JSON.parse', function() {
@@ -2114,6 +2292,22 @@ suite('msgpackr performance tests', function(){
 		}
 		//console.log('serialized', serialized.length, global.propertyComparisons)
 	});
+	test('performance unpack 16-31 byte fixstrs', function() {
+		this.timeout(10000);
+		const runs = ITERATIONS * 10;
+		for (const len of [16, 24, 31]) {
+			const structures = [];
+			const packr = new Packr({ structures });
+			const str = 'x'.repeat(len - 2) + (len % 10) + '!';
+			const buf = Buffer.from(packr.pack({ id: 1, title: str }));
+			const u8 = new Uint8Array(buf.length);
+			u8.set(buf);
+			for (let i = 0; i < runs; i++) {
+				packr.unpack(buf);
+				packr.unpack(u8);
+			}
+		}
+	});
 });
 
 suite('msgpackr – two-byte record definitions (over-cap own records with a shared store)', function () {
@@ -2146,7 +2340,7 @@ suite('msgpackr – two-byte record definitions (over-cap own records with a sha
 
 	test('cap=256 + shared store round-trips every over-cap shape (two-byte mode)', function () {
 		const store = sharedStore();
-		const o = { randomAccessStructure: true, useRecords: true, useBigIntExtension: true, maxOwnStructures: 256, ...store };
+		const o = { useRecords: true, maxOwnStructures: 256, ...store };
 		const w = new Packr(o), r = new Packr(o);
 		const records = makeRecords(3000);
 		let sawTwoByteDef = false;
@@ -2160,7 +2354,7 @@ suite('msgpackr – two-byte record definitions (over-cap own records with a sha
 
 	test('over-cap own records do not grow the shared dictionary without bound', function () {
 		const store = sharedStore();
-		const o = { randomAccessStructure: true, useRecords: true, useBigIntExtension: true, maxOwnStructures: 256, ...store };
+		const o = { useRecords: true, maxOwnStructures: 256, ...store };
 		const w = new Packr(o);
 		for (const rec of makeRecords(3000)) w.pack(rec);
 		const saved = store.peek();
@@ -2190,10 +2384,31 @@ suite('msgpackr – two-byte record definitions (over-cap own records with a sha
 
 	test('one-byte path (maxOwn=32) keeps working with a shared store', function () {
 		const store = sharedStore();
-		const o = { randomAccessStructure: true, useRecords: true, useBigIntExtension: true, maxOwnStructures: 32, ...store };
+		const o = { useRecords: true, maxOwnStructures: 32, ...store };
 		const w = new Packr(o), r = new Packr(o);
 		for (const rec of makeRecords(3000)) {
 			assert.deepEqual(r.unpack(w.pack(rec)), rec);
 		}
 	});
 });
+	test('structured cloning: AggregateError', function() {
+		let packr = new Packr({ moreTypes: true, structuredClone: true });
+		let original = new AggregateError([new Error('first'), new TypeError('second')], 'aggregate boom');
+		let round = packr.unpack(packr.pack(original));
+		assert.equal(round.name, 'AggregateError');
+		assert.equal(round.message, 'aggregate boom');
+		assert.deepEqual(
+			round.errors.map((e) => [e.name, e.message]),
+			[
+				['Error', 'first'],
+				['TypeError', 'second'],
+			]
+		);
+		// A payload written before the errors were carried (three entries) still decodes to the
+		// right message and name, with no errors rather than an error list spelled from the message.
+		let legacy = Buffer.from('d4650093ae4167677265676174654572726f72ae61676772656761746520626f6f6dd40000', 'hex');
+		let legacyRound = packr.unpack(legacy);
+		assert.equal(legacyRound.name, 'AggregateError');
+		assert.equal(legacyRound.message, 'aggregate boom');
+		assert.deepEqual(legacyRound.errors, []);
+	});
