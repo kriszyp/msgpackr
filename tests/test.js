@@ -2432,3 +2432,9 @@ suite('msgpackr – two-byte record definitions (over-cap own records with a sha
 		assert.equal(legacyRound.message, 'aggregate boom');
 		assert.deepEqual(legacyRound.errors, []);
 	});
+	test('negative zero round-trips', function() {
+		let packr = new Packr();
+		assert.ok(Object.is(packr.unpack(packr.pack(-0)), -0), 'top-level -0');
+		let nested = { a: [-0] };
+		assert.ok(Object.is(packr.unpack(packr.pack(nested)).a[0], -0), 'nested -0');
+	});
