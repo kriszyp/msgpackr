@@ -2446,4 +2446,11 @@ suite('msgpackr – two-byte record definitions (over-cap own records with a sha
 		let packed = packr.pack('hi \ud83d');
 		let body = packed.subarray(packed.length - 5);
 		assert.equal(Buffer.from(body).toString('hex'), '6920efbfbd');
+	
+	test('negative zero round-trips', function() {
+		let packr = new Packr();
+		assert.ok(Object.is(packr.unpack(packr.pack(-0)), -0), 'top-level -0');
+		let nested = { a: [-0] };
+		assert.ok(Object.is(packr.unpack(packr.pack(nested)).a[0], -0), 'nested -0');
 	});
+});
