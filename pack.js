@@ -544,6 +544,13 @@ export class Packr extends Unpackr {
 							target[strPosition++] = c1 >> 12 & 0x3f | 0x80;
 							target[strPosition++] = c1 >> 6 & 0x3f | 0x80;
 							target[strPosition++] = c1 & 0x3f | 0x80;
+						} else if ((c1 & 0xf800) === 0xd800) {
+							// A lone surrogate cannot be encoded in UTF-8. The standard encoder
+							// (and TextEncoder) writes U+FFFD for it; do the same here so the
+							// bytes do not depend on the string length.
+							target[strPosition++] = 0xef;
+							target[strPosition++] = 0xbf;
+							target[strPosition++] = 0xbd;
 						} else {
 							target[strPosition++] = c1 >> 12 | 0xe0;
 							target[strPosition++] = c1 >> 6 & 0x3f | 0x80;
