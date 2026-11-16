@@ -76,8 +76,14 @@
       },
       "default": "./unpack.js"
     },
-    "./unpack-no-eval": "./dist/unpack-no-eval.cjs",
-    "./index-no-eval": "./dist/index-no-eval.cjs"
+    "./unpack-no-eval": {
+      "types": "./unpack.d.cts",
+      "default": "./dist/unpack-no-eval.cjs"
+    },
+    "./index-no-eval": {
+      "types": "./index.d.cts",
+      "default": "./dist/index-no-eval.cjs"
+    }
   },
   "files": [
     "/dist",
