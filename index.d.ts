@@ -24,6 +24,7 @@ export interface Options {
 	largeBigIntToString?: boolean
 	useBigIntExtension?: boolean
 	encodeUndefinedAsNil?: boolean
+	skipValues?: any[] | { includes(value: any): boolean }
 	maxSharedStructures?: number
 	maxOwnStructures?: number
 	mapAsEmptyObject?: boolean
