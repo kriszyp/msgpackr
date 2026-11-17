@@ -1243,8 +1243,9 @@ extensions = [{
 }, {
 	pack(typedArray, allocateForWrite) {
 		let constructor = typedArray.constructor;
-		if (constructor !== ByteArray && this.moreTypes)
-			writeExtBuffer(typedArray, typedArrays.indexOf(constructor.name), allocateForWrite);
+		let typeCode = constructor !== ByteArray && this.moreTypes ? typedArrayCode(constructor) : -1;
+		if (typeCode > -1)
+			writeExtBuffer(typedArray, typeCode, allocateForWrite);
 		else
 			writeBuffer(typedArray, allocateForWrite);
 	}
@@ -1263,6 +1264,17 @@ extensions = [{
 }];
 const builtInExtensionCount = extensions.length;
 
+// The type code of the built-in typed array a constructor is or extends. A subclass (or a Buffer
+// polyfill in the browser) has its own name, which is not in the table, and writing -1 as the code
+// produced a byte (0xff) that unpack can't map back to a typed array.
+function typedArrayCode(constructor) {
+	while (constructor) {
+		let code = typedArrays.indexOf(constructor.name);
+		if (code > -1) return code;
+		constructor = Object.getPrototypeOf(constructor);
+	}
+	return -1;
+}
 function writeExtBuffer(typedArray, type, allocateForWrite, encode) {
 	let length = typedArray.byteLength;
 	if (length + 1 < 0x100) {

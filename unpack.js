@@ -1229,7 +1229,7 @@ currentExtensions[0x70] = (data) => {
 
 currentExtensions[0x73] = () => new Set(read());
 
-export const typedArrays = ['Int8','Uint8','Uint8Clamped','Int16','Uint16','Int32','Uint32','Float32','Float64','BigInt64','BigUint64'].map(type => type + 'Array');
+export const typedArrays = ['Int8','Uint8','Uint8Clamped','Int16','Uint16','Int32','Uint32','Float32','Float64','BigInt64','BigUint64','Float16'].map(type => type + 'Array');
 
 let glbl = typeof globalThis === 'object' ? globalThis : window;
 currentExtensions[0x74] = (data) => {
@@ -1243,7 +1243,9 @@ currentExtensions[0x74] = (data) => {
 		if (typeCode === 17) return new DataView(buffer);
 		throw new Error('Could not find typed array for code ' + typeCode);
 	}
-	return new glbl[typedArrayName](buffer);
+	let TypedArray = glbl[typedArrayName];
+	if (!TypedArray) throw new Error(typedArrayName + ' is not supported in this environment');
+	return new TypedArray(buffer);
 };
 currentExtensions[0x78] = () => {
 	let data = read();

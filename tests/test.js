@@ -1419,6 +1419,26 @@ suite('msgpackr basic tests', function() {
 		assert.equal(deserialized.dataView.constructor.name, 'DataView');
 		assert.equal(deserialized.dataView.getUint16(), 0xbeef);
 	});
+	test('moreTypes: typed array subclasses and Float16Array', function() {
+		// The type code came from the constructor's name, so a subclass (and Float16Array, which
+		// was missing from the table) was written with code 0xff, which unpack rejected.
+		class Vector extends Float32Array {}
+		let packr = new Packr({ moreTypes: true });
+		let deserialized = packr.unpack(packr.pack(new Vector([1.5, -2])));
+		assert.equal(deserialized.constructor, Float32Array);
+		assert.deepEqual(Array.from(deserialized), [1.5, -2]);
+
+		class Bytes extends Uint8Array {}
+		deserialized = packr.unpack(packr.pack({ bytes: new Bytes([1, 2, 3]) }));
+		assert.equal(deserialized.bytes.constructor, Uint8Array);
+		assert.deepEqual(Array.from(deserialized.bytes), [1, 2, 3]);
+
+		if (typeof Float16Array !== 'undefined') {
+			deserialized = packr.unpack(packr.pack(new Float16Array([1.5, -0.25])));
+			assert.equal(deserialized.constructor, Float16Array);
+			assert.deepEqual(Array.from(deserialized), [1.5, -0.25]);
+		}
+	});
 	test('typed array and DataView bytes without moreTypes', function() {
 		// Without moreTypes these are plain bins, so the payload must be the exact bytes the view
 		// spans. Passing the view to target.set copied element-wise: the low byte of each element
