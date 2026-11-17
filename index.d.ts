@@ -32,7 +32,7 @@ export interface Options {
 	writeFunction?: () => any
 	/** @deprecated use int64AsType: 'number' */
 	int64AsNumber?: boolean
-	int64AsType?: 'bigint' | 'number' | 'string'
+	int64AsType?: 'bigint' | 'number' | 'string' | 'auto'
 	shouldShareStructure?: (keys: string[]) => boolean
 	getStructures?(): {}[]
 	saveStructures?(structures: {}[]): boolean | void
