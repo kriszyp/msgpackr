@@ -17,6 +17,12 @@ let bundledStrings = null;
 let packing = false;
 const MAX_BUNDLE_SIZE = 0x5500; // maximum characters such that the encoded bytes fits in 16 bits.
 const hasNonLatin = /[\u0080-\uFFFF]/;
+// comparing a bigint with a bigint is much faster than comparing it with a number
+const hasBigInt = typeof BigInt === 'function';
+const BIGINT_0 = hasBigInt ? BigInt(0) : 0;
+const BIGINT_2_63 = hasBigInt ? BigInt('0x8000000000000000') : 0;
+const BIGINT_MINUS_2_63 = hasBigInt ? -BIGINT_2_63 : 0;
+const BIGINT_2_64 = hasBigInt ? BigInt('0x10000000000000000') : 0;
 export const RECORD_SYMBOL = Symbol('record-id');
 export class Packr extends Unpackr {
 	constructor(options) {
@@ -782,11 +788,11 @@ export class Packr extends Unpackr {
 			} else if (type === 'boolean') {
 				target[position++] = value ? 0xc3 : 0xc2;
 			} else if (type === 'bigint') {
-				if (value < 0x8000000000000000 && value >= -0x8000000000000000) {
+				if (value < BIGINT_2_63 && value >= BIGINT_MINUS_2_63) {
 					// use a signed int as long as it fits
 					target[position++] = 0xd3;
 					targetView.setBigInt64(position, value);
-				} else if (value < 0x10000000000000000 && value > 0) {
+				} else if (value < BIGINT_2_64 && value > BIGINT_0) {
 					// if we can fit an unsigned int, use that
 					target[position++] = 0xcf;
 					targetView.setBigUint64(position, value);
