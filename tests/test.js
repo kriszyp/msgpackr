@@ -1947,6 +1947,17 @@ suite('msgpackr basic tests', function() {
 		assert.equal(deserialized.tooBig, (2n**66n).toString());
 	});
 
+	test('bigint int64/uint64 boundaries', function(){
+		assert.equal(pack(2n**63n - 1n)[0], 0xd3);
+		assert.equal(pack(-(2n**63n))[0], 0xd3);
+		assert.equal(pack(2n**63n)[0], 0xcf);
+		assert.equal(pack(2n**64n - 1n)[0], 0xcf);
+		for (let value of [2n**63n - 1n, -(2n**63n), 2n**63n, 2n**64n - 1n])
+			assert.equal(unpack(pack(value)), value);
+		assert.throws(function(){ pack(2n**64n); });
+		assert.throws(function(){ pack(-(2n**63n) - 1n); });
+	});
+
 	test('roundFloat32', function() {
 		assert.equal(roundFloat32(0.00333000003), 0.00333);
 		assert.equal(roundFloat32(43.29999999993), 43.3);
