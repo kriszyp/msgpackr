@@ -96,6 +96,28 @@ suite('msgpackr basic tests', function() {
 		assert.deepEqual(deserialized, data);
 	});
 
+	test('__proto__ key (#159)', function () {
+		// A `__proto__` key must round-trip as an own property — not invoke the
+		// prototype setter, pollute the prototype, or be silently renamed.
+		let packr = new Packr();
+		// exercise the record path and, after several reads, the optimized reader
+		let many = [];
+		for (let i = 0; i < 80; i++) many.push(JSON.parse('{"__proto__": ' + i + ', "a": 1}'));
+		packr.unpack(packr.pack(many)).forEach(function (object, i) {
+			assert.equal(Object.getOwnPropertyDescriptor(object, '__proto__').value, i);
+			assert.equal(Object.getPrototypeOf(object), Object.prototype);
+			assert.equal(object.a, 1);
+		});
+		// maps-as-objects path
+		let mapPackr = new Packr({ mapsAsObjects: true, useRecords: false });
+		let asObject = mapPackr.unpack(mapPackr.pack(JSON.parse('{"__proto__": 7, "b": 2}')));
+		assert.equal(Object.getOwnPropertyDescriptor(asObject, '__proto__').value, 7);
+		assert.equal(asObject.b, 2);
+		// no prototype pollution even when the value is an object
+		packr.unpack(packr.pack(JSON.parse('{"__proto__": {"polluted": true}}')));
+		assert.isUndefined(({}).polluted);
+	});
+
 	test('mixed structures', function () {
 		let data1 = {a: 1, b: 2, c: 3};
 		let data2 = {a: 1, b: 2, d: 4};
