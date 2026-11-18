@@ -21,7 +21,7 @@
   },
   "scripts": {
     "benchmark": "node ./tests/benchmark.cjs",
-    "build": "rollup -c && cpy index.d.ts . --rename=index.d.cts && cpy pack.d.ts . --rename=pack.d.cts && cpy unpack.d.ts . --rename=unpack.d.cts",
+    "build": "rollup -c && cpy index.d.ts . --rename=index.d.cts && cpy pack.d.ts . --rename=pack.d.cts && cpy unpack.d.ts . --rename=unpack.d.cts && cpy index-no-eval.d.ts . --rename=index-no-eval.d.cts",
     "dry-run": "npm publish --dry-run",
     "prepare": "npm run build",
     "test": "mocha tests/test**.*js -u tdd --experimental-json-modules"
@@ -81,7 +81,7 @@
       "default": "./dist/unpack-no-eval.cjs"
     },
     "./index-no-eval": {
-      "types": "./index.d.cts",
+      "types": "./index-no-eval.d.cts",
       "default": "./dist/index-no-eval.cjs"
     }
   },
