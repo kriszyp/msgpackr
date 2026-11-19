@@ -21,6 +21,9 @@ var currentExtensions = [];
 var dataView;
 var arrayAllocationBudget;
 var fragmentEnd = 0;
+// int64AsType 'auto' bounds, built once rather than on every 64-bit integer read
+var BIGINT_2_53 = typeof BigInt === 'function' ? BigInt(2) << BigInt(52) : 0;
+var BIGINT_MINUS_2_53 = typeof BigInt === 'function' ? BigInt(-2) << BigInt(52) : 0;
 var defaultOptions = {
 	useRecords: false,
 	mapsAsObjects: true
@@ -421,7 +424,7 @@ export function read() {
 					value = dataView.getBigUint64(position).toString();
 				} else if (currentUnpackr.int64AsType === 'auto') {
 					value = dataView.getBigUint64(position);
-					if (value<=BigInt(2)<<BigInt(52)) value=Number(value);
+					if (value<=BIGINT_2_53) value=Number(value);
 				} else
 					value = dataView.getBigUint64(position);
 				position += 8;
@@ -446,7 +449,7 @@ export function read() {
 					value = dataView.getBigInt64(position).toString();
 				} else if (currentUnpackr.int64AsType === 'auto') {
 					value = dataView.getBigInt64(position);
-					if (value>=BigInt(-2)<<BigInt(52)&&value<=BigInt(2)<<BigInt(52)) value=Number(value);
+					if (value>=BIGINT_MINUS_2_53&&value<=BIGINT_2_53) value=Number(value);
 				} else
 					value = dataView.getBigInt64(position);
 				position += 8;
