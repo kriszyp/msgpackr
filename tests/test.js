@@ -1320,6 +1320,18 @@ suite('msgpackr basic tests', function() {
 		assert(deserialized.range instanceof RangeError);
 	});
 
+	test('moreTypes: Error named like an Object.prototype member', function() {
+		const packr = new Packr({ moreTypes: true });
+		for (const name of ['constructor', 'toString', 'valueOf', 'hasOwnProperty', 'isPrototypeOf', '__proto__']) {
+			const error = new Error('boom');
+			error.name = name;
+			const deserialized = packr.unpack(packr.pack(error));
+			assert(deserialized instanceof Error, name);
+			assert.equal(deserialized.name, name);
+			assert.equal(deserialized.message, 'boom');
+		}
+	});
+
 	test('structured cloning: self reference', function() {
 		let object = {
 			test: 'string',
