@@ -1320,6 +1320,26 @@ suite('msgpackr basic tests', function() {
 		assert(deserialized.range instanceof RangeError);
 	});
 
+	test('structured cloning: self reference with useRecords: false', function() {
+		// useRecords: false reads maps as objects (mapsAsObjects), so the placeholder of a cycle must be an object too
+		const packr = new Packr({ structuredClone: true, useRecords: false });
+		const object = { name: 'a', child: { name: 'b' } };
+		object.self = object;
+		object.child.parent = object;
+		const deserialized = packr.unpack(packr.pack(object));
+		assert.equal(deserialized.name, 'a');
+		assert.equal(deserialized.self, deserialized);
+		assert.equal(deserialized.child.name, 'b');
+		assert.equal(deserialized.child.parent, deserialized);
+		assert(!(deserialized instanceof Map));
+		const mapPackr = new Packr({ structuredClone: true, useRecords: false, mapsAsObjects: false });
+		const map = new Map([['name', 'm']]);
+		map.set('self', map);
+		const mapOut = mapPackr.unpack(mapPackr.pack(map));
+		assert(mapOut instanceof Map);
+		assert.equal(mapOut.get('self'), mapOut);
+	});
+
 	test('structured cloning: self reference', function() {
 		let object = {
 			test: 'string',
