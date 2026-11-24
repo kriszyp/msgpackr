@@ -1173,12 +1173,14 @@ currentExtensions[0x65] = () => {
 		// A payload written before errors were carried has only three entries; give it an empty list.
 		return new errors.AggregateError(data[3] || [], data[1], { cause: data[2] });
 	}
-	if (!errors[data[0]]) {
+	// only the own properties of errors: a name like toString or __proto__ is not an Error constructor
+	let ErrorType = Object.prototype.hasOwnProperty.call(errors, data[0]) ? errors[data[0]] : null;
+	if (!ErrorType) {
 		let error = Error(data[1], { cause: data[2] });
 		error.name = data[0];
 		return error;
 	}
-	return errors[data[0]](data[1], { cause: data[2] });
+	return ErrorType(data[1], { cause: data[2] });
 };
 
 currentExtensions[0x69] = (data) => {
