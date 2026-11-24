@@ -390,7 +390,8 @@ export function read() {
 				return readExt(value);
 			case 0xca:
 				value = dataView.getFloat32(position);
-				if (currentUnpackr.useFloat32 > 2) {
+				// Infinity, -Infinity and NaN have no decimal digits to round, and >> 0 would make them 0
+				if (currentUnpackr.useFloat32 > 2 && Number.isFinite(value)) {
 					// this does rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
 					let multiplier = mult10[((src[position] & 0x7f) << 1) | (src[position + 1] >> 7)];
 					position += 4;
@@ -1489,6 +1490,7 @@ export const FLOAT32_OPTIONS = {
 let f32Array = new Float32Array(1);
 let u8Array = new Uint8Array(f32Array.buffer, 0, 4);
 export function roundFloat32(float32Number) {
+	if (!Number.isFinite(float32Number)) return float32Number; // >> 0 below would make it 0
 	f32Array[0] = float32Number;
 	let multiplier = mult10[((u8Array[3] & 0x7f) << 1) | (u8Array[2] >> 7)];
 	return ((multiplier * float32Number + (float32Number > 0 ? 0.5 : -0.5)) >> 0) / multiplier;

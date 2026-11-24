@@ -36,6 +36,7 @@ var unpackMultiple = msgpackr.unpackMultiple;
 var roundFloat32 = msgpackr.roundFloat32;
 var pack = msgpackr.pack;
 var DECIMAL_FIT = msgpackr.FLOAT32_OPTIONS.DECIMAL_FIT;
+var DECIMAL_ROUND = msgpackr.FLOAT32_OPTIONS.DECIMAL_ROUND;
 
 var addExtension = msgpackr.addExtension;
 var zlib = tryRequire('zlib');
@@ -1950,6 +1951,27 @@ suite('msgpackr basic tests', function() {
 	test('roundFloat32', function() {
 		assert.equal(roundFloat32(0.00333000003), 0.00333);
 		assert.equal(roundFloat32(43.29999999993), 43.3);
+		assert.equal(roundFloat32(Infinity), Infinity);
+		assert.equal(roundFloat32(-Infinity), -Infinity);
+		assert(Number.isNaN(roundFloat32(NaN)));
+	});
+
+	test('float32 Infinity, -Infinity and NaN with DECIMAL_ROUND and DECIMAL_FIT', function() {
+		// msgpackr packs these values as float64, but another encoder can send them as float32 (0xca)
+		const float32 = (value) => {
+			const bytes = new Uint8Array(5);
+			const view = new DataView(bytes.buffer);
+			view.setUint8(0, 0xca);
+			view.setFloat32(1, value);
+			return bytes;
+		};
+		for (const useFloat32 of [DECIMAL_ROUND, DECIMAL_FIT]) {
+			const unpackr = new Unpackr({ useFloat32 });
+			assert.equal(unpackr.unpack(float32(Infinity)), Infinity);
+			assert.equal(unpackr.unpack(float32(-Infinity)), -Infinity);
+			assert(Number.isNaN(unpackr.unpack(float32(NaN))));
+			assert.equal(unpackr.unpack(float32(1.5)), 1.5);
+		}
 	});
 
 	test('buffers', function(){
