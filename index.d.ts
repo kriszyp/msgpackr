@@ -63,8 +63,12 @@ export function decode(messagePack: Buffer | Uint8Array, options?: UnpackOptions
 export function addExtension(extension: Extension): void
 export function clearSource(): void
 export function roundFloat32(float32Number: number): number
-export function decodeIter(bufferIterator: Iterable<Buffer | Uint8Array> | Iterator<Buffer | Uint8Array> | AsyncIterable<Buffer | Uint8Array> | AsyncIterator<Buffer | Uint8Array>, options?: Options): AsyncGenerator<any>
-export function encodeIter(objectIterator: Iterable<Buffer | Uint8Array> | Iterator<Buffer | Uint8Array> | AsyncIterable<Buffer | Uint8Array> | AsyncIterator<Buffer | Uint8Array>, options?: Options): IterableIterator<Buffer> | Promise<AsyncIterableIterator<Buffer>>
+type SyncIteratorInput<T> = Iterable<T> | Iterator<T>
+type AsyncIteratorInput<T> = AsyncIterable<T> | AsyncIterator<T>
+export function decodeIter(bufferIterator: SyncIteratorInput<Buffer | Uint8Array>, options?: Options): IterableIterator<any>
+export function decodeIter(bufferIterator: AsyncIteratorInput<Buffer | Uint8Array>, options?: Options): AsyncIterableIterator<any>
+export function encodeIter(objectIterator: SyncIteratorInput<unknown>, options?: Options): IterableIterator<Buffer>
+export function encodeIter(objectIterator: AsyncIteratorInput<unknown>, options?: Options): AsyncIterableIterator<Buffer>
 export const C1: {}
 export let isNativeAccelerationEnabled: boolean
 
